@@ -139,6 +139,53 @@ S.save=(skipCloud=false)=>{
 S.t=(k,v)=>window.translateI18n?window.translateI18n(S.lang,k,v):k;
 S.setLang=l=>{S.lang=l;localStorage.setItem('legacy_lang',l);notify();};
 
+const SOLD_RULE_CUTOFF_MS=Date.parse('2026-10-28T19:10:00.000Z');
+const THREE_DAYS_MS=3*24*60*60*1000;
+const INITIAL_REMOVED_SOLD_IDS=new Set(["cmvrdnnha001m9d7q45oilwjx", "cmvrjdcyl001e9d2tpbfdzby6", "cmvrjdcyp001f9d2t3umrtzbz", "cmvrjdcys001g9d2t3bsoa943", "cmvrjdcyu001h9d2thvvgn73a", "cmvrjdcyx001i9d2tr2i5k0ro", "cmvrjdcz0001j9d2t67rbpqva", "cmvrjdcz2001k9d2tg8u85svv", "cmvrjdcz5001l9d2txorvjmd5", "cmvrjdcz8001m9d2t4lpgyijc", "cmvrjdczb001n9d2twwg6shtr", "cmvrjdczd001o9d2tkcqgmfsf", "cmvrjdczg001p9d2tn0xqgwhp", "cmvrjdczl001r9d2te5oua2pn", "cmvrjdczn001s9d2tnck6vz3e", "cmvrjdczq001t9d2t1q4bm7sa", "cmvrjdczu001u9d2t40975kte", "cmvrjdczx001v9d2tsqqhqyk7", "cmvrjdd00001w9d2tzf47cqt5", "cmvrjdd02001x9d2ta5h7bnwg", "cmvrjdd05001y9d2tv45ifnz3", "cmvrjdd07001z9d2tq6xbh2dh", "cmvrjdd0a00209d2tp2gbqco4", "cmvrjdd0e00219d2tn44ve5ka", "cmvrjdd0g00229d2twkoh1pqo", "cmvrjdd0j00239d2tepha04eq", "cmvrjdd0m00249d2tb4lxrk43", "cmvrjdd0p00259d2tcvytdefv", "cmvrjdd0r00269d2td4s6rt6x", "cmvrjdd0u00279d2tclkg5k2s", "cmvrjdd0y00289d2t7zlg0bcj", "cmvrjdd1000299d2tlsvc9osk", "cmvrjdd13002a9d2t3umi2rph", "cmvrjdd16002b9d2t9r6xivm6", "cmvrjdd19002c9d2tnlaha5v7", "cmvrjdd1b002d9d2ty5wn5mxc", "cmvrjdd1e002e9d2thy423ez5"]);
+
+function enforceThreeDaySoldRule(stateData){
+  if(!stateData||!Array.isArray(stateData.listings))return false;
+  stateData.removedSoldIds=Array.from(new Set([...(stateData.removedSoldIds||[]),...INITIAL_REMOVED_SOLD_IDS]));
+  const removedSet=new Set(stateData.removedSoldIds);
+  stateData.closedArchive=stateData.closedArchive||[];
+  const archIds=new Set(stateData.closedArchive.map(x=>x&&x.id).filter(Boolean));
+  let changed=false;
+  const kept=[];
+  for(const l of stateData.listings){
+    if(!l||!l.id)continue;
+    const isSold=(l.status==='SOLD'||l.status==='CLOSED');
+    if(!isSold){
+      if(removedSet.has(l.id)){
+        kept.push(l);
+      }else{
+        kept.push(l);
+      }
+      continue;
+    }
+    const soldMs=toMs(l.soldAt||l.sold_at);
+    const eligibleMovingForward=(soldMs>=SOLD_RULE_CUTOFF_MS)&&((Date.now()-soldMs)<=THREE_DAYS_MS);
+    if(removedSet.has(l.id)&&!eligibleMovingForward){
+      changed=true;
+      continue;
+    }
+    if(!eligibleMovingForward){
+      changed=true;
+      removedSet.add(l.id);
+      if(!archIds.has(l.id)){
+        stateData.closedArchive.push(Object.assign({},l,{archivedAt:now()}));
+        archIds.add(l.id);
+      }
+      sbDelete('listings',`id=eq.${l.id}`);
+      continue;
+    }
+    kept.push(l);
+  }
+  stateData.removedSoldIds=Array.from(removedSet);
+  if(kept.length!==stateData.listings.length)changed=true;
+  stateData.listings=kept;
+  return changed;
+}
+
 const LIST=['users','agentProfiles','buyerProfiles','offers','showings','messages','documents','favorites','propertyViews','propertyRequests','listings'];
 function merge(base,incoming){
   if(!incoming)return base;
@@ -260,7 +307,8 @@ function applyRelationalListings(stateData,listRows){
       latitude:r.latitude!=null?+r.latitude:cur.latitude,
       longitude:r.longitude!=null?+r.longitude:cur.longitude,
       approxLocation:r.approx_location??cur.approxLocation,
-      areas:r.areas??cur.areas
+      areas:r.areas??cur.areas,
+      soldAt:r.sold_at??cur.soldAt??null
     }));
   });
   stateData.listings=[...byId.values()];
@@ -277,15 +325,19 @@ S.load=async()=>{
     const {kvVal,updatedAt,listRows,userRows}=await fetchCloudState();
     if(kvVal){
       merged=merge(merged,kvVal);
+      if(Array.isArray(kvVal.removedSoldIds)){
+        merged.removedSoldIds=Array.from(new Set([...(merged.removedSoldIds||[]),...kvVal.removedSoldIds]));
+      }
     }
     applyRelationalUsers(merged,userRows);
     applyRelationalListings(merged,listRows);
     S.lastSyncedAt=updatedAt;
-    try{localStorage.setItem(KEY,JSON.stringify(merged));}catch(e){}
   }catch(e){
     console.warn('Offline or fallback to app-data.json:',e);
     S.cloudConnected=false;
   }
+  enforceThreeDaySoldRule(merged);
+  try{localStorage.setItem(KEY,JSON.stringify(merged));}catch(e){}
   S.data=merged;
   const sid=sessionStorage.getItem('legacy_uid')||localStorage.getItem('legacy_uid');
   S.user=S.data.users.find(u=>u.id===sid)||null;
@@ -308,7 +360,11 @@ async function pollSupabase(){
       if(remoteTs&&remoteTs!==S.lastSyncedAt){
         S.lastSyncedAt=remoteTs;
         const remoteVal=rows[0].value;
+        if(Array.isArray(remoteVal.removedSoldIds)){
+          S.data.removedSoldIds=Array.from(new Set([...(S.data.removedSoldIds||[]),...remoteVal.removedSoldIds]));
+        }
         S.data=merge(S.data,remoteVal);
+        enforceThreeDaySoldRule(S.data);
         if(Array.isArray(remoteVal.favorites))S.data.favorites=remoteVal.favorites;
         changed=true;
       }
@@ -541,12 +597,29 @@ S.uploadDocument=async(file,{listingId,docType,offerId}={})=>{if(!S.user)throw n
   },'id');
   return d;
 };
-S.STATUSES=['AVAILABLE','COMING_SOON','PENDING','PENDING_NO_EM','PENDING_EM','CLOSED'];
-S.STATUS_LABEL={AVAILABLE:'Available',COMING_SOON:'Coming Soon',PENDING:'Pending',PENDING_NO_EM:'Pending/NoEM',PENDING_EM:'Pending/EM',CLOSED:'Closed'};
-S.STATUS_LABEL_ES={AVAILABLE:'Disponible',COMING_SOON:'Próximamente',PENDING:'Pendiente',PENDING_NO_EM:'Pendiente/Sin EM',PENDING_EM:'Pendiente/Con EM',CLOSED:'Cerrada'};
+S.STATUSES=['AVAILABLE','COMING_SOON','PENDING','PENDING_NO_EM','PENDING_EM','SOLD'];
+S.STATUS_LABEL={AVAILABLE:'Available',COMING_SOON:'Coming Soon',PENDING:'Pending',PENDING_NO_EM:'Pending/NoEM',PENDING_EM:'Pending/EM',SOLD:'Sold (3-Day)',CLOSED:'Sold (3-Day)'};
+S.STATUS_LABEL_ES={AVAILABLE:'Disponible',COMING_SOON:'Próximamente',PENDING:'Pendiente',PENDING_NO_EM:'Pendiente/Sin EM',PENDING_EM:'Pendiente/Con EM',SOLD:'Vendida (3 días)',CLOSED:'Vendida (3 días)'};
 S.statusText=st=>S.lang==='es'?(S.STATUS_LABEL_ES[st]||st):(S.STATUS_LABEL[st]||st);
 S.OFFER_COLOR={ACCEPTED:'#16a34a',REJECTED:'#dc2626',COUNTERED:'#d97706',SUBMITTED:'#64748b'};
-S.setListingStatus=(lid,st)=>{if(!S.isAdmin())throw new Error('Admins only');const l=S.listing(lid);l.status=st;l.updatedAt=now();if(st==='CLOSED')l.soldAt=now();S.save();sbUpsert('listings',listingToRow(l),'id');};
+S.setListingStatus=(lid,st)=>{
+  if(!S.isAdmin())throw new Error('Admins only');
+  const l=S.listing(lid);
+  if(!l)return;
+  l.status=st;
+  l.updatedAt=now();
+  if(st==='SOLD'||st==='CLOSED'){
+    l.soldAt=now();
+    if(Array.isArray(S.data.removedSoldIds)){
+      S.data.removedSoldIds=S.data.removedSoldIds.filter(id=>id!==lid);
+    }
+  }else{
+    l.soldAt=null;
+  }
+  enforceThreeDaySoldRule(S.data);
+  S.save();
+  sbUpsert('listings',listingToRow(l),'id');
+};
 S.updateListing=(lid,p)=>{if(!S.isAdmin())throw new Error('Admins only');const l=S.listing(lid);Object.assign(l,p,{updatedAt:now()});S.save();sbUpsert('listings',listingToRow(l),'id');};
 S.respondOffer=(oid,status,c={})=>{if(!S.isAdmin())throw new Error('Admins only');const o=S.data.offers.find(x=>x.id===oid);
   o.status=status;o.respondedAt=now();o.adminNotes=c.adminNotes||'';
