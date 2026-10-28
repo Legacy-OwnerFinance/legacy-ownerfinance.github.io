@@ -150,11 +150,19 @@ function merge(base,incoming){
       if(!prev){m.set(x.id,x);return;}
       const prevTs=toMs(prev.updatedAt||prev.updated_at||prev.respondedAt||prev.createdAt);
       const incTs=toMs(x.updatedAt||x.updated_at||x.respondedAt||x.createdAt);
-      if(incTs>=prevTs){
-        m.set(x.id,Object.assign({},prev,x));
-      }else{
-        m.set(x.id,Object.assign({},x,prev));
+      const merged=incTs>=prevTs?Object.assign({},prev,x):Object.assign({},x,prev);
+      if(k==='listings'){
+        const hasReal=u=>u&&u!=='listing-placeholder.svg';
+        if(!hasReal(merged.photoUrl)){
+          if(hasReal(prev.photoUrl))merged.photoUrl=prev.photoUrl;
+          else if(hasReal(x.photoUrl))merged.photoUrl=x.photoUrl;
+        }
+        const prevPh=(prev.photoUrls||[]).filter(hasReal);
+        const xPh=(x.photoUrls||[]).filter(hasReal);
+        if(prevPh.length>xPh.length)merged.photoUrls=prev.photoUrls;
+        else if(xPh.length>0)merged.photoUrls=x.photoUrls;
       }
+      m.set(x.id,merged);
     });
     base[k]=[...m.values()];
   });
@@ -244,8 +252,8 @@ function applyRelationalListings(stateData,listRows){
       description:r.description??cur.description,
       publicTitle:r.public_title??cur.publicTitle,
       publicSummary:r.public_summary??cur.publicSummary,
-      photoUrl:r.photo_url??cur.photoUrl,
-      photoUrls:r.photo_urls??cur.photoUrls,
+      photoUrl:(r.photo_url&&r.photo_url!=='listing-placeholder.svg')?r.photo_url:(cur.photoUrl||r.photo_url),
+      photoUrls:(Array.isArray(r.photo_urls)&&r.photo_urls.some(u=>u&&u!=='listing-placeholder.svg'))?r.photo_urls:(cur.photoUrls||r.photo_urls),
       photosUrl:r.photos_url??cur.photosUrl,
       videoUrl:r.video_url??cur.videoUrl,
       listingUrl:r.listing_url??cur.listingUrl,

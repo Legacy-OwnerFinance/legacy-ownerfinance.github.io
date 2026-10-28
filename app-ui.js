@@ -1,5 +1,19 @@
 (function(){
 const S=window.AppState,$=s=>document.querySelector(s);
+window.imgFallback=function(el){
+  if(!el)return;
+  const s=el.getAttribute('src')||'';
+  const m=s.match(/googleusercontent\.com\/d\/([A-Za-z0-9_-]+)/);
+  if(m&&!el.dataset.triedThumb){
+    el.dataset.triedThumb='1';
+    el.src='https://drive.google.com/thumbnail?id='+m[1]+'&sz=w1200';
+    return;
+  }
+  if(s!=='listing-placeholder.svg'){
+    el.src='listing-placeholder.svg';
+  }
+};
+
 const esc=v=>String(v==null?'':v).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const initTab=()=>{
   const h=location.hash.slice(1);
@@ -426,7 +440,7 @@ function card(l){
   if(!S.user){
     return `<article class="card listing-card" style="border-radius:12px;overflow:hidden;background:#fff;box-shadow:0 1px 6px rgba(0,0,0,.1);display:flex;flex-direction:column">
       <div style="position:relative;cursor:pointer" data-open="${l.id}">
-        <img src="${esc(l.photoUrl||'listing-placeholder.svg')}" style="width:100%;height:185px;object-fit:cover;display:block" data-open="${l.id}">
+        <img src="${esc(l.photoUrl||'listing-placeholder.svg')}" referrerpolicy="no-referrer" loading="lazy" onerror="window.imgFallback&&window.imgFallback(this)" style="width:100%;height:185px;object-fit:cover;display:block" data-open="${l.id}">
         <span style="position:absolute;bottom:8px;right:8px;background:rgba(15,23,42,.8);color:#fff;font-size:12px;padding:3px 9px;border-radius:999px">📷 ${phCount} ${tr('photosCount')}</span>
       </div>
       <div style="padding:12px;display:flex;flex-direction:column;gap:8px;flex:1">
@@ -442,7 +456,7 @@ function card(l){
     </article>`;
   }
   return `<article class="card listing-card" style="border-radius:12px;overflow:hidden;background:#fff;box-shadow:0 1px 6px rgba(0,0,0,.1)">
-  <div style="position:relative"><img src="${esc(l.photoUrl||'listing-placeholder.svg')}" style="width:100%;height:170px;object-fit:cover;cursor:pointer" data-open="${l.id}">
+  <div style="position:relative"><img src="${esc(l.photoUrl||'listing-placeholder.svg')}" referrerpolicy="no-referrer" loading="lazy" onerror="window.imgFallback&&window.imgFallback(this)" style="width:100%;height:170px;object-fit:cover;cursor:pointer" data-open="${l.id}">
   <button data-fav="${l.id}" title="Favorite" style="position:absolute;top:8px;right:8px;font-size:20px;background:#fff;border-radius:50%;border:0;width:36px;height:36px">${S.isFavorite(l.id)?'❤️':'🤍'}</button></div>
   <div style="padding:10px">${badge(l.status)}<h3 style="margin:6px 0;font-size:16px">${title(l)}</h3>
   <div>${tr('price')} <b>${S.money(l.askingPrice)}</b> · ${tr('down')} <b>${S.money(l.downPayment)}</b> · <b>${S.money(l.monthlyPayment)}</b>${tr('perMo')}</div>
@@ -462,7 +476,7 @@ function drawMap(){if(!window.L||!$('#inventory-map'))return;if(map){map.remove(
 function openListing(id){const l=S.listing(id);if(!l)return;S.recordView(id);const ph=(l.photoUrls&&l.photoUrls.length?l.photoUrls:[l.photoUrl||'listing-placeholder.svg']);
   if(!S.user){
     const m=modal(`<h2>📍 ${partialAddr(l)}</h2>
-      <div class="gallery" style="display:flex;gap:8px;overflow-x:auto;margin:12px 0;padding-bottom:6px">${ph.map(p=>`<img src="${esc(p)}" style="height:220px;border-radius:8px;object-fit:cover">`).join('')}</div>
+      <div class="gallery" style="display:flex;gap:8px;overflow-x:auto;margin:12px 0;padding-bottom:6px">${ph.map(p=>`<img src="${esc(p)}" referrerpolicy="no-referrer" loading="lazy" onerror="window.imgFallback&&window.imgFallback(this)" style="height:220px;border-radius:8px;object-fit:cover">`).join('')}</div>
       <div style="background:#f8fafc;border:2px solid #d4af37;border-radius:12px;padding:16px;margin-top:12px;text-align:center">
         <h3 style="margin:0 0 8px 0;color:#0f172a">${tr('guestModalTitle')}</h3>
         <p style="margin:0 0 14px 0;font-size:14px;color:#334155">${tr('guestModalBody')}</p>
@@ -477,7 +491,7 @@ function openListing(id){const l=S.listing(id);if(!l)return;S.recordView(id);con
     return;
   }
   const ag=S.user&&S.agentFor(S.user);
-  const m=modal(`<h2>${title(l)}</h2>${badge(l.status)}<div class="gallery" style="display:flex;gap:6px;overflow-x:auto;margin:10px 0">${ph.map(p=>`<img src="${esc(p)}" style="height:200px;border-radius:8px">`).join('')}</div>
+  const m=modal(`<h2>${title(l)}</h2>${badge(l.status)}<div class="gallery" style="display:flex;gap:6px;overflow-x:auto;margin:10px 0">${ph.map(p=>`<img src="${esc(p)}" referrerpolicy="no-referrer" loading="lazy" onerror="window.imgFallback&&window.imgFallback(this)" style="height:200px;border-radius:8px">`).join('')}</div>
    ${l.photosUrl?`<a href="${esc(l.photosUrl)}" target="_blank" rel="noopener">${tr('morePhotos')}</a>`:''}
    <p>${tr('price')} <b>${S.money(l.askingPrice)}</b> · ${tr('down')} <b>${S.money(l.downPayment)}</b> · ${tr('monthly')} <b>${S.money(l.monthlyPayment)}</b> · ${l.termYears||'—'} ${tr('yrs')}</p>
    <p style="font-size:14px;color:#475569">${l.beds??'—'} bd · ${l.baths??'—'} ba · ${l.sqft?l.sqft+' sqft':''}</p>
