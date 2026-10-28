@@ -1,0 +1,1097 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Design Templates — Legacy - Owner Finance</title>
+  <link rel="icon" href="favicon.ico">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <style>
+    :root {
+      --bg: #faf8f5;
+      --surface: #ffffff;
+      --surface-2: #f3efe6;
+      --text: #0f172a;
+      --muted: #64748b;
+      --primary: #0a1120;
+      --accent: #d4af37;
+      --accent-soft: rgba(212, 175, 55, 0.14);
+      --border: #e2e8f0;
+      --card-radius: 16px;
+      --shadow: 0 10px 30px -10px rgba(15, 23, 42, 0.12);
+      --font-heading: 'Cormorant Garamond', Georgia, serif;
+      --font-body: 'Plus Jakarta Sans', system-ui, sans-serif;
+    }
+
+    body[data-tpl="2"] {
+      --bg: #f8fafc;
+      --surface: #ffffff;
+      --surface-2: #f1f5f9;
+      --text: #0f172a;
+      --muted: #475569;
+      --primary: #0f172a;
+      --accent: #0284c7;
+      --accent-soft: rgba(2, 132, 199, 0.12);
+      --border: #e2e8f0;
+      --card-radius: 14px;
+      --font-heading: 'Plus Jakarta Sans', system-ui, sans-serif;
+    }
+
+    body[data-tpl="3"] {
+      --bg: #090d16;
+      --surface: #111827;
+      --surface-2: #1e293b;
+      --text: #f8fafc;
+      --muted: #94a3b8;
+      --primary: #e5c158;
+      --accent: #e5c158;
+      --accent-soft: rgba(229, 193, 88, 0.15);
+      --border: #1f2937;
+      --card-radius: 18px;
+      --shadow: 0 16px 40px -12px rgba(0, 0, 0, 0.65);
+      --font-heading: 'Cormorant Garamond', Georgia, serif;
+    }
+
+    body[data-tpl="4"] {
+      --bg: #ffffff;
+      --surface: #ffffff;
+      --surface-2: #f8fafc;
+      --text: #1e293b;
+      --muted: #64748b;
+      --primary: #14532d;
+      --accent: #b45309;
+      --accent-soft: rgba(180, 83, 9, 0.1);
+      --border: #e5e7eb;
+      --card-radius: 20px;
+      --shadow: 0 8px 24px -8px rgba(0, 0, 0, 0.09);
+      --font-heading: 'Plus Jakarta Sans', system-ui, sans-serif;
+    }
+
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--font-body);
+      transition: background 0.25s ease, color 0.25s ease;
+    }
+
+    /* Top Interactive Template Switcher Bar */
+    .switcher-bar {
+      position: sticky;
+      top: 0;
+      z-index: 2000;
+      background: linear-gradient(90deg, #070b14, #111827);
+      color: #fff;
+      padding: 10px 18px;
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      border-bottom: 2px solid #d4af37;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.35);
+    }
+    .switcher-title {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 13px;
+      font-weight: 700;
+      color: #f8d57e;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+    }
+    .tpl-pills {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+    }
+    .tpl-btn {
+      background: rgba(255,255,255,0.08);
+      color: #e2e8f0;
+      border: 1px solid rgba(255,255,255,0.16);
+      padding: 7px 13px;
+      border-radius: 999px;
+      font-size: 12.5px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.18s ease;
+    }
+    .tpl-btn:hover {
+      background: rgba(255,255,255,0.16);
+    }
+    .tpl-btn.active {
+      background: #d4af37;
+      color: #0a1120;
+      border-color: #d4af37;
+      box-shadow: 0 0 14px rgba(212,175,55,0.45);
+    }
+    .view-mode-toggle {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 12px;
+    }
+    .mode-btn {
+      background: #1e293b;
+      color: #cbd5e1;
+      border: 1px solid #334155;
+      padding: 6px 11px;
+      border-radius: 8px;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    .mode-btn.active {
+      background: #16a34a;
+      color: #fff;
+      border-color: #16a34a;
+    }
+
+    /* Brand Header */
+    .app-header {
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      padding: 14px 24px;
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+    }
+    .brand-wrap {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+    .brand-wrap img.main-logo {
+      height: 54px;
+      border-radius: 10px;
+    }
+    .brand-title {
+      font-family: var(--font-heading);
+      font-size: 28px;
+      font-weight: 700;
+      margin: 0;
+      line-height: 1.05;
+      letter-spacing: -0.01em;
+    }
+    .brand-sub {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 12.5px;
+      color: var(--muted);
+      margin-top: 3px;
+    }
+    .brand-sub img {
+      height: 20px;
+    }
+    .nav-pills {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    .nav-pill {
+      background: transparent;
+      color: var(--text);
+      border: 1px solid var(--border);
+      padding: 8px 15px;
+      border-radius: 999px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .nav-pill.primary {
+      background: var(--accent);
+      color: #0a1120;
+      border-color: var(--accent);
+    }
+
+    /* Hero / Interactive Filter Ribbon */
+    .hero-banner {
+      padding: 28px 24px 20px;
+      background: linear-gradient(135deg, #0a1120 0%, #172554 100%);
+      color: #fff;
+      position: relative;
+      overflow: hidden;
+    }
+    body[data-tpl="2"] .hero-banner {
+      padding: 14px 24px;
+      background: #0f172a;
+    }
+    body[data-tpl="3"] .hero-banner {
+      background: radial-gradient(circle at top right, #1e293b 0%, #090d16 75%);
+      border-bottom: 1px solid #1f2937;
+    }
+    body[data-tpl="4"] .hero-banner {
+      background: linear-gradient(135deg, #14532d 0%, #064e3b 100%);
+    }
+    .hero-inner {
+      max-width: 1400px;
+      margin: 0 auto;
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: 20px;
+    }
+    .hero-copy h2 {
+      font-family: var(--font-heading);
+      font-size: 34px;
+      margin: 0 0 6px;
+      color: #f8d57e;
+    }
+    body[data-tpl="2"] .hero-copy h2 {
+      font-size: 20px;
+      margin: 0;
+    }
+    .hero-copy p {
+      margin: 0;
+      color: #cbd5e1;
+      font-size: 14.5px;
+      max-width: 620px;
+    }
+    .hero-stats {
+      display: flex;
+      gap: 14px;
+      flex-wrap: wrap;
+    }
+    .stat-box {
+      background: rgba(255,255,255,0.08);
+      backdrop-filter: blur(10px);
+      border: 1px solid rgba(255,255,255,0.14);
+      padding: 10px 16px;
+      border-radius: 12px;
+      text-align: center;
+      min-width: 110px;
+    }
+    .stat-num {
+      font-size: 22px;
+      font-weight: 700;
+      color: #f8d57e;
+    }
+    .stat-lbl {
+      font-size: 11px;
+      color: #cbd5e1;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    /* Interactive Filter Controls & Sliders */
+    .interactive-controls {
+      max-width: 1440px;
+      margin: 0 auto;
+      padding: 16px 24px;
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    .filter-row {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 12px;
+    }
+    .search-box {
+      flex: 1 1 260px;
+      position: relative;
+    }
+    .search-box input {
+      width: 100%;
+      padding: 11px 14px 11px 38px;
+      border-radius: 12px;
+      border: 1px solid var(--border);
+      background: var(--surface-2);
+      color: var(--text);
+      font-size: 14px;
+    }
+    .search-box::before {
+      content: "🔍";
+      position: absolute;
+      left: 12px;
+      top: 50%;
+      transform: translateY(-50%);
+      font-size: 14px;
+    }
+    .slider-group {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      background: var(--surface-2);
+      padding: 8px 14px;
+      border-radius: 12px;
+      border: 1px solid var(--border);
+      font-size: 13px;
+    }
+    .slider-group input[type="range"] {
+      accent-color: var(--accent);
+      cursor: pointer;
+      width: 115px;
+    }
+    .quick-chips {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+    }
+    .chip {
+      background: var(--surface-2);
+      color: var(--text);
+      border: 1px solid var(--border);
+      padding: 6px 13px;
+      border-radius: 999px;
+      font-size: 12.5px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .chip.active {
+      background: var(--accent);
+      color: #0a1120;
+      border-color: var(--accent);
+    }
+
+    /* Main Workspace Layout */
+    .workspace {
+      max-width: 1440px;
+      margin: 0 auto;
+      padding: 20px 24px 60px;
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 22px;
+    }
+    /* Template 2 is Split-Screen Map + Cards */
+    body[data-tpl="2"] .workspace {
+      max-width: 100%;
+      padding: 0;
+      grid-template-columns: 46% 54%;
+      gap: 0;
+      height: calc(100vh - 195px);
+      overflow: hidden;
+    }
+    body[data-tpl="2"] .map-pane {
+      height: 100%;
+      position: sticky;
+      top: 0;
+    }
+    body[data-tpl="2"] #showcase-map {
+      height: 100% !important;
+      border-radius: 0 !important;
+      margin: 0 !important;
+    }
+    body[data-tpl="2"] .cards-pane {
+      height: 100%;
+      overflow-y: auto;
+      padding: 18px 22px 60px;
+    }
+
+    #showcase-map {
+      height: 320px;
+      border-radius: 16px;
+      border: 1px solid var(--border);
+      box-shadow: var(--shadow);
+    }
+
+    .cards-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(305px, 1fr));
+      gap: 20px;
+    }
+    body[data-tpl="2"] .cards-grid {
+      grid-template-columns: repeat(auto-fill, minmax(265px, 1fr));
+      gap: 16px;
+    }
+
+    /* Property Card Styling */
+    .prop-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--card-radius);
+      overflow: hidden;
+      box-shadow: var(--shadow);
+      display: flex;
+      flex-direction: column;
+      transition: transform 0.22s ease, box-shadow 0.22s ease, border-color 0.22s ease;
+      position: relative;
+    }
+    .prop-card:hover {
+      transform: translateY(-4px);
+      border-color: var(--accent);
+      box-shadow: 0 18px 36px -12px rgba(15, 23, 42, 0.22);
+    }
+    .card-media {
+      position: relative;
+      height: 210px;
+      overflow: hidden;
+      background: #0f172a;
+    }
+    .card-media img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+      transition: transform 0.35s ease;
+    }
+    .prop-card:hover .card-media img {
+      transform: scale(1.03);
+    }
+    .carousel-btn {
+      position: absolute;
+      top: 50%;
+      transform: translateY(-50%);
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      border: 0;
+      background: rgba(15, 23, 42, 0.75);
+      color: #fff;
+      font-size: 16px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      opacity: 0.88;
+      transition: opacity 0.15s, background 0.15s;
+      z-index: 3;
+    }
+    .carousel-btn:hover {
+      opacity: 1;
+      background: #d4af37;
+      color: #0a1120;
+    }
+    .carousel-btn.prev { left: 8px; }
+    .carousel-btn.next { right: 8px; }
+
+    .badge-top-left {
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      padding: 4px 11px;
+      border-radius: 999px;
+      font-size: 11.5px;
+      font-weight: 700;
+      letter-spacing: 0.03em;
+      text-transform: uppercase;
+      color: #fff;
+      z-index: 2;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.25);
+    }
+    .photo-counter {
+      position: absolute;
+      bottom: 10px;
+      right: 10px;
+      background: rgba(15, 23, 42, 0.82);
+      backdrop-filter: blur(6px);
+      color: #fff;
+      font-size: 11.5px;
+      font-weight: 600;
+      padding: 4px 10px;
+      border-radius: 999px;
+      z-index: 2;
+    }
+    .fav-btn {
+      position: absolute;
+      top: 10px;
+      right: 10px;
+      width: 34px;
+      height: 34px;
+      border-radius: 50%;
+      border: 0;
+      background: rgba(255,255,255,0.9);
+      cursor: pointer;
+      font-size: 16px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 2;
+    }
+
+    .card-body {
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      flex: 1;
+    }
+    .price-strip {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 8px;
+    }
+    .main-price {
+      font-family: var(--font-heading);
+      font-size: 26px;
+      font-weight: 700;
+      color: var(--text);
+    }
+    .monthly-pill {
+      background: var(--accent-soft);
+      color: var(--accent);
+      border: 1px solid var(--accent);
+      padding: 4px 10px;
+      border-radius: 999px;
+      font-size: 13px;
+      font-weight: 700;
+    }
+    body[data-tpl="1"] .monthly-pill, body[data-tpl="4"] .monthly-pill {
+      color: #92400e;
+    }
+    .down-box {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 6px;
+      background: var(--surface-2);
+      padding: 9px 10px;
+      border-radius: 10px;
+      font-size: 12px;
+      text-align: center;
+    }
+    .down-box b {
+      display: block;
+      font-size: 13.5px;
+      color: var(--text);
+    }
+    .addr-line {
+      font-size: 15px;
+      font-weight: 600;
+      color: var(--text);
+      margin: 0;
+    }
+    .specs-line {
+      font-size: 12.5px;
+      color: var(--muted);
+      display: flex;
+      gap: 10px;
+    }
+    .card-actions {
+      display: flex;
+      gap: 8px;
+      margin-top: auto;
+      padding-top: 6px;
+    }
+    .btn-card {
+      flex: 1;
+      padding: 9px 12px;
+      border-radius: 10px;
+      font-size: 12.5px;
+      font-weight: 700;
+      cursor: pointer;
+      border: 1px solid var(--border);
+      background: var(--surface-2);
+      color: var(--text);
+      transition: all 0.15s;
+    }
+    .btn-card.gold {
+      background: var(--accent);
+      color: #0a1120;
+      border-color: var(--accent);
+    }
+
+    /* Slide-over Interactive Property Drawer + Calculator */
+    .drawer-backdrop {
+      position: fixed;
+      inset: 0;
+      background: rgba(10, 17, 32, 0.65);
+      backdrop-filter: blur(4px);
+      z-index: 3000;
+      display: none;
+      justify-content: flex-end;
+    }
+    .drawer-backdrop.open {
+      display: flex;
+    }
+    .drawer {
+      width: min(680px, 96vw);
+      height: 100%;
+      background: var(--surface);
+      color: var(--text);
+      overflow-y: auto;
+      padding: 24px;
+      box-shadow: -12px 0 40px rgba(0,0,0,0.4);
+      animation: slideIn 0.22s ease;
+    }
+    @keyframes slideIn {
+      from { transform: translateX(100%); }
+      to { transform: translateX(0); }
+    }
+    .calc-card {
+      background: var(--surface-2);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 16px;
+      margin: 16px 0;
+    }
+
+    /* Comparison Floating Bar */
+    .compare-tray {
+      position: fixed;
+      bottom: 18px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: #0a1120;
+      color: #fff;
+      border: 2px solid #d4af37;
+      border-radius: 999px;
+      padding: 10px 20px;
+      display: none;
+      align-items: center;
+      gap: 14px;
+      z-index: 2500;
+      box-shadow: 0 12px 32px rgba(0,0,0,0.45);
+    }
+    .compare-tray.show {
+      display: flex;
+    }
+  </style>
+</head>
+<body data-tpl="1">
+
+  <!-- TOP TEMPLATE SWITCHER BAR -->
+  <div class="switcher-bar">
+    <div class="switcher-title">✨ Interactive Design Studio — Pick Your Template:</div>
+    <div class="tpl-pills">
+      <button class="tpl-btn active" data-set-tpl="1">1. Sotheby's Navy & Gold Editorial</button>
+      <button class="tpl-btn" data-set-tpl="2">2. Zillow Pro Split-Screen Map</button>
+      <button class="tpl-btn" data-set-tpl="3">3. Architectural Dark Concierge</button>
+      <button class="tpl-btn" data-set-tpl="4">4. Modern Discovery Marketplace</button>
+    </div>
+    <div class="view-mode-toggle">
+      <span>Preview as:</span>
+      <button class="mode-btn active" id="modeMember">🔓 Signed-In Buyer/Agent</button>
+      <button class="mode-btn" id="modeGuest">🔒 Guest Visitor</button>
+    </div>
+  </div>
+
+  <!-- SITE HEADER -->
+  <header class="app-header">
+    <div class="brand-wrap">
+      <img src="legacy-logo.png" alt="Legacy" class="main-logo">
+      <div>
+        <h1 class="brand-title">Legacy - Owner Finance</h1>
+        <div class="brand-sub">
+          <span>Brokerage By: KLC Real Estate, LLC</span>
+          <img src="klc-logo.png" alt="KLC">
+          <span style="background:#dcfce7;color:#166534;padding:2px 8px;border-radius:999px;font-weight:700;font-size:11px">● 50 Active Homes Live</span>
+        </div>
+      </div>
+    </div>
+    <div class="nav-pills">
+      <button class="nav-pill primary">Inventory Explorer</button>
+      <button class="nav-pill" onclick="alert('Interactive Payment Calculator is built into every property card — click Calculator / Details on any home to try it!')">Payment Calculator</button>
+      <button class="nav-pill" onclick="location.href='index.html'">← Back to Live App</button>
+    </div>
+  </header>
+
+  <!-- HERO SECTION -->
+  <section class="hero-banner">
+    <div class="hero-inner">
+      <div class="hero-copy">
+        <h2 id="heroHeadline">Oklahoma's Premier Owner-Finance Portfolio</h2>
+        <p id="heroSub">Browse verified owner-financed homes across Oklahoma City, Del City, Midwest City, Yukon, and surrounding communities — with interactive payment modeling and instant showing requests.</p>
+      </div>
+      <div class="hero-stats">
+        <div class="stat-box"><div class="stat-num" id="statTotal">50</div><div class="stat-lbl">Active Homes</div></div>
+        <div class="stat-box"><div class="stat-num" id="statAvail">32</div><div class="stat-lbl">Available Now</div></div>
+        <div class="stat-box"><div class="stat-num" id="statLowDown">$3.5k+</div><div class="stat-lbl">Min Down</div></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- INTERACTIVE FILTER & SLIDER BAR -->
+  <section class="interactive-controls">
+    <div class="filter-row">
+      <div class="search-box">
+        <input type="text" id="qInput" placeholder="Search street, city, or zip code (e.g., Oklahoma City, Del City, 73115)…">
+      </div>
+      <div class="slider-group" id="downSliderWrap">
+        <span>Max Down: <b id="downValLabel">Any</b></span>
+        <input type="range" id="downSlider" min="3500" max="40000" step="500" value="40000">
+      </div>
+      <div class="slider-group" id="moSliderWrap">
+        <span>Max Monthly: <b id="moValLabel">Any</b></span>
+        <input type="range" id="moSlider" min="900" max="3000" step="50" value="3000">
+      </div>
+    </div>
+    <div class="quick-chips">
+      <button class="chip active" data-chip="ALL">All Active Homes (50)</button>
+      <button class="chip" data-chip="AVAILABLE">✅ Available Only (32)</button>
+      <button class="chip" data-chip="LOW_DOWN">🔥 Down ≤ $10,000</button>
+      <button class="chip" data-chip="LOW_MONTHLY">💳 Monthly ≤ $1,500/mo</button>
+      <button class="chip" data-chip="BEDS_3">🛏️ 3+ Bedrooms</button>
+      <button class="chip" data-chip="COMING_SOON">⏳ Coming Soon (7)</button>
+    </div>
+  </section>
+
+  <!-- MAIN WORKSPACE -->
+  <div class="workspace">
+    <div class="map-pane">
+      <div id="showcase-map"></div>
+    </div>
+    <div class="cards-pane">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
+        <div style="font-size:14px;font-weight:600"><span id="matchCount">50</span> properties matching your criteria</div>
+        <div style="font-size:12.5px;color:var(--muted)">💡 Tip: Click ‹ › on any photo to swipe through the gallery</div>
+      </div>
+      <div class="cards-grid" id="cardsGrid"></div>
+    </div>
+  </div>
+
+  <!-- INTERACTIVE SLIDE-OVER PROPERTY DRAWER -->
+  <div class="drawer-backdrop" id="drawerBackdrop">
+    <div class="drawer" id="drawerContent"></div>
+  </div>
+
+  <!-- FLOATING COMPARE TRAY -->
+  <div class="compare-tray" id="compareTray">
+    <span>📊 <b id="compareCount">0</b> homes selected to compare</span>
+    <button class="tpl-btn active" id="openCompareBtn">Compare Side-by-Side</button>
+    <button class="tpl-btn" id="clearCompareBtn">Clear</button>
+  </div>
+
+  <script>
+    let DATA = null;
+    let isMember = true;
+    let activeChip = 'ALL';
+    let maxDownFilter = 40000;
+    let maxMoFilter = 3000;
+    let searchQ = '';
+    let photoIdxMap = {};
+    let compareIds = new Set();
+    let map = null;
+    let markersById = {};
+
+    const params = new URLSearchParams(location.search);
+    const initialTpl = params.get('tpl') || '1';
+    if (['1','2','3','4'].includes(initialTpl)) {
+      document.body.dataset.tpl = initialTpl;
+      document.querySelectorAll('[data-set-tpl]').forEach(b => b.classList.toggle('active', b.dataset.setTpl === initialTpl));
+    }
+    if (params.get('guest') === '1') {
+      isMember = false;
+      document.getElementById('modeMember').classList.remove('active');
+      document.getElementById('modeGuest').classList.add('active');
+    }
+
+    const money = cents => cents == null ? '—' : '$' + Math.round(cents / 100).toLocaleString('en-US');
+    const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+    const partialAddr = l => {
+      const s = (l.approxLocation && l.approxLocation.streetOnly) || String(l.address || '').replace(/^\s*\d+[A-Za-z\-]*\s+/, '').trim();
+      return `${s.replace(/^\s*\d+[A-Za-z\-]*\s+/, '').trim() || 'Street Hidden'}, ${l.city || 'OK'}`;
+    };
+
+    function setTemplate(n) {
+      document.body.dataset.tpl = String(n);
+      document.querySelectorAll('[data-set-tpl]').forEach(b => b.classList.toggle('active', b.dataset.setTpl === String(n)));
+      setTimeout(() => { if (map) map.invalidateSize(); }, 260);
+    }
+
+    document.querySelectorAll('[data-set-tpl]').forEach(btn => {
+      btn.onclick = () => setTemplate(btn.dataset.setTpl);
+    });
+
+    document.getElementById('modeMember').onclick = () => {
+      isMember = true;
+      document.getElementById('modeMember').classList.add('active');
+      document.getElementById('modeGuest').classList.remove('active');
+      renderAll();
+    };
+    document.getElementById('modeGuest').onclick = () => {
+      isMember = false;
+      document.getElementById('modeGuest').classList.add('active');
+      document.getElementById('modeMember').classList.remove('active');
+      renderAll();
+    };
+
+    document.getElementById('qInput').oninput = e => { searchQ = e.target.value.toLowerCase(); renderAll(); };
+    document.getElementById('downSlider').oninput = e => {
+      maxDownFilter = +e.target.value;
+      document.getElementById('downValLabel').textContent = maxDownFilter >= 40000 ? 'Any' : '$' + maxDownFilter.toLocaleString();
+      renderAll();
+    };
+    document.getElementById('moSlider').oninput = e => {
+      maxMoFilter = +e.target.value;
+      document.getElementById('moValLabel').textContent = maxMoFilter >= 3000 ? 'Any' : '$' + maxMoFilter.toLocaleString() + '/mo';
+      renderAll();
+    };
+    document.querySelectorAll('[data-chip]').forEach(c => {
+      c.onclick = () => {
+        activeChip = c.dataset.chip;
+        document.querySelectorAll('[data-chip]').forEach(x => x.classList.toggle('active', x === c));
+        renderAll();
+      };
+    });
+
+    function getFiltered() {
+      if (!DATA) return [];
+      return DATA.listings.filter(l => {
+        const text = (l.address + ' ' + l.city + ' ' + (l.zip || '')).toLowerCase();
+        if (searchQ && !text.includes(searchQ)) return false;
+        if (isMember) {
+          if (maxDownFilter < 40000 && (l.downPayment || 0) > maxDownFilter * 100) return false;
+          if (maxMoFilter < 3000 && (l.monthlyPayment || 0) > maxMoFilter * 100) return false;
+        }
+        if (activeChip === 'AVAILABLE' && l.status !== 'AVAILABLE') return false;
+        if (activeChip === 'COMING_SOON' && l.status !== 'COMING_SOON') return false;
+        if (activeChip === 'LOW_DOWN' && ((l.downPayment || 99999999) > 1000000)) return false;
+        if (activeChip === 'LOW_MONTHLY' && ((l.monthlyPayment || 99999999) > 150000)) return false;
+        if (activeChip === 'BEDS_3' && ((l.beds || 0) < 3)) return false;
+        return true;
+      }).sort((a, b) => {
+        // Put homes with real multi-photo galleries first for visual showcase
+        const aReal = (a.photoUrls && a.photoUrls.length > 1) ? 0 : 1;
+        const bReal = (b.photoUrls && b.photoUrls.length > 1) ? 0 : 1;
+        if (aReal !== bReal) return aReal - bReal;
+        return (a.askingPrice || 0) - (b.askingPrice || 0);
+      });
+    }
+
+    function statusColor(st) {
+      return ({AVAILABLE:'#16a34a', COMING_SOON:'#2563eb', PENDING:'#d97706'})[st] || '#475569';
+    }
+
+    function renderCards(list) {
+      const grid = document.getElementById('cardsGrid');
+      document.getElementById('matchCount').textContent = list.length;
+      grid.innerHTML = list.map(l => {
+        const photos = (l.photoUrls && l.photoUrls.length) ? l.photoUrls : [l.photoUrl || 'listing-placeholder.svg'];
+        const idx = photoIdxMap[l.id] || 0;
+        const curPhoto = photos[idx % photos.length];
+        const hasMulti = photos.length > 1;
+
+        if (!isMember) {
+          return `<article class="prop-card" data-card-id="${l.id}">
+            <div class="card-media">
+              <span class="badge-top-left" style="background:#0f172a">🔒 Guest Preview</span>
+              <img src="${esc(curPhoto)}" referrerpolicy="no-referrer" loading="lazy">
+              ${hasMulti ? `<button class="carousel-btn prev" data-prev="${l.id}">‹</button><button class="carousel-btn next" data-next="${l.id}">›</button>` : ''}
+              <span class="photo-counter">📷 ${(idx % photos.length) + 1} / ${photos.length}</span>
+            </div>
+            <div class="card-body">
+              <p class="addr-line">📍 ${esc(partialAddr(l))}</p>
+              <div style="font-size:12.5px;color:var(--muted);background:var(--surface-2);padding:10px;border-radius:10px;border:1px dashed var(--border)">
+                🔒 Create a free account or log in to unlock the full street address, price, down payment, monthly payment, and beds/baths.
+              </div>
+              <div class="card-actions">
+                <button class="btn-card gold" data-open-drawer="${l.id}">Unlock Full Details</button>
+                <button class="btn-card" data-open-drawer="${l.id}">Gallery (${photos.length})</button>
+              </div>
+            </div>
+          </article>`;
+        }
+
+        const isComp = compareIds.has(l.id);
+        return `<article class="prop-card" data-card-id="${l.id}">
+          <div class="card-media">
+            <span class="badge-top-left" style="background:${statusColor(l.status)}">${esc(l.status.replace('_',' '))}</span>
+            <button class="fav-btn" title="Compare Home" data-compare="${l.id}">${isComp ? '✅' : '⚖️'}</button>
+            <img src="${esc(curPhoto)}" referrerpolicy="no-referrer" loading="lazy" data-open-drawer="${l.id}" style="cursor:pointer">
+            ${hasMulti ? `<button class="carousel-btn prev" data-prev="${l.id}">‹</button><button class="carousel-btn next" data-next="${l.id}">›</button>` : ''}
+            <span class="photo-counter">📷 ${(idx % photos.length) + 1} / ${photos.length}</span>
+          </div>
+          <div class="card-body">
+            <div class="price-strip">
+              <span class="main-price">${money(l.askingPrice)}</span>
+              <span class="monthly-pill">${money(l.monthlyPayment)}/mo</span>
+            </div>
+            <p class="addr-line">${esc(l.address)}, ${esc(l.city)}, OK ${esc(l.zip || '')}</p>
+            <div class="down-box">
+              <div>Down Payment<b>${money(l.downPayment)}</b></div>
+              <div>Beds / Baths<b>${l.beds ?? '—'} bd · ${l.baths ?? '—'} ba</b></div>
+              <div>Living Area<b>${l.sqft ? l.sqft.toLocaleString() + ' sqft' : 'Owner Fin.'}</b></div>
+            </div>
+            <div class="card-actions">
+              <button class="btn-card gold" data-open-drawer="${l.id}">Interactive Calculator & Details</button>
+            </div>
+          </div>
+        </article>`;
+      }).join('');
+
+      grid.querySelectorAll('[data-prev]').forEach(b => {
+        b.onclick = e => {
+          e.stopPropagation();
+          const id = b.dataset.prev;
+          const l = DATA.listings.find(x => x.id === id);
+          const len = (l.photoUrls && l.photoUrls.length) || 1;
+          photoIdxMap[id] = ((photoIdxMap[id] || 0) - 1 + len) % len;
+          renderCards(list);
+        };
+      });
+      grid.querySelectorAll('[data-next]').forEach(b => {
+        b.onclick = e => {
+          e.stopPropagation();
+          const id = b.dataset.next;
+          const l = DATA.listings.find(x => x.id === id);
+          const len = (l.photoUrls && l.photoUrls.length) || 1;
+          photoIdxMap[id] = ((photoIdxMap[id] || 0) + 1) % len;
+          renderCards(list);
+        };
+      });
+      grid.querySelectorAll('[data-open-drawer]').forEach(b => {
+        b.onclick = () => openDrawer(b.dataset.openDrawer);
+      });
+      grid.querySelectorAll('[data-compare]').forEach(b => {
+        b.onclick = e => {
+          e.stopPropagation();
+          const id = b.dataset.compare;
+          if (compareIds.has(id)) compareIds.delete(id);
+          else if (compareIds.size < 3) compareIds.add(id);
+          else alert('You can compare up to 3 homes side by side.');
+          updateCompareTray();
+          renderCards(list);
+        };
+      });
+      grid.querySelectorAll('.prop-card').forEach(card => {
+        card.onmouseenter = () => {
+          const m = markersById[card.dataset.cardId];
+          if (m) m.openPopup();
+        };
+      });
+    }
+
+    function updateCompareTray() {
+      const tray = document.getElementById('compareTray');
+      document.getElementById('compareCount').textContent = compareIds.size;
+      tray.classList.toggle('show', compareIds.size > 0);
+    }
+
+    document.getElementById('clearCompareBtn').onclick = () => {
+      compareIds.clear();
+      updateCompareTray();
+      renderAll();
+    };
+
+    document.getElementById('openCompareBtn').onclick = () => {
+      const items = [...compareIds].map(id => DATA.listings.find(x => x.id === id)).filter(Boolean);
+      if (!items.length) return;
+      const box = document.getElementById('drawerContent');
+      box.innerHTML = `<div style="display:flex;justify-content:space-between;align-items:center">
+        <h2 style="font-family:var(--font-heading);margin:0">⚖️ Side-by-Side Home Comparison</h2>
+        <button class="nav-pill" onclick="closeDrawer()">✕ Close</button>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(${items.length},1fr);gap:14px;margin-top:18px">
+        ${items.map(l => `<div style="border:1px solid var(--border);border-radius:12px;padding:12px;background:var(--surface-2)">
+          <img src="${esc(l.photoUrl)}" referrerpolicy="no-referrer" style="width:100%;height:130px;object-fit:cover;border-radius:8px">
+          <h4 style="margin:8px 0 4px">${esc(l.address)}</h4>
+          <div style="font-size:12px;color:var(--muted);margin-bottom:8px">${esc(l.city)}, OK ${esc(l.zip||'')}</div>
+          <div style="font-size:13px;line-height:1.8">
+            <div><b>Price:</b> ${money(l.askingPrice)}</div>
+            <div><b>Down:</b> ${money(l.downPayment)}</div>
+            <div><b>Monthly:</b> ${money(l.monthlyPayment)}/mo</div>
+            <div><b>Beds/Baths:</b> ${l.beds ?? '—'} bd / ${l.baths ?? '—'} ba</div>
+            <div><b>Sq Ft:</b> ${l.sqft ? l.sqft.toLocaleString() : '—'}</div>
+          </div>
+        </div>`).join('')}
+      </div>`;
+      document.getElementById('drawerBackdrop').classList.add('open');
+    };
+
+    function openDrawer(id) {
+      const l = DATA.listings.find(x => x.id === id);
+      if (!l) return;
+      const photos = (l.photoUrls && l.photoUrls.length) ? l.photoUrls : [l.photoUrl];
+      const box = document.getElementById('drawerContent');
+      const priceD = Math.round((l.askingPrice || 16000000) / 100);
+      const downD = Math.round((l.downPayment || 1000000) / 100);
+      const moD = Math.round((l.monthlyPayment || 150000) / 100);
+
+      box.innerHTML = `<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+        <span style="background:${statusColor(l.status)};color:#fff;padding:4px 12px;border-radius:999px;font-size:12px;font-weight:700">${esc(l.status)}</span>
+        <button class="nav-pill" onclick="closeDrawer()">✕ Close</button>
+      </div>
+      <h2 style="font-family:var(--font-heading);font-size:28px;margin:0 0 4px">${isMember ? esc(l.address + ', ' + l.city + ', OK ' + (l.zip||'')) : '📍 ' + esc(partialAddr(l))}</h2>
+      <div style="display:flex;gap:8px;overflow-x:auto;padding:10px 0">
+        ${photos.slice(0, 12).map(p => `<img src="${esc(p)}" referrerpolicy="no-referrer" style="height:190px;border-radius:10px;object-fit:cover">`).join('')}
+      </div>
+      ${isMember ? `
+        <div class="calc-card">
+          <h3 style="margin:0 0 8px;font-size:16px">🧮 Interactive Owner-Finance Payment Estimator</h3>
+          <p style="margin:0 0 12px;font-size:12.5px;color:var(--muted)">Slide your down payment below to see how increasing your down payment lowers your estimated monthly payment:</p>
+          <div style="display:flex;justify-content:space-between;font-size:13.5px;margin-bottom:6px">
+            <span>Your Down Payment: <b id="calcDownLbl">$${downD.toLocaleString()}</b></span>
+            <span>Financed Balance: <b id="calcBalLbl">$${Math.max(0, priceD - downD).toLocaleString()}</b></span>
+          </div>
+          <input type="range" id="calcSlider" min="${Math.max(2000, Math.round(downD*0.7))}" max="${Math.round(priceD*0.5)}" step="500" value="${downD}" style="width:100%;accent-color:var(--accent)">
+          <div style="margin-top:12px;padding:12px;background:var(--surface);border-radius:10px;display:flex;justify-content:space-between;align-items:center">
+            <span>Estimated Monthly Payment (PITI):</span>
+            <strong style="font-size:22px;color:var(--accent)" id="calcMoLbl">$${moD.toLocaleString()}/mo</strong>
+          </div>
+        </div>
+        <p style="font-size:14px;line-height:1.6">${esc(l.description || '')}</p>
+      ` : `
+        <div class="calc-card" style="text-align:center">
+          <h3>🔒 Create Your Free Account to Unlock Full Details</h3>
+          <p style="font-size:13.5px;color:var(--muted)">Registered buyers and agents unlock the exact street number, asking price, down payment, interactive payment calculator, and 1-click showing requests.</p>
+          <button class="btn-card gold" onclick="location.href='index.html#auth'" style="max-width:260px;margin:8px auto 0">Create Free Account / Log In</button>
+        </div>
+      `}`;
+
+      document.getElementById('drawerBackdrop').classList.add('open');
+      const sl = document.getElementById('calcSlider');
+      if (sl) {
+        sl.oninput = e => {
+          const newDown = +e.target.value;
+          const diff = newDown - downD;
+          const estMo = Math.max(450, Math.round(moD - (diff * 0.0085)));
+          document.getElementById('calcDownLbl').textContent = '$' + newDown.toLocaleString();
+          document.getElementById('calcBalLbl').textContent = '$' + Math.max(0, priceD - newDown).toLocaleString();
+          document.getElementById('calcMoLbl').textContent = '$' + estMo.toLocaleString() + '/mo';
+        };
+      }
+    }
+
+    function closeDrawer() {
+      document.getElementById('drawerBackdrop').classList.remove('open');
+    }
+    document.getElementById('drawerBackdrop').onclick = e => {
+      if (e.target.id === 'drawerBackdrop') closeDrawer();
+    };
+
+    function renderMap(list) {
+      if (!window.L) return;
+      if (!map) {
+        map = L.map('showcase-map').setView([35.47, -97.52], 10);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '© OpenStreetMap' }).addTo(map);
+      }
+      Object.values(markersById).forEach(m => map.removeLayer(m));
+      markersById = {};
+      const pts = [];
+      list.forEach(l => {
+        const lat = isMember ? l.latitude : (l.approxLocation && l.approxLocation.lat);
+        const lng = isMember ? l.longitude : (l.approxLocation && l.approxLocation.lng);
+        if (lat == null || lng == null) return;
+        pts.push([lat, lng]);
+        const m = L.marker([lat, lng]).addTo(map);
+        m.bindPopup(isMember
+          ? `<b>${esc(l.address)}</b><br>${money(l.askingPrice)} · Down ${money(l.downPayment)} · ${money(l.monthlyPayment)}/mo`
+          : `<b>📍 ${esc(partialAddr(l))}</b><br>Log in for full address & price`);
+        markersById[l.id] = m;
+      });
+      if (pts.length) map.fitBounds(pts, { padding: [28, 28], animate: false });
+    }
+
+    function renderAll() {
+      const list = getFiltered();
+      renderCards(list);
+      renderMap(list);
+    }
+
+    fetch('app-data.json', { cache: 'no-store' })
+      .then(r => r.json())
+      .then(d => {
+        DATA = d;
+        renderAll();
+      });
+  </script>
+</body>
+</html>
