@@ -445,7 +445,7 @@ S.register=f=>{
   if(!emailNorm)throw new Error(S.lang==='es'?'Ingresa un correo válido':'Please enter a valid email');
   if(byEmail(emailNorm))throw new Error(S.lang==='es'?'Ya existe una cuenta con ese correo. Inicia sesión o usa "¿Olvidaste tu contraseña?".':'An account with that email already exists. Please log in or use "Forgot password?".');
   const u={id:uid(),email:emailNorm,name:String(f.name||'').trim(),phone:String(f.phone||'').trim(),role:f.role==='AGENT'?'AGENT':'BUYER',avatarUrl:null,
-    brokerage:f.brokerage||null,folderSlug:slugify(f.name)+'-'+Math.random().toString(36).slice(2,6),passwordHash:hash(f.password),approvalStatus:'PENDING',createdAt:now(),updatedAt:now()};
+    brokerage:f.brokerage||null,folderSlug:slugify(f.name)+'-'+Math.random().toString(36).slice(2,6),passwordHash:hash(f.password),approvalStatus:f.role==='AGENT'?'PENDING':'APPROVED',createdAt:now(),updatedAt:now()};
   S.data.users.push(u);
   if(u.role==='AGENT'){
     const ap={id:uid(),userId:u.id,brokerage:f.brokerage||'',licenseNumber:f.licenseNumber||'',licenseState:'OK',licenseHolderName:u.name,
