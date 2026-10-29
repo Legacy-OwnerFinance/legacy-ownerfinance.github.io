@@ -432,6 +432,9 @@ S.login=(email,pw)=>{
   return u;
 };
 S.logout=()=>setUser(null);
+S.isPendingApproval=u=>Boolean(u&&(u.approvalStatus==='PENDING'||u.approvalStatus==='REJECTED'));
+const needApproved=()=>{if(S.user&&!S.isAdmin()&&S.isPendingApproval(S.user))throw new Error(S.lang==='es'?'Tu cuenta está pendiente de aprobación. Te avisaremos cuando esté aprobada.':'Your account is pending approval. We will let you know once it is approved.');};
+S.setApproval=(userId,status)=>{const u=S.data.users.find(x=>x.id===userId);if(!u)return;u.approvalStatus=status;u.approvedAt=now();u.updatedAt=now();if(S.user&&S.user.id===u.id)S.user.approvalStatus=status;S.save();};
 const hash=pw=>{
   const clean=String(pw||'').trim();
   if(clean.length<8)throw new Error(S.lang==='es'?'La contraseña debe tener al menos 8 caracteres':'Password must be at least 8 characters');
@@ -442,7 +445,7 @@ S.register=f=>{
   if(!emailNorm)throw new Error(S.lang==='es'?'Ingresa un correo válido':'Please enter a valid email');
   if(byEmail(emailNorm))throw new Error(S.lang==='es'?'Ya existe una cuenta con ese correo. Inicia sesión o usa "¿Olvidaste tu contraseña?".':'An account with that email already exists. Please log in or use "Forgot password?".');
   const u={id:uid(),email:emailNorm,name:String(f.name||'').trim(),phone:String(f.phone||'').trim(),role:f.role==='AGENT'?'AGENT':'BUYER',avatarUrl:null,
-    brokerage:f.brokerage||null,folderSlug:slugify(f.name)+'-'+Math.random().toString(36).slice(2,6),passwordHash:hash(f.password),createdAt:now(),updatedAt:now()};
+    brokerage:f.brokerage||null,folderSlug:slugify(f.name)+'-'+Math.random().toString(36).slice(2,6),passwordHash:hash(f.password),approvalStatus:'PENDING',createdAt:now(),updatedAt:now()};
   S.data.users.push(u);
   if(u.role==='AGENT'){
     const ap={id:uid(),userId:u.id,brokerage:f.brokerage||'',licenseNumber:f.licenseNumber||'',licenseState:'OK',licenseHolderName:u.name,
@@ -538,7 +541,7 @@ S.sendMessage=({toUserId,listingId,kind,body})=>{if(!S.user)throw new Error(S.la
   return m;
 };
 S.myMessages=()=>S.user?S.data.messages.filter(m=>m.fromUserId===S.user.id||m.toUserId===S.user.id):[];
-S.submitOffer=f=>{if(!S.user)throw new Error(S.lang==='es'?'Inicia sesión primero':'Please log in');
+S.submitOffer=f=>{if(!S.user)throw new Error(S.lang==='es'?'Inicia sesión primero':'Please log in');needApproved();
   const o={id:uid(),userId:S.user.id,listingId:f.listingId,offerPrice:+f.offerPrice*100,
     downPayment:+f.downPayment*100,monthlyPayment:+f.monthlyPayment*100,notes:f.notes||'',inspections:f.inspections==='YES',status:'SUBMITTED',createdAt:now()};
   S.data.offers.push(o);
@@ -560,7 +563,7 @@ S.submitOffer=f=>{if(!S.user)throw new Error(S.lang==='es'?'Inicia sesión prime
   },'id');
   return o;
 };
-S.requestShowing=f=>{if(!S.user)throw new Error(S.lang==='es'?'Inicia sesión primero':'Please log in');
+S.requestShowing=f=>{if(!S.user)throw new Error(S.lang==='es'?'Inicia sesión primero':'Please log in');needApproved();
   const sh={id:uid(),userId:S.user.id,listingId:f.listingId,preferredAt:f.preferredAt,notes:f.notes||'',status:'REQUESTED',createdAt:now()};
   S.data.showings.push(sh);
   S.save();
