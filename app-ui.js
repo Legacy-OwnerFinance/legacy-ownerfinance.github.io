@@ -466,7 +466,7 @@ function card(l){
     <div class="card-body"><div class="price-strip"><span class="main-price">${S.money(l.askingPrice)}</span><span class="monthly-pill">${S.money(l.monthlyPayment)}${tr('perMo')}</span></div>
     <p class="addr-line">${title(l)}</p>
     <div class="down-box"><div>${tr('down')}<b>${S.money(l.downPayment)}</b></div><div>${tr('beds')}/${tr('baths')}<b>${l.beds??'—'} · ${l.baths??'—'}</b></div><div>Sq Ft<b>${l.sqft?(+l.sqft).toLocaleString():'—'}</b></div></div>
-    <div class="card-actions"><button type="button" class="btn-card primary" data-open="${l.id}">${S.lang==='es'?'Calculadora y Detalles':'Calculator & Details'}</button></div></div></article>`;
+    <div class="card-actions"><button type="button" class="btn-card primary" data-open="${l.id}">${S.lang==='es'?'Ver Detalles':'View Details'}</button></div></div></article>`;
 }
 
 function drawMap(){if(!window.L||!$('#inventory-map'))return;if(map){map.remove();map=null;}MARK={};
@@ -504,19 +504,11 @@ function openListing(id){const l=S.listing(id);if(!l)return;S.recordView(id);con
    ${l.photosUrl?`<a href="${esc(l.photosUrl)}" target="_blank" rel="noopener">${tr('morePhotos')}</a>`:''}
    <p>${tr('price')} <b>${S.money(l.askingPrice)}</b> · ${tr('down')} <b>${S.money(l.downPayment)}</b> · ${tr('monthly')} <b>${S.money(l.monthlyPayment)}</b> · ${l.termYears||'—'} ${tr('yrs')}</p>
    <p style="font-size:14px;color:#475569">${l.beds??'—'} bd · ${l.baths??'—'} ba · ${l.sqft?l.sqft+' sqft':''}</p>
-   ${(()=>{const pr=Math.round((l.askingPrice||0)/100),dn=Math.round((l.downPayment||0)/100),mo=Math.round((l.monthlyPayment||0)/100);if(!pr||!dn||!mo)return '';
-     return `<div class="calc-card"><h3 style="margin:0 0 6px;font-size:16px">🧮 ${S.lang==='es'?'Calculadora de Pago (Owner Finance)':'Owner-Finance Payment Estimator'}</h3>
-     <p style="margin:0 0 10px;font-size:12px;color:var(--muted)">${S.lang==='es'?'Mueve el enganche para ver cómo cambia tu mensualidad estimada. Es solo una estimación; los términos finales los confirma el vendedor.':'Slide the down payment to see how your estimated monthly payment changes. Estimate only; final terms are set by the seller.'}</p>
-     <div style="display:flex;justify-content:space-between;font-size:13px"><span>${tr('down')}: <b id="cDn">$${dn.toLocaleString()}</b></span><span>${S.lang==='es'?'Saldo':'Balance'}: <b id="cBal">$${Math.max(0,pr-dn).toLocaleString()}</b></span></div>
-     <input type="range" id="cSl" min="${Math.max(1000,Math.round(dn*0.5/500)*500)}" max="${Math.max(dn+1000,Math.round(pr*0.5/500)*500)}" step="500" value="${dn}" data-pr="${pr}" data-dn="${dn}" data-mo="${mo}" style="width:100%;accent-color:var(--accent)">
-     <div style="margin-top:8px;padding:10px;background:var(--surface);border-radius:9px;display:flex;justify-content:space-between;align-items:center"><span>${S.lang==='es'?'Mensualidad estimada':'Estimated monthly'}</span><strong id="cMo" style="font-size:20px;color:var(--accent)">$${mo.toLocaleString()}${tr('perMo')}</strong></div></div>`;})()}
    <p>${esc(l.description)}</p>
-   <h3>${tr('makeOffer')}</h3><form id="offerF"><input name="offerPrice" type="number" placeholder="${tr('offerPrice')}" required><input name="downPayment" type="number" placeholder="${tr('downPayment')}" required><input name="monthlyPayment" type="number" placeholder="${tr('monthlyPayment')}" required><textarea name="notes" placeholder="${tr('notes')}"></textarea><button>${tr('submitOffer')}</button></form>
+   <h3>${tr('makeOffer')}</h3><form id="offerF"><label style="display:flex;gap:8px;align-items:center;font-weight:600;margin-bottom:6px"><input type="checkbox" id="allAsk" style="width:auto"> All asking (${S.lang==='es'?'precio, enganche y mensualidad que pide el vendedor':'full asking price, down & monthly'})</label><input name="offerPrice" type="number" placeholder="${tr('offerPrice')}" required><input name="downPayment" type="number" placeholder="${tr('downPayment')}" required><input name="monthlyPayment" type="number" placeholder="${tr('monthlyPayment')}" required><textarea name="notes" placeholder="${tr('notes')}"></textarea><button>${tr('submitOffer')}</button></form>
    <h3>${tr('requestShowing')}</h3><form id="showF"><input name="preferredAt" type="datetime-local" required><input name="notes" placeholder="${tr('notes')}"><button>${tr('requestShowingBtn')}</button></form>
    ${ag?`<h3>${tr('shareHouse')}</h3><form id="shareF"><textarea name="body" placeholder="${tr('msgToAgent')}">${tr('defaultShareMsg')}</textarea><button>${tr('shareHouse')}</button> <button type="button" id="reqAcc">${tr('requestAccess')}</button></form>`:''}`);
-  const cs=m.querySelector('#cSl');if(cs)cs.oninput=()=>{const pr=+cs.dataset.pr,dn0=+cs.dataset.dn,mo0=+cs.dataset.mo,dn=+cs.value;
-    const bal0=Math.max(1,pr-dn0),est=Math.max(0,Math.round(mo0*(Math.max(0,pr-dn)/bal0)));
-    m.querySelector('#cDn').textContent='$'+dn.toLocaleString();m.querySelector('#cBal').textContent='$'+Math.max(0,pr-dn).toLocaleString();m.querySelector('#cMo').textContent='$'+est.toLocaleString()+tr('perMo');};
+  const aa=m.querySelector('#allAsk');if(aa)aa.onchange=()=>{const f=m.querySelector('#offerF');const v={offerPrice:l.askingPrice,downPayment:l.downPayment,monthlyPayment:l.monthlyPayment};['offerPrice','downPayment','monthlyPayment'].forEach(k=>{const i=f.elements[k];if(aa.checked){i.value=Math.round((v[k]||0)/100);i.readOnly=true;}else{i.readOnly=false;}});const n=f.elements.notes;if(aa.checked&&!/^All asking/.test(n.value))n.value='All asking'+(n.value?' - '+n.value:'');if(!aa.checked)n.value=n.value.replace(/^All asking( - )?/,'');};
   const on=(s,f)=>{const el=m.querySelector(s);if(el)el.onsubmit=wrap(()=>{f(fd(el));alert(tr('sentAlert'));m.remove();render();});};
   on('#offerF',v=>S.submitOffer({...v,listingId:id}));on('#showF',v=>S.requestShowing({...v,listingId:id}));
   on('#shareF',v=>S.sendMessage({toUserId:ag.id,listingId:id,kind:'SHARE_HOUSE',body:v.body}));
