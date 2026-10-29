@@ -25,6 +25,7 @@ const initTab=()=>{
   if(p.includes('/guides'))return 'guides';
   return 'inventory';
 };
+let PIDX={},CMP=new Set(),CHIP='ALL',MARK={};
 let tab=initTab(),F={q:'',city:'',area:'',beds:'',baths:'',maxDown:'',maxMonthly:'',maxPrice:'',status:'',sort:'priceAsc'},map=null;
 
 const L10N={
@@ -323,7 +324,7 @@ const partialAddr=l=>{
 const title=l=>S.user?`${esc(l.address)}, ${esc(l.city)}, ${esc(l.state||'OK')} ${esc(l.zip||'')}`:partialAddr(l);
 
 function modal(html){const m=document.createElement('div');m.className='modal-backdrop';m.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.55);display:flex;align-items:center;justify-content:center;z-index:9999';
-  m.innerHTML=`<div class="modal card" style="background:#fff;max-width:640px;width:94%;max-height:90vh;overflow:auto;padding:20px;border-radius:12px"><button class="close" style="float:right">✕</button>${html}</div>`;
+  m.style.justifyContent='flex-end';m.innerHTML=`<div class="drawer-panel"><button class="close nav-pill" style="float:right">✕</button>${html}</div>`;
   m.onclick=e=>{if(e.target===m||e.target.classList.contains('close'))m.remove();};document.body.appendChild(m);return m;}
 const wrap=fn=>async e=>{e&&e.preventDefault&&e.preventDefault();try{await fn(e);}catch(err){alert(err.message);}};
 const fd=f=>Object.fromEntries(new FormData(f));
@@ -377,14 +378,13 @@ function header(){
   const T=[['inventory',tr('navInventory')],['guides',tr('navGuides')],['dashboard',tr('navDashboard')]];
   if(S.isAdmin())T.push(['admin',tr('navAdmin')]);
   if(!S.user)T.push(['auth',tr('navAuth')]);
-  const cloudPill=`<span style="display:inline-flex;align-items:center;gap:4px;background:${S.cloudConnected?'#dcfce7':'#fef3c7'};color:${S.cloudConnected?'#166534':'#92400e'};padding:3px 10px;border-radius:999px;font-size:12px;font-weight:600">${S.cloudConnected?tr('cloudLive'):tr('cloudOffline')}</span>`;
-  return `<header class="site-header" style="display:flex;flex-wrap:wrap;align-items:center;gap:14px;padding:12px 18px">
-   <img src="legacy-logo.png" alt="Legacy" style="height:56px"><div><h1 style="font-family:'Cormorant Garamond',serif;margin:0">Legacy - Owner Finance</h1>
-   <div style="display:flex;flex-wrap:wrap;align-items:center;gap:8px;font-size:13px">Brokerage By: KLC Real Estate, LLC <img src="klc-logo.png" alt="KLC" style="height:22px"> ${cloudPill}</div></div>
-   <nav style="display:flex;gap:6px;flex-wrap:wrap;margin-left:auto">${T.map(([k,v])=>`<button data-tab="${k}" class="${tab===k?'active':''}">${v}</button>`).join('')}
-   ${S.user?`<button id="logout">${tr('logout')} (${esc(S.user.name)})</button>`:''}
-   <button data-lang="en" class="${S.lang==='en'?'active':''}">EN</button><button data-lang="es" class="${S.lang==='es'?'active':''}">ES</button></nav></header>
-   <div class="guide-banner" style="padding:8px 18px;background:#f5efe3">${tr('newHere')} <a href="#guides" data-tab="guides">${tr('guideLink')}</a></div>`;
+  const cloudPill=`<span style="background:${S.cloudConnected?'#dcfce7':'#fef3c7'};color:${S.cloudConnected?'#166534':'#92400e'};padding:2px 8px;border-radius:999px;font-weight:700;font-size:11px">${S.cloudConnected?tr('cloudLive'):tr('cloudOffline')}</span>`;
+  return `<header class="app-header"><div class="brand-wrap" data-tab="inventory"><img src="legacy-logo.png" alt="Legacy" class="main-logo"><div><h1 class="brand-title">Legacy - Owner Finance</h1>
+   <div class="brand-sub"><span>Brokerage By: KLC Real Estate, LLC</span><img src="klc-logo.png" alt="KLC">${cloudPill}</div></div></div>
+   <nav class="nav-pills">${T.map(([k,v])=>`<button data-tab="${k}" class="nav-pill ${tab===k?'active':''}">${v}</button>`).join('')}
+   ${S.user?`<button id="logout" class="nav-pill">${tr('logout')} (${esc(S.user.name)})</button>`:''}
+   <button data-lang="en" class="nav-pill lang-btn ${S.lang==='en'?'active':''}">EN</button><button data-lang="es" class="nav-pill lang-btn ${S.lang==='es'?'active':''}">ES</button></nav></header>
+   <div class="guide-banner"><span>${tr('newHere')} <a href="#guides" data-tab="guides">${tr('guideLink')}</a></span></div>`;
 }
 
 function guides(){
@@ -412,7 +412,9 @@ function filtered(){let L=S.data.listings.filter(l=>{const q=F.q.toLowerCase();
   const searchable=S.user?(l.address+' '+(l.publicTitle||'')+' '+l.city+' '+l.zip):(partialAddr(l)+' '+l.city);
   if(q&&!searchable.toLowerCase().includes(q))return false;
   if(F.city&&l.city!==F.city)return false;if(F.area&&!(l.areas||[]).includes(F.area))return false;
+  if(CHIP==='AVAILABLE'&&l.status!=='AVAILABLE')return false;if(CHIP==='COMING_SOON'&&l.status!=='COMING_SOON')return false;
   if(S.user){
+    if(CHIP==='LOW_DOWN'&&(l.downPayment||1e9)>1000000)return false;if(CHIP==='LOW_MONTHLY'&&(l.monthlyPayment||1e9)>150000)return false;if(CHIP==='BEDS_3'&&(l.beds||0)<3)return false;
     if(F.beds&&(l.beds||0)<+F.beds)return false;if(F.baths&&(l.baths||0)<+F.baths)return false;
     if(F.maxDown&&l.downPayment>F.maxDown*100)return false;if(F.maxMonthly&&l.monthlyPayment>F.maxMonthly*100)return false;
     if(F.maxPrice&&l.askingPrice>F.maxPrice*100)return false;if(F.status&&l.status!==F.status)return false;
@@ -421,57 +423,64 @@ function filtered(){let L=S.data.listings.filter(l=>{const q=F.q.toLowerCase();
   const k={priceAsc:['askingPrice',1],priceDesc:['askingPrice',-1],downAsc:['downPayment',1],monthlyAsc:['monthlyPayment',1],bedsDesc:['beds',-1]}[F.sort]||['askingPrice',1];
   return L.sort((a,b)=>((a[k[0]]||0)-(b[k[0]]||0))*k[1]);}
 
-function inventory(){const cities=[...new Set(S.data.listings.map(l=>l.city))].sort(),L=filtered();
-  const sel=(n,opts,lab)=>`<select name="${n}"><option value="">${lab}</option>${opts.map(o=>`<option value="${esc(o[0]??o)}" ${F[n]==(o[0]??o)?'selected':''}>${esc(o[1]??o)}</option>`).join('')}</select>`;
-  const guestNotice=!S.user?`<div class="card" style="padding:14px 18px;margin-bottom:14px;background:linear-gradient(135deg,#1e293b,#0f172a);color:#fff;border-radius:12px;display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:12px">
-    <div style="max-width:720px"><div style="font-weight:700;font-size:16px;color:#f8d57e;margin-bottom:4px">🔒 ${tr('guestBannerTitle')}</div><div style="font-size:13.5px;color:#e2e8f0">${tr('guestBannerBody')}</div></div>
-    <button data-register="1" style="background:#d4af37;color:#0f172a;font-weight:700;border:0;padding:10px 16px;border-radius:8px;cursor:pointer">${tr('guestBannerBtn')}</button>
-  </div>`:'';
-  return `<section style="padding:14px 18px">${guestNotice}<form id="filters" class="filters" style="display:flex;flex-wrap:wrap;gap:6px">
-   <input name="q" placeholder="${S.user?tr('searchPlaceholder'):tr('searchPlaceholderGuest')}" value="${esc(F.q)}" style="flex:1 1 260px">${sel('city',cities,tr('city'))}${sel('area',[['N','N'],['S','S'],['W','W'],['E','E']],tr('area'))}
-   ${S.user?`${sel('beds',[1,2,3,4,5].map(n=>[n,n+tr('bedsPlus')]),tr('beds'))}${sel('baths',[1,2,3].map(n=>[n,n+tr('bathsPlus')]),tr('baths'))}
-   <input name="maxDown" type="number" placeholder="${tr('maxDown')}" value="${esc(F.maxDown)}"><input name="maxMonthly" type="number" placeholder="${tr('maxMonthly')}" value="${esc(F.maxMonthly)}"><input name="maxPrice" type="number" placeholder="${tr('maxPrice')}" value="${esc(F.maxPrice)}">
-   ${sel('status',S.STATUSES.map(s=>[s,S.statusText(s)]),tr('status'))}${sel('sort',[['priceAsc',tr('sortPriceAsc')],['priceDesc',tr('sortPriceDesc')],['downAsc',tr('sortDownAsc')],['monthlyAsc',tr('sortMonthlyAsc')],['bedsDesc',tr('sortBedsDesc')]],tr('sort'))}`:''}</form>
-   <p>${L.length} ${tr('homesCount')}</p><div id="inventory-map" style="height:380px;border-radius:12px;margin-bottom:14px"></div>
-   <div class="grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(270px,1fr));gap:14px">${L.map(card).join('')}</div></section>`;}
+function inventory(){const all=S.data.listings,cities=[...new Set(all.map(l=>l.city))].sort(),L=filtered();
+  const es=S.lang==='es';
+  const sel=(n,opts,lab)=>`<select name="${n}" class="filter-select"><option value="">${lab}</option>${opts.map(o=>`<option value="${esc(o[0]??o)}" ${F[n]==(o[0]??o)?'selected':''}>${esc(o[1]??o)}</option>`).join('')}</select>`;
+  const nAv=all.filter(l=>l.status==='AVAILABLE').length,nCs=all.filter(l=>l.status==='COMING_SOON').length;
+  const downs=all.map(l=>l.downPayment).filter(x=>x>0),minDown=downs.length?Math.min(...downs):0;
+  const dv=F.maxDown||40000,mv=F.maxMonthly||3000;
+  const chips=[['ALL',(es?'Todas':'All Active Homes')+` (${all.length})`],['AVAILABLE',`✅ ${es?'Disponibles':'Available Only'} (${nAv})`]]
+    .concat(S.user?[['LOW_DOWN',`🔥 ${es?'Enganche':'Down'} ≤ $10,000`],['LOW_MONTHLY',`💳 ${es?'Mensualidad':'Monthly'} ≤ $1,500`],['BEDS_3',`🛏️ 3+ ${es?'Recámaras':'Bedrooms'}`]]:[])
+    .concat([['COMING_SOON',`⏳ ${es?'Próximamente':'Coming Soon'} (${nCs})`]]);
+  const guestNotice=!S.user?`<div class="card" style="padding:12px 16px;margin-bottom:14px;background:linear-gradient(135deg,#1e293b,#0f172a);color:#fff;display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:10px">
+    <div style="max-width:560px"><div style="font-weight:700;color:#f8d57e;margin-bottom:3px">🔒 ${tr('guestBannerTitle')}</div><div style="font-size:12.5px;color:#e2e8f0">${tr('guestBannerBody')}</div></div>
+    <button data-register="1" class="btn-card primary" style="flex:0 0 auto">${tr('guestBannerBtn')}</button></div>`:'';
+  return `<section class="hero-banner"><div class="hero-inner"><div class="hero-copy"><h2>${es?'El Portafolio Premier de Owner-Finance en Oklahoma':"Oklahoma's Premier Owner-Finance Portfolio"}</h2>
+    <p>${es?'Casas con financiamiento del dueño en Oklahoma City, Del City, Midwest City, Yukon y alrededores.':'Owner-financed homes across Oklahoma City, Del City, Midwest City, Yukon, and surrounding communities.'}</p></div>
+    <div class="hero-stats"><div class="stat-box"><div class="stat-num">${all.length}</div><div class="stat-lbl">${es?'Casas Activas':'Active Homes'}</div></div>
+    <div class="stat-box"><div class="stat-num">${nAv}</div><div class="stat-lbl">${es?'Disponibles':'Available Now'}</div></div>
+    ${S.user&&minDown?`<div class="stat-box"><div class="stat-num">$${(minDown/100000).toFixed(1)}k+</div><div class="stat-lbl">${es?'Enganche Mín':'Min Down'}</div></div>`:''}</div></div></section>
+  <form id="filters" class="interactive-controls" onsubmit="return false"><div class="filter-row">
+   <div class="search-box"><input name="q" placeholder="${S.user?tr('searchPlaceholder'):tr('searchPlaceholderGuest')}" value="${esc(F.q)}"></div>${sel('city',cities,tr('city'))}
+   ${S.user?`<div class="slider-group">${tr('maxDown').replace(' $','')}: <b>${dv>=40000?(es?'Cualquiera':'Any'):'$'+(+dv).toLocaleString()}</b><input type="range" name="maxDownR" min="3000" max="40000" step="500" value="${dv}"></div>
+   <div class="slider-group">${tr('maxMonthly').replace(' $','')}: <b>${mv>=3000?(es?'Cualquiera':'Any'):'$'+(+mv).toLocaleString()}</b><input type="range" name="maxMonthlyR" min="800" max="3000" step="50" value="${mv}"></div>
+   ${sel('beds',[1,2,3,4,5].map(n=>[n,n+tr('bedsPlus')]),tr('beds'))}${sel('status',S.STATUSES.map(s=>[s,S.statusText(s)]),tr('status'))}${sel('sort',[['priceAsc',tr('sortPriceAsc')],['priceDesc',tr('sortPriceDesc')],['downAsc',tr('sortDownAsc')],['monthlyAsc',tr('sortMonthlyAsc')],['bedsDesc',tr('sortBedsDesc')]],tr('sort'))}`:''}</div>
+   <div class="quick-chips">${chips.map(([k,v])=>`<button type="button" class="chip ${CHIP===k?'active':''}" data-chip="${k}">${v}</button>`).join('')}</div></form>
+  <div class="workspace-split"><div class="map-pane"><div id="inventory-map"></div></div>
+   <div class="cards-pane">${guestNotice}<div class="cards-toolbar"><b style="font-size:14px">${L.length} ${tr('homesCount')}</b><span style="font-size:12px;color:var(--muted)">💡 ${es?'Usa ‹ › en la foto para ver la galería':'Click ‹ › on any photo to swipe the gallery'}</span></div>
+   <div class="cards-grid">${L.map(card).join('')}</div></div></div>
+  ${S.user?`<div class="compare-tray ${CMP.size?'show':''}"><span>⚖️ <b>${CMP.size}</b> ${es?'casas para comparar':'homes selected to compare'}</span><button type="button" class="btn-card primary" data-cmpopen="1">${es?'Comparar':'Compare Side-by-Side'}</button><button type="button" class="btn-card" data-cmpclear="1">${es?'Limpiar':'Clear'}</button></div>`:''}`;}
 
 function card(l){
-  const phCount=(l.photoUrls&&l.photoUrls.length)||1;
+  const ph=(l.photoUrls&&l.photoUrls.length)?l.photoUrls:[l.photoUrl||'listing-placeholder.svg'],i=(PIDX[l.id]||0)%ph.length,multi=ph.length>1;
+  const media=badgeHtml=>`<div class="card-media">${badgeHtml}<img src="${esc(ph[i])}" data-img="${l.id}" referrerpolicy="no-referrer" loading="lazy" onerror="window.imgFallback&&window.imgFallback(this)" data-open="${l.id}" style="cursor:pointer">
+    ${multi?`<button type="button" class="carousel-btn prev" data-prev="${l.id}">‹</button><button type="button" class="carousel-btn next" data-next="${l.id}">›</button>`:''}<span class="photo-counter" data-cnt="${l.id}">📷 ${i+1} / ${ph.length}</span>`;
   if(!S.user){
-    return `<article class="card listing-card" style="border-radius:12px;overflow:hidden;background:#fff;box-shadow:0 1px 6px rgba(0,0,0,.1);display:flex;flex-direction:column">
-      <div style="position:relative;cursor:pointer" data-open="${l.id}">
-        <img src="${esc(l.photoUrl||'listing-placeholder.svg')}" referrerpolicy="no-referrer" loading="lazy" onerror="window.imgFallback&&window.imgFallback(this)" style="width:100%;height:185px;object-fit:cover;display:block" data-open="${l.id}">
-        <span style="position:absolute;bottom:8px;right:8px;background:rgba(15,23,42,.8);color:#fff;font-size:12px;padding:3px 9px;border-radius:999px">📷 ${phCount} ${tr('photosCount')}</span>
-      </div>
-      <div style="padding:12px;display:flex;flex-direction:column;gap:8px;flex:1">
-        <h3 style="margin:0;font-size:16px;color:#0f172a">📍 ${partialAddr(l)}</h3>
-        <div style="font-size:12.5px;color:#475569;background:#f8fafc;border:1px dashed #cbd5e1;padding:8px 10px;border-radius:8px">
-          🔒 ${tr('guestCardPrompt')}
-        </div>
-        <div style="display:flex;gap:6px;margin-top:auto">
-          <button data-register="1" style="flex:1;background:#0f172a;color:#fff;font-size:12.5px;padding:8px 10px;border-radius:8px;cursor:pointer">${tr('guestCardBtn')}</button>
-          <button data-open="${l.id}" style="background:#f1f5f9;color:#0f172a;font-size:12.5px;padding:8px 10px;border-radius:8px;cursor:pointer">${tr('viewPhotos')}</button>
-        </div>
-      </div>
-    </article>`;
+    return `<article class="prop-card" data-card="${l.id}">${media(`<span class="badge-top-left" style="background:#0f172a">🔒 ${S.lang==='es'?'Vista Previa':'Guest Preview'}</span>`)}</div>
+      <div class="card-body"><p class="addr-line">📍 ${partialAddr(l)}</p><div style="font-size:12px;color:var(--muted);background:var(--surface-2);border:1px dashed var(--border);padding:8px 10px;border-radius:9px">🔒 ${tr('guestCardPrompt')}</div>
+      <div class="card-actions"><button type="button" class="btn-card primary" data-register="1">${tr('guestCardBtn')}</button><button type="button" class="btn-card" data-open="${l.id}">${tr('viewPhotos')} (${ph.length})</button></div></div></article>`;
   }
-  return `<article class="card listing-card" style="border-radius:12px;overflow:hidden;background:#fff;box-shadow:0 1px 6px rgba(0,0,0,.1)">
-  <div style="position:relative"><img src="${esc(l.photoUrl||'listing-placeholder.svg')}" referrerpolicy="no-referrer" loading="lazy" onerror="window.imgFallback&&window.imgFallback(this)" style="width:100%;height:170px;object-fit:cover;cursor:pointer" data-open="${l.id}">
-  <button data-fav="${l.id}" title="Favorite" style="position:absolute;top:8px;right:8px;font-size:20px;background:#fff;border-radius:50%;border:0;width:36px;height:36px">${S.isFavorite(l.id)?'❤️':'🤍'}</button></div>
-  <div style="padding:10px">${badge(l.status)}<h3 style="margin:6px 0;font-size:16px">${title(l)}</h3>
-  <div>${tr('price')} <b>${S.money(l.askingPrice)}</b> · ${tr('down')} <b>${S.money(l.downPayment)}</b> · <b>${S.money(l.monthlyPayment)}</b>${tr('perMo')}</div>
-  <div style="font-size:13px;color:#555">${l.beds??'—'} bd · ${l.baths??'—'} ba · ${l.sqft?l.sqft+' sqft':''}</div><button data-open="${l.id}" style="margin-top:8px">${tr('viewDetails')}</button></div></article>`;
+  const col=({AVAILABLE:'#16a34a',COMING_SOON:'#2563eb',SOLD:'#475569',CLOSED:'#475569'})[l.status]||'#d97706';
+  return `<article class="prop-card" data-card="${l.id}">${media(`<span class="badge-top-left" style="background:${col}">${esc(S.statusText?S.statusText(l.status):l.status)}</span>`)}
+    <div class="card-top-actions"><button type="button" class="icon-circle-btn" title="Compare" data-compare="${l.id}">${CMP.has(l.id)?'✅':'⚖️'}</button><button type="button" class="icon-circle-btn" title="Favorite" data-fav="${l.id}">${S.isFavorite(l.id)?'❤️':'🤍'}</button></div></div>
+    <div class="card-body"><div class="price-strip"><span class="main-price">${S.money(l.askingPrice)}</span><span class="monthly-pill">${S.money(l.monthlyPayment)}${tr('perMo')}</span></div>
+    <p class="addr-line">${title(l)}</p>
+    <div class="down-box"><div>${tr('down')}<b>${S.money(l.downPayment)}</b></div><div>${tr('beds')}/${tr('baths')}<b>${l.beds??'—'} · ${l.baths??'—'}</b></div><div>Sq Ft<b>${l.sqft?(+l.sqft).toLocaleString():'—'}</b></div></div>
+    <div class="card-actions"><button type="button" class="btn-card primary" data-open="${l.id}">${S.lang==='es'?'Calculadora y Detalles':'Calculator & Details'}</button></div></div></article>`;
 }
 
-function drawMap(){if(!window.L||!$('#inventory-map'))return;if(map){map.remove();map=null;}
+function drawMap(){if(!window.L||!$('#inventory-map'))return;if(map){map.remove();map=null;}MARK={};
   map=L.map('inventory-map').setView([35.47,-97.52],10);L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{attribution:'© OpenStreetMap'}).addTo(map);
   const pts=[];filtered().forEach(l=>{const a=l.approxLocation||{};const lat=S.user?l.latitude:a.lat,lng=S.user?l.longitude:a.lng;if(lat==null||lng==null)return;
    pts.push([lat,lng]);
    const popupHtml=S.user
-     ?`<b>${title(l)}</b><br>${S.money(l.askingPrice)} · <a href="#" data-open="${l.id}">${tr('viewDetails')}</a>`
+     ?`<b>${title(l)}</b><br>${S.money(l.askingPrice)} · ${tr('down')} ${S.money(l.downPayment)} · ${S.money(l.monthlyPayment)}${tr('perMo')}<br><a href="#" data-open="${l.id}">${tr('viewDetails')}</a>`
      :`<b>📍 ${partialAddr(l)}</b><br><a href="#" data-open="${l.id}">${tr('viewPhotos')}</a> · <a href="#auth" data-register="1">${tr('loginPromptLink')}</a>`;
-   L.marker([lat,lng]).addTo(map).bindPopup(popupHtml);});
-  if(pts.length)map.fitBounds(pts,{padding:[30,30],animate:false});}
+   const m=L.marker([lat,lng]).addTo(map).bindPopup(popupHtml);MARK[l.id]=m;
+   m.on('click',()=>{const c=document.querySelector(`[data-card="${l.id}"]`);if(c){c.scrollIntoView({behavior:'smooth',block:'center'});c.style.borderColor='var(--accent)';setTimeout(()=>c.style.borderColor='',1500);}});});
+  if(pts.length)map.fitBounds(pts,{padding:[30,30],animate:false});
+  document.querySelectorAll('[data-card]').forEach(c=>{c.onmouseenter=()=>{const m=MARK[c.dataset.card];if(m)m.openPopup();};});
+  setTimeout(()=>map&&map.invalidateSize(),150);}
 
 function openListing(id){const l=S.listing(id);if(!l)return;S.recordView(id);const ph=(l.photoUrls&&l.photoUrls.length?l.photoUrls:[l.photoUrl||'listing-placeholder.svg']);
   if(!S.user){
@@ -495,10 +504,19 @@ function openListing(id){const l=S.listing(id);if(!l)return;S.recordView(id);con
    ${l.photosUrl?`<a href="${esc(l.photosUrl)}" target="_blank" rel="noopener">${tr('morePhotos')}</a>`:''}
    <p>${tr('price')} <b>${S.money(l.askingPrice)}</b> · ${tr('down')} <b>${S.money(l.downPayment)}</b> · ${tr('monthly')} <b>${S.money(l.monthlyPayment)}</b> · ${l.termYears||'—'} ${tr('yrs')}</p>
    <p style="font-size:14px;color:#475569">${l.beds??'—'} bd · ${l.baths??'—'} ba · ${l.sqft?l.sqft+' sqft':''}</p>
+   ${(()=>{const pr=Math.round((l.askingPrice||0)/100),dn=Math.round((l.downPayment||0)/100),mo=Math.round((l.monthlyPayment||0)/100);if(!pr||!dn||!mo)return '';
+     return `<div class="calc-card"><h3 style="margin:0 0 6px;font-size:16px">🧮 ${S.lang==='es'?'Calculadora de Pago (Owner Finance)':'Owner-Finance Payment Estimator'}</h3>
+     <p style="margin:0 0 10px;font-size:12px;color:var(--muted)">${S.lang==='es'?'Mueve el enganche para ver cómo cambia tu mensualidad estimada. Es solo una estimación; los términos finales los confirma el vendedor.':'Slide the down payment to see how your estimated monthly payment changes. Estimate only; final terms are set by the seller.'}</p>
+     <div style="display:flex;justify-content:space-between;font-size:13px"><span>${tr('down')}: <b id="cDn">$${dn.toLocaleString()}</b></span><span>${S.lang==='es'?'Saldo':'Balance'}: <b id="cBal">$${Math.max(0,pr-dn).toLocaleString()}</b></span></div>
+     <input type="range" id="cSl" min="${Math.max(1000,Math.round(dn*0.5/500)*500)}" max="${Math.max(dn+1000,Math.round(pr*0.5/500)*500)}" step="500" value="${dn}" data-pr="${pr}" data-dn="${dn}" data-mo="${mo}" style="width:100%;accent-color:var(--accent)">
+     <div style="margin-top:8px;padding:10px;background:var(--surface);border-radius:9px;display:flex;justify-content:space-between;align-items:center"><span>${S.lang==='es'?'Mensualidad estimada':'Estimated monthly'}</span><strong id="cMo" style="font-size:20px;color:var(--accent)">$${mo.toLocaleString()}${tr('perMo')}</strong></div></div>`;})()}
    <p>${esc(l.description)}</p>
    <h3>${tr('makeOffer')}</h3><form id="offerF"><input name="offerPrice" type="number" placeholder="${tr('offerPrice')}" required><input name="downPayment" type="number" placeholder="${tr('downPayment')}" required><input name="monthlyPayment" type="number" placeholder="${tr('monthlyPayment')}" required><textarea name="notes" placeholder="${tr('notes')}"></textarea><button>${tr('submitOffer')}</button></form>
    <h3>${tr('requestShowing')}</h3><form id="showF"><input name="preferredAt" type="datetime-local" required><input name="notes" placeholder="${tr('notes')}"><button>${tr('requestShowingBtn')}</button></form>
    ${ag?`<h3>${tr('shareHouse')}</h3><form id="shareF"><textarea name="body" placeholder="${tr('msgToAgent')}">${tr('defaultShareMsg')}</textarea><button>${tr('shareHouse')}</button> <button type="button" id="reqAcc">${tr('requestAccess')}</button></form>`:''}`);
+  const cs=m.querySelector('#cSl');if(cs)cs.oninput=()=>{const pr=+cs.dataset.pr,dn0=+cs.dataset.dn,mo0=+cs.dataset.mo,dn=+cs.value;
+    const bal0=Math.max(1,pr-dn0),est=Math.max(0,Math.round(mo0*(Math.max(0,pr-dn)/bal0)));
+    m.querySelector('#cDn').textContent='$'+dn.toLocaleString();m.querySelector('#cBal').textContent='$'+Math.max(0,pr-dn).toLocaleString();m.querySelector('#cMo').textContent='$'+est.toLocaleString()+tr('perMo');};
   const on=(s,f)=>{const el=m.querySelector(s);if(el)el.onsubmit=wrap(()=>{f(fd(el));alert(tr('sentAlert'));m.remove();render();});};
   on('#offerF',v=>S.submitOffer({...v,listingId:id}));on('#showF',v=>S.requestShowing({...v,listingId:id}));
   on('#shareF',v=>S.sendMessage({toUserId:ag.id,listingId:id,kind:'SHARE_HOUSE',body:v.body}));
@@ -548,6 +566,18 @@ function render(){const root=$('#app-root');if(!S.data)return;document.documentE
   const body={inventory,guides,dashboard,admin,auth}[tab]||inventory;root.innerHTML=header()+`<main>${body()}</main><footer style="padding:18px;font-size:12px;text-align:center">© Legacy - Owner Finance · Brokerage By: KLC Real Estate, LLC</footer>`;bind();if(tab==='inventory')drawMap();}
 function bind(){const r=$('#app-root');
   r.onclick=async e=>{
+   const c=e.target.closest('[data-prev],[data-next],[data-compare],[data-chip],[data-cmpopen],[data-cmpclear]');
+   if(c){e.preventDefault();e.stopPropagation();const d=c.dataset;
+     if(d.prev||d.next){const id=d.prev||d.next,l=S.listing(id),ph=(l.photoUrls&&l.photoUrls.length)?l.photoUrls:[l.photoUrl||'listing-placeholder.svg'];
+       PIDX[id]=((PIDX[id]||0)+(d.next?1:-1)+ph.length)%ph.length;const img=r.querySelector(`[data-img="${id}"]`),cn=r.querySelector(`[data-cnt="${id}"]`);
+       if(img){delete img.dataset.triedThumb;img.src=ph[PIDX[id]];}if(cn)cn.textContent=`📷 ${PIDX[id]+1} / ${ph.length}`;return;}
+     if(d.compare){if(CMP.has(d.compare))CMP.delete(d.compare);else if(CMP.size<3)CMP.add(d.compare);else alert(S.lang==='es'?'Máximo 3 casas.':'You can compare up to 3 homes.');return render();}
+     if(d.chip){CHIP=d.chip;return render();}
+     if(d.cmpclear){CMP.clear();return render();}
+     if(d.cmpopen){const it=[...CMP].map(id=>S.listing(id)).filter(Boolean);
+       modal(`<h2>⚖️ ${S.lang==='es'?'Comparación de Casas':'Side-by-Side Comparison'}</h2><div style="display:grid;grid-template-columns:repeat(${it.length},1fr);gap:12px">${it.map(l=>`<div class="card" style="padding:10px"><img src="${esc(l.photoUrl||'listing-placeholder.svg')}" referrerpolicy="no-referrer" onerror="window.imgFallback&&window.imgFallback(this)" style="width:100%;height:120px;object-fit:cover;border-radius:8px"><h4 style="margin:8px 0">${title(l)}</h4>
+       <div style="font-size:13px;line-height:1.8">${tr('price')}: <b>${S.money(l.askingPrice)}</b><br>${tr('down')}: <b>${S.money(l.downPayment)}</b><br>${tr('monthly')}: <b>${S.money(l.monthlyPayment)}</b><br>${l.beds??'—'} bd · ${l.baths??'—'} ba<br>${l.sqft?(+l.sqft).toLocaleString()+' sqft':''}${l.sqft&&l.askingPrice?'<br>$'+Math.round(l.askingPrice/100/l.sqft)+'/sqft':''}</div></div>`).join('')}</div>`);return;}
+   }
    const t=e.target.closest('[data-tab],[data-lang],[data-open],[data-fav],[data-acc],[data-rej],[data-ctr],[data-reset],[data-save],[data-client],[data-register],#logout,#forgot');
    if(!t)return;
    e.preventDefault();
@@ -563,7 +593,9 @@ function bind(){const r=$('#app-root');
      if(d.client){const c=S.data.users.find(u=>u.id===d.client);const of=S.data.offers.filter(o=>o.userId===c.id);modal(`<h2>${esc(c.name)}</h2><p>${esc(c.email)} · ${esc(c.phone)}</p><h3>${tr('favorites')}</h3><ul>${S.data.favorites.filter(f=>f.userId===c.id).map(f=>`<li>${esc((S.listing(f.listingId)||{}).address)}</li>`).join('')}</ul><h3>${tr('myOffers')}</h3><ul>${of.map(o=>`<li>${esc((S.listing(o.listingId)||{}).address)} ${S.money(o.offerPrice)} ${offerBadge(o.status)}</li>`).join('')}</ul>`);}
    }catch(err){alert(err.message);}
   };
-  const f=$('#filters');if(f){f.oninput=f.onchange=e=>{F=Object.assign(F,fd(f));const pos=e.target.name==='q'?e.target.selectionStart:null;render();if(pos!=null){const q=$('#filters [name=q]');q.focus();q.setSelectionRange(pos,pos);}};f.onsubmit=e=>e.preventDefault();}
+  const f=$('#filters');if(f){f.oninput=f.onchange=e=>{const v=fd(f);if('maxDownR' in v){v.maxDown=+v.maxDownR>=40000?'':v.maxDownR;delete v.maxDownR;}if('maxMonthlyR' in v){v.maxMonthly=+v.maxMonthlyR>=3000?'':v.maxMonthlyR;delete v.maxMonthlyR;}
+    if(e.type==='input'&&e.target.type==='range'){const b=e.target.parentNode.querySelector('b');if(b)b.textContent='$'+(+e.target.value).toLocaleString();return;}
+    F=Object.assign(F,v);const pos=e.target.name==='q'?e.target.selectionStart:null;render();if(pos!=null){const q=$('#filters [name=q]');q.focus();q.setSelectionRange(pos,pos);}};f.onsubmit=e=>e.preventDefault();}
   r.onchange=async e=>{
    try{
      const t=e.target;if(t.dataset.status)return S.setListingStatus(t.dataset.status,t.value);
