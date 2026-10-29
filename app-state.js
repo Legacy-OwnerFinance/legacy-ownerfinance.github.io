@@ -540,7 +540,7 @@ S.sendMessage=({toUserId,listingId,kind,body})=>{if(!S.user)throw new Error(S.la
 S.myMessages=()=>S.user?S.data.messages.filter(m=>m.fromUserId===S.user.id||m.toUserId===S.user.id):[];
 S.submitOffer=f=>{if(!S.user)throw new Error(S.lang==='es'?'Inicia sesión primero':'Please log in');
   const o={id:uid(),userId:S.user.id,listingId:f.listingId,offerPrice:+f.offerPrice*100,
-    downPayment:+f.downPayment*100,monthlyPayment:+f.monthlyPayment*100,notes:f.notes||'',status:'SUBMITTED',createdAt:now()};
+    downPayment:+f.downPayment*100,monthlyPayment:+f.monthlyPayment*100,notes:f.notes||'',inspections:f.inspections==='YES',status:'SUBMITTED',createdAt:now()};
   S.data.offers.push(o);
   S.save();
   sbUpsert('offers',{
@@ -601,6 +601,7 @@ S.STATUSES=['AVAILABLE','COMING_SOON','PENDING','PENDING_NO_EM','PENDING_EM','SO
 S.STATUS_LABEL={AVAILABLE:'Available',COMING_SOON:'Coming Soon',PENDING:'Pending',PENDING_NO_EM:'Pending/NoEM',PENDING_EM:'Pending/EM',SOLD:'Sold (3-Day)',CLOSED:'Sold (3-Day)'};
 S.STATUS_LABEL_ES={AVAILABLE:'Disponible',COMING_SOON:'Próximamente',PENDING:'Pendiente',PENDING_NO_EM:'Pendiente/Sin EM',PENDING_EM:'Pendiente/Con EM',SOLD:'Vendida (3 días)',CLOSED:'Vendida (3 días)'};
 S.statusText=st=>S.lang==='es'?(S.STATUS_LABEL_ES[st]||st):(S.STATUS_LABEL[st]||st);
+S.setInspection=(offerId,at)=>{const o=S.data.offers.find(x=>x.id===offerId);if(!o)return;if(at){o.inspectionAt=at;o.inspectionStatus='SCHEDULED';}else{o.inspectionStatus='CANCELLED';o.inspectionAt=null;}o.updatedAt=now();S.save();};
 S.OFFER_COLOR={ACCEPTED:'#16a34a',REJECTED:'#dc2626',COUNTERED:'#d97706',SUBMITTED:'#64748b'};
 S.setListingStatus=(lid,st)=>{
   if(!S.isAdmin())throw new Error('Admins only');
