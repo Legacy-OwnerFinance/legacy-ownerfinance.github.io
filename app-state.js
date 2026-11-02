@@ -311,7 +311,8 @@ function applyRelationalListings(stateData,listRows){
       soldAt:r.sold_at??cur.soldAt??null
     }));
   });
-  stateData.listings=[...byId.values()];
+  const live=new Set(listRows.map(r=>r.id));
+  stateData.listings=[...byId.values()].filter(l=>live.has(l.id));
 }
 
 S.load=async()=>{
