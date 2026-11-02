@@ -499,6 +499,12 @@ S.uploadAvatar=async file=>{
   S.save();
   sbUpsert('app_users',userToRow(S.user),'id');
 };
+const bpFor=u=>{let bp=S.buyerProfile(u);if(!bp){bp={id:uid(),userId:u.id,notes:'',accountStatus:'ACTIVE'};S.data.buyerProfiles.push(bp);}u.buyerProfile=bp;return bp;};
+S.saveSearchCriteria=c=>{if(!S.user)throw new Error('Please log in');const bp=bpFor(S.user);
+  const n=v=>v===''||v==null||isNaN(+v)||+v<=0?'':+v;
+  bp.searchCriteria={beds:n(c.beds),baths:n(c.baths),cities:Array.isArray(c.cities)?c.cities.filter(Boolean):[],maxPrice:n(c.maxPrice),maxDown:n(c.maxDown),maxMonthly:n(c.maxMonthly),minSqft:n(c.minSqft),updatedAt:now()};
+  bp.criteriaPrompted=true;bp.updatedAt=now();S.user.updatedAt=now();S.save();sbUpsert('app_users',userToRow(S.user),'id');};
+S.markCriteriaPrompted=()=>{if(!S.user)return;const bp=bpFor(S.user);bp.criteriaPrompted=true;bp.updatedAt=now();S.user.updatedAt=now();S.save();sbUpsert('app_users',userToRow(S.user),'id');};
 S.isFavorite=lid=>S.user&&S.data.favorites.some(f=>f.userId===S.user.id&&f.listingId===lid);
 S.toggleFavorite=lid=>{if(!S.user)throw new Error(S.lang==='es'?'Inicia sesión primero':'Please log in');
   const i=S.data.favorites.findIndex(f=>f.userId===S.user.id&&f.listingId===lid);

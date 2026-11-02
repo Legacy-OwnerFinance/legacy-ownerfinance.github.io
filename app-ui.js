@@ -423,6 +423,75 @@ function filtered(){let L=S.data.listings.filter(l=>{const q=F.q.toLowerCase();
   const k={priceAsc:['askingPrice',1],priceDesc:['askingPrice',-1],downAsc:['downPayment',1],monthlyAsc:['monthlyPayment',1],bedsDesc:['beds',-1]}[F.sort]||['askingPrice',1];
   return L.sort((a,b)=>((a[k[0]]||0)-(b[k[0]]||0))*k[1]);}
 
+// ===== Client search criteria ("What are you looking for?") =====
+let VIEW='REC';
+const SC_TXT={
+ en:{title:'What are you looking for?',sub:'Answer a few quick questions and we will put the homes that fit you first. You can still see every home.',
+  step:'Step',of:'of',next:'Next',back:'Back',skip:'Skip for now',saveBtn:'Show my matches',any:'Any',
+  qBeds:'How many bedrooms do you need (minimum)?',qBaths:'How many bathrooms (minimum)?',qCities:'Which cities or areas? (pick any)',
+  qBudget:'What fits your budget?',qPrice:'Max price $',qDown:'Max down payment $',qMonthly:'Max monthly payment $',qMore:'Anything else?',qSqft:'Minimum square feet (optional)',
+  rec:'Recommended for you',all:'All properties',edit:'Edit my search',great:'Great match',close:'Close match',others:'Other homes',
+  noMatch:'No close matches yet — try widening your search. All homes are listed below.',setPrompt:'Tell us what you are looking for and we will show the best matches first.',setBtn:'Set my search',
+  mySearch:'My Search',noCrit:'No search saved yet.',clientCrit:'Saved search (read-only)',bedsL:'Beds',bathsL:'Baths',citiesL:'Cities',priceL:'Max price',downL:'Max down',monthlyL:'Max monthly',sqftL:'Min sq ft'},
+ es:{title:'¿Qué estás buscando?',sub:'Contesta unas preguntas rápidas y te mostraremos primero las casas que te quedan. Siempre podrás ver todas las casas.',
+  step:'Paso',of:'de',next:'Siguiente',back:'Atrás',skip:'Omitir por ahora',saveBtn:'Ver mis casas ideales',any:'Cualquiera',
+  qBeds:'¿Cuántas recámaras necesitas (mínimo)?',qBaths:'¿Cuántos baños (mínimo)?',qCities:'¿En qué ciudades o zonas? (elige las que quieras)',
+  qBudget:'¿Qué se ajusta a tu presupuesto?',qPrice:'Precio máximo $',qDown:'Enganche máximo $',qMonthly:'Mensualidad máxima $',qMore:'¿Algo más?',qSqft:'Pies cuadrados mínimos (opcional)',
+  rec:'Recomendadas para ti',all:'Todas las casas',edit:'Editar mi búsqueda',great:'Excelente opción',close:'Opción cercana',others:'Otras casas',
+  noMatch:'Aún no hay opciones cercanas — amplía tu búsqueda. Todas las casas aparecen abajo.',setPrompt:'Dinos qué buscas y te mostraremos primero las mejores opciones.',setBtn:'Definir mi búsqueda',
+  mySearch:'Mi Búsqueda',noCrit:'Aún no hay búsqueda guardada.',clientCrit:'Búsqueda guardada (solo lectura)',bedsL:'Recámaras',bathsL:'Baños',citiesL:'Ciudades',priceL:'Precio máx',downL:'Enganche máx',monthlyL:'Mensualidad máx',sqftL:'Pies² mín'}};
+const st=k=>(SC_TXT[S.lang]||SC_TXT.en)[k];
+const isClient=()=>Boolean(S.user&&S.user.role==='BUYER'&&!S.isAdmin());
+const critOf=u=>{const bp=S.buyerProfile(u);const c=bp&&bp.searchCriteria;return c&&Object.keys(c).some(k=>k!=='updatedAt'&&c[k]!==''&&c[k]!=null&&!(Array.isArray(c[k])&&!c[k].length))?c:null;};
+// Weights: down, monthly and cities matter most for owner-finance buyers, with beds/baths close behind.
+const W={maxDown:25,maxMonthly:25,cities:20,beds:15,baths:12,maxPrice:5,minSqft:3};
+function matchScore(l,c){if(!c)return null;let tot=0,got=0,fails=0;
+ const add=(k,s)=>{tot+=W[k];got+=W[k]*s;if(s===0)fails++;};
+ const money=(k,val)=>{const cap=+c[k];if(!cap)return;const v=(val||0)/100;if(!v){add(k,.5);return;}add(k,v<=cap?1:v<=cap*1.15?.5:0);};
+ money('maxDown',l.downPayment);money('maxMonthly',l.monthlyPayment);money('maxPrice',l.askingPrice);
+ if(c.cities&&c.cities.length)add('cities',c.cities.includes(l.city)?1:0);
+ if(+c.beds){const b=l.beds;add('beds',b==null?.5:b>=+c.beds?1:b>=+c.beds-1?.5:0);}
+ if(+c.baths){const b=l.baths;add('baths',b==null?.5:b>=+c.baths?1:b>=+c.baths-1?.5:0);}
+ if(+c.minSqft){const q=l.sqft;add('minSqft',q==null?.5:q>=+c.minSqft?1:q>=+c.minSqft*.85?.5:0);}
+ if(!tot)return null;const score=got/tot;
+ return {score,level:score>=0.999?'GREAT':(score>=0.7&&fails<=1)?'CLOSE':null};}
+const matchBadge=m=>m&&m.level?`<span class="match-badge ${m.level==='GREAT'?'great':'close'}">${m.level==='GREAT'?'⭐ '+st('great'):'👍 '+st('close')}</span>`:'';
+function critSummary(c){if(!c)return `<p style="color:var(--muted)">${st('noCrit')}</p>`;const m=v=>'$'+(+v).toLocaleString();const r=[];
+ if(+c.beds)r.push([st('bedsL'),c.beds+'+']);if(+c.baths)r.push([st('bathsL'),c.baths+'+']);if(c.cities&&c.cities.length)r.push([st('citiesL'),c.cities.join(', ')]);
+ if(+c.maxPrice)r.push([st('priceL'),m(c.maxPrice)]);if(+c.maxDown)r.push([st('downL'),m(c.maxDown)]);if(+c.maxMonthly)r.push([st('monthlyL'),m(c.maxMonthly)]);if(+c.minSqft)r.push([st('sqftL'),(+c.minSqft).toLocaleString()]);
+ return `<ul class="crit-list">${r.map(([a,b])=>`<li><span>${esc(a)}</span><b>${esc(b)}</b></li>`).join('')}</ul>`;}
+function openCriteriaWizard(){if(!isClient())return;const cur=Object.assign({beds:'',baths:'',cities:[],maxPrice:'',maxDown:'',maxMonthly:'',minSqft:''},critOf(S.user)||{});
+ const cities=[...new Set(S.data.listings.map(l=>l.city).filter(Boolean))].sort();let step=0;const N=5;
+ const opt=(name,vals)=>`<div class="sc-opts">${vals.map(([v,lab])=>`<label class="sc-opt"><input type="radio" name="${name}" value="${v}" ${String(cur[name])===String(v)?'checked':''}><span>${lab}</span></label>`).join('')}</div>`;
+ const steps=[
+  ()=>`<h3>${st('qBeds')}</h3>${opt('beds',[['',st('any')],[1,'1+'],[2,'2+'],[3,'3+'],[4,'4+'],[5,'5+']])}`,
+  ()=>`<h3>${st('qBaths')}</h3>${opt('baths',[['',st('any')],[1,'1+'],[1.5,'1.5+'],[2,'2+'],[3,'3+']])}`,
+  ()=>`<h3>${st('qCities')}</h3><div class="sc-opts">${cities.map(c=>`<label class="sc-opt"><input type="checkbox" name="cities" value="${esc(c)}" ${cur.cities.includes(c)?'checked':''}><span>${esc(c)}</span></label>`).join('')}</div>`,
+  ()=>`<h3>${st('qBudget')}</h3><label>${st('qDown')}<input name="maxDown" type="number" min="0" step="500" value="${esc(cur.maxDown)}" placeholder="${st('any')}"></label><label>${st('qMonthly')}<input name="maxMonthly" type="number" min="0" step="50" value="${esc(cur.maxMonthly)}" placeholder="${st('any')}"></label><label>${st('qPrice')}<input name="maxPrice" type="number" min="0" step="1000" value="${esc(cur.maxPrice)}" placeholder="${st('any')}"></label>`,
+  ()=>`<h3>${st('qMore')}</h3><label>${st('qSqft')}<input name="minSqft" type="number" min="0" step="50" value="${esc(cur.minSqft)}" placeholder="${st('any')}"></label>`];
+ const m=modal(`<div id="scWiz"></div>`);m.classList.add('sc-modal');
+ const collect=()=>{const f=m.querySelector('#scF');if(!f)return;if(step===2){cur.cities=[...f.querySelectorAll('[name=cities]:checked')].map(i=>i.value);return;}const v=fd(f);Object.keys(v).forEach(k=>cur[k]=v[k]);};
+ const draw=()=>{m.querySelector('#scWiz').innerHTML=`<h2>🏡 ${st('title')}</h2><p style="color:var(--muted);font-size:14px">${st('sub')}</p>
+  <div class="sc-progress"><div style="width:${(step+1)/N*100}%"></div></div><div style="font-size:12px;color:var(--muted)">${st('step')} ${step+1} ${st('of')} ${N}</div>
+  <form id="scF" class="sc-form" onsubmit="return false">${steps[step]()}</form>
+  <div class="sc-nav"><button type="button" class="btn-card" id="scSkip">${st('skip')}</button><span style="flex:1"></span>${step?`<button type="button" class="btn-card" id="scBack">${st('back')}</button>`:''}<button type="button" class="btn-card primary" id="scNext">${step===N-1?st('saveBtn'):st('next')}</button></div>`;
+  m.querySelector('#scSkip').onclick=()=>{S.markCriteriaPrompted();m.remove();};
+  const b=m.querySelector('#scBack');if(b)b.onclick=()=>{collect();step--;draw();};
+  m.querySelector('#scNext').onclick=()=>{collect();if(step<N-1){step++;draw();return;}S.saveSearchCriteria(cur);VIEW='REC';m.remove();if(tab!=='inventory')go('inventory');else render();};};
+ draw();}
+function maybePromptCriteria(){if(isClient()&&!critOf(S.user)){const bp=S.buyerProfile(S.user);if(!(bp&&bp.criteriaPrompted))setTimeout(openCriteriaWizard,120);}}
+function cardsSection(L){
+ if(!isClient())return `<div class="cards-grid">${L.map(l=>card(l)).join('')}</div>`;
+ const c=critOf(S.user);
+ const tog=`<div class="sc-toolbar"><div class="sc-toggle"><button type="button" data-view="REC" class="${VIEW==='REC'?'active':''}">⭐ ${st('rec')}</button><button type="button" data-view="ALL" class="${VIEW==='ALL'?'active':''}">${st('all')}</button></div><button type="button" class="btn-card" data-editsearch="1">✏️ ${st('edit')}</button></div>`;
+ if(!c)return `${tog}<div class="sc-cta">🏡 ${st('setPrompt')} <button type="button" class="btn-card primary" data-editsearch="1">${st('setBtn')}</button></div><div class="cards-grid">${L.map(l=>card(l)).join('')}</div>`;
+ const sc=L.map(l=>({l,m:matchScore(l,c)}));
+ if(VIEW==='ALL')return `${tog}<div class="cards-grid">${sc.map(x=>card(x.l,x.m)).join('')}</div>`;
+ const rec=sc.filter(x=>x.m&&x.m.level).sort((a,b)=>b.m.score-a.m.score),rest=sc.filter(x=>!(x.m&&x.m.level));
+ return `${tog}<h3 class="sc-h">⭐ ${st('rec')} (${rec.length})</h3>${rec.length?`<div class="cards-grid">${rec.map(x=>card(x.l,x.m)).join('')}</div>`:`<p class="sc-cta">${st('noMatch')}</p>`}
+  <h3 class="sc-h">${st('others')} (${rest.length})</h3><div class="cards-grid">${rest.map(x=>card(x.l,x.m)).join('')}</div>`;}
+window.__sc={matchScore,critOf};
+
 function inventory(){const all=S.data.listings,cities=[...new Set(all.map(l=>l.city))].sort(),L=filtered();
   const es=S.lang==='es';
   const sel=(n,opts,lab)=>`<select name="${n}" class="filter-select"><option value="">${lab}</option>${opts.map(o=>`<option value="${esc(o[0]??o)}" ${F[n]==(o[0]??o)?'selected':''}>${esc(o[1]??o)}</option>`).join('')}</select>`;
@@ -448,10 +517,10 @@ function inventory(){const all=S.data.listings,cities=[...new Set(all.map(l=>l.c
    <div class="quick-chips">${chips.map(([k,v])=>`<button type="button" class="chip ${CHIP===k?'active':''}" data-chip="${k}">${v}</button>`).join('')}</div></form>
   <div class="workspace-split"><div class="map-pane"><div id="inventory-map"></div></div>
    <div class="cards-pane">${guestNotice}<div class="cards-toolbar"><b style="font-size:14px">${L.length} ${tr('homesCount')}</b><span style="font-size:12px;color:var(--muted)">💡 ${es?'Usa ‹ › en la foto para ver la galería':'Click ‹ › on any photo to swipe the gallery'}</span></div>
-   <div class="cards-grid">${L.map(card).join('')}</div></div></div>
+   ${cardsSection(L)}</div></div>
   ${S.user?`<div class="compare-tray ${CMP.size?'show':''}"><span>⚖️ <b>${CMP.size}</b> ${es?'casas para comparar':'homes selected to compare'}</span><button type="button" class="btn-card primary" data-cmpopen="1">${es?'Comparar':'Compare Side-by-Side'}</button><button type="button" class="btn-card" data-cmpclear="1">${es?'Limpiar':'Clear'}</button></div>`:''}`;}
 
-function card(l){
+function card(l,mt){
   const ph=(l.photoUrls&&l.photoUrls.length)?l.photoUrls:[l.photoUrl||'listing-placeholder.svg'],i=(PIDX[l.id]||0)%ph.length,multi=ph.length>1;
   const media=badgeHtml=>`<div class="card-media">${badgeHtml}<img src="${esc(ph[i])}" data-img="${l.id}" referrerpolicy="no-referrer" loading="lazy" onerror="window.imgFallback&&window.imgFallback(this)" data-open="${l.id}" style="cursor:pointer">
     ${multi?`<button type="button" class="carousel-btn prev" data-prev="${l.id}">‹</button><button type="button" class="carousel-btn next" data-next="${l.id}">›</button>`:''}<span class="photo-counter" data-cnt="${l.id}">📷 ${i+1} / ${ph.length}</span>`;
@@ -463,7 +532,7 @@ function card(l){
   const col=({AVAILABLE:'#16a34a',COMING_SOON:'#2563eb',SOLD:'#475569',CLOSED:'#475569'})[l.status]||'#d97706';
   return `<article class="prop-card" data-card="${l.id}">${media(`<span class="badge-top-left" style="background:${col}">${esc(S.statusText?S.statusText(l.status):l.status)}</span>`)}
     <div class="card-top-actions"><button type="button" class="icon-circle-btn" title="Compare" data-compare="${l.id}">${CMP.has(l.id)?'✅':'⚖️'}</button><button type="button" class="icon-circle-btn" title="Favorite" data-fav="${l.id}">${S.isFavorite(l.id)?'❤️':'🤍'}</button></div></div>
-    <div class="card-body"><div class="price-strip"><span class="main-price">${S.money(l.askingPrice)}</span><span class="monthly-pill">${S.money(l.monthlyPayment)}${tr('perMo')}</span></div>
+    <div class="card-body">${matchBadge(mt)}<div class="price-strip"><span class="main-price">${S.money(l.askingPrice)}</span><span class="monthly-pill">${S.money(l.monthlyPayment)}${tr('perMo')}</span></div>
     <p class="addr-line">${title(l)}</p>
     <div class="down-box"><div>${tr('down')}<b>${S.money(l.downPayment)}</b></div><div>${tr('beds')}/${tr('baths')}<b>${l.beds??'—'} · ${l.baths??'—'}</b></div><div>Sq Ft<b>${l.sqft?(+l.sqft).toLocaleString():'—'}</b></div></div>
     <div class="card-actions"><button type="button" class="btn-card primary" data-open="${l.id}">${S.lang==='es'?'Ver Detalles':'View Details'}</button></div></div></article>`;
@@ -532,6 +601,7 @@ function dashboard(){if(!S.user)return auth();const u=S.user,ap=S.agentProfile(u
   <div class="card" style="padding:16px"><h2>${tr('myProfile')}</h2><img src="${esc(u.avatarUrl||'listing-placeholder.svg')}" style="width:90px;height:90px;border-radius:50%;object-fit:cover"><input type="file" id="avatar" accept="image/*">
    <form id="profF"><input name="name" value="${esc(u.name)}"><input name="phone" value="${esc(u.phone)}">${ap?`<label>${tr('orecLicense')}<input name="licenseNumber" value="${esc(ap.licenseNumber)}"></label><label>${tr('brokerage')}<input name="brokerage" value="${esc(ap.brokerage)}"></label><p>${tr('yourInviteCode')} <b>${esc(ap.inviteCode)}</b></p>`:''}<button>${tr('save')}</button></form>
    ${ag?`<p>${tr('yourAgent')} <b>${esc(ag.name)}</b></p>`:''}<h3>${tr('changePw')}</h3><form id="pwF"><input name="cur" type="password" placeholder="${tr('currentPw')}" required><input name="pw" type="password" placeholder="${tr('newPw')}" minlength="8" required><button>${tr('updatePw')}</button></form></div>
+  ${isClient()?`<div class="card" style="padding:16px"><h2>🏡 ${st('mySearch')}</h2>${critSummary(critOf(u))}<button type="button" class="btn-card primary" data-editsearch="1">✏️ ${st('edit')}</button></div>`:''}
   <div class="card" style="padding:16px"><h2>${tr('favorites')}</h2><ul>${favs.map(li).join('')||`<li>${tr('noneYet')}</li>`}</ul><h2>${tr('viewedHomes')}</h2><ul>${views.map(li).join('')||`<li>${tr('noneYet')}</li>`}</ul></div>
   <div class="card" style="padding:16px"><h2>${tr('messages')}</h2>${contacts.length?`<form id="msgF"><select name="toUserId">${contacts.map(c=>`<option value="${c.id}">${esc(c.name)}</option>`).join('')}</select>
    <select name="listingId"><option value="">${tr('propAddress')}</option>${D.listings.map(l=>`<option value="${l.id}">${esc(l.address)}, ${esc(l.city)}</option>`).join('')}</select>
@@ -560,13 +630,14 @@ function render(){const root=$('#app-root');if(!S.data)return;document.documentE
   const body={inventory,guides,dashboard,admin,auth}[tab]||inventory;root.innerHTML=header()+`<main>${body()}</main><footer style="padding:18px;font-size:12px;text-align:center">© Legacy - Owner Finance · Brokerage By: KLC Real Estate, LLC</footer>`;bind();if(tab==='inventory')drawMap();}
 function bind(){const r=$('#app-root');
   r.onclick=async e=>{
-   const c=e.target.closest('[data-prev],[data-next],[data-compare],[data-chip],[data-cmpopen],[data-cmpclear]');
+   const c=e.target.closest('[data-view],[data-editsearch],[data-prev],[data-next],[data-compare],[data-chip],[data-cmpopen],[data-cmpclear]');
    if(c){e.preventDefault();e.stopPropagation();const d=c.dataset;
      if(d.prev||d.next){const id=d.prev||d.next,l=S.listing(id),ph=(l.photoUrls&&l.photoUrls.length)?l.photoUrls:[l.photoUrl||'listing-placeholder.svg'];
        PIDX[id]=((PIDX[id]||0)+(d.next?1:-1)+ph.length)%ph.length;const img=r.querySelector(`[data-img="${id}"]`),cn=r.querySelector(`[data-cnt="${id}"]`);
        if(img){delete img.dataset.triedThumb;img.src=ph[PIDX[id]];}if(cn)cn.textContent=`📷 ${PIDX[id]+1} / ${ph.length}`;return;}
      if(d.compare){if(CMP.has(d.compare))CMP.delete(d.compare);else if(CMP.size<3)CMP.add(d.compare);else alert(S.lang==='es'?'Máximo 3 casas.':'You can compare up to 3 homes.');return render();}
      if(d.chip){CHIP=d.chip;return render();}
+     if(d.view){VIEW=d.view;return render();}if(d.editsearch)return openCriteriaWizard();
      if(d.cmpclear){CMP.clear();return render();}
      if(d.cmpopen){const it=[...CMP].map(id=>S.listing(id)).filter(Boolean);
        modal(`<h2>⚖️ ${S.lang==='es'?'Comparación de Casas':'Side-by-Side Comparison'}</h2><div style="display:grid;grid-template-columns:repeat(${it.length},1fr);gap:12px">${it.map(l=>`<div class="card" style="padding:10px"><img src="${esc(l.photoUrl||'listing-placeholder.svg')}" referrerpolicy="no-referrer" onerror="window.imgFallback&&window.imgFallback(this)" style="width:100%;height:120px;object-fit:cover;border-radius:8px"><h4 style="margin:8px 0">${title(l)}</h4>
@@ -584,7 +655,7 @@ function bind(){const r=$('#app-root');
      if(d.ctr){const p=prompt('Counter price $'),dn=prompt('Counter down $'),mo=prompt('Counter monthly $'),n=prompt('Admin notes')||'';if(p)S.respondOffer(d.ctr,'COUNTERED',{counterPrice:p,counterDown:dn,counterMonthly:mo,adminNotes:n});return;}
      if(d.reset)return openAdminResetModal(d.reset);
      if(d.save){const row=r.querySelector(`[data-row="${d.save}"]`),p={};row.querySelectorAll('[data-f]').forEach(i=>p[i.dataset.f]=Math.round(+i.value*100));S.updateListing(d.save,p);return alert(tr('savedAlert'));}
-     if(d.client){const c=S.data.users.find(u=>u.id===d.client);const of=S.data.offers.filter(o=>o.userId===c.id);modal(`<h2>${esc(c.name)}</h2><p>${esc(c.email)} · ${esc(c.phone)}</p><h3>${tr('favorites')}</h3><ul>${S.data.favorites.filter(f=>f.userId===c.id).map(f=>`<li>${esc((S.listing(f.listingId)||{}).address)}</li>`).join('')}</ul><h3>${tr('myOffers')}</h3><ul>${of.map(o=>`<li>${esc((S.listing(o.listingId)||{}).address)} ${S.money(o.offerPrice)} ${offerBadge(o.status)}</li>`).join('')}</ul>`);}
+     if(d.client){const c=S.data.users.find(u=>u.id===d.client);const of=S.data.offers.filter(o=>o.userId===c.id);modal(`<h2>${esc(c.name)}</h2><p>${esc(c.email)} · ${esc(c.phone)}</p><h3>🏡 ${st('clientCrit')}</h3>${critSummary(critOf(c))}<h3>${tr('favorites')}</h3><ul>${S.data.favorites.filter(f=>f.userId===c.id).map(f=>`<li>${esc((S.listing(f.listingId)||{}).address)}</li>`).join('')}</ul><h3>${tr('myOffers')}</h3><ul>${of.map(o=>`<li>${esc((S.listing(o.listingId)||{}).address)} ${S.money(o.offerPrice)} ${offerBadge(o.status)}</li>`).join('')}</ul>`);}
    }catch(err){alert(err.message);}
   };
   const f=$('#filters');if(f){f.oninput=f.onchange=e=>{const v=fd(f);if('maxDownR' in v){v.maxDown=+v.maxDownR>=40000?'':v.maxDownR;delete v.maxDownR;}if('maxMonthlyR' in v){v.maxMonthly=+v.maxMonthlyR>=3000?'':v.maxMonthlyR;delete v.maxMonthlyR;}
@@ -600,8 +671,8 @@ function bind(){const r=$('#app-root');
    }catch(err){alert(err.message);}
   };
   const sub=(id,fn)=>{const el=$(id);if(el)el.onsubmit=wrap(()=>fn(fd(el)));};
-  sub('#loginF',v=>{const u=S.login(v.email,v.password);go(u&&u.role==='ADMIN'?'admin':'dashboard');});
-  sub('#regF',v=>{S.register(v);go('dashboard');});
+  sub('#loginF',v=>{const u=S.login(v.email,v.password);go(u&&u.role==='ADMIN'?'admin':'dashboard');maybePromptCriteria();});
+  sub('#regF',v=>{S.register(v);go('dashboard');maybePromptCriteria();});
   sub('#profF',v=>{S.updateProfile(v);alert(tr('savedAlert'));});
   sub('#pwF',v=>{S.changePassword(v.cur,v.pw);alert(tr('pwUpdatedAlert'));});
   sub('#msgF',v=>{S.sendMessage(v);});}
@@ -624,5 +695,5 @@ function checkResetUrlParams(){
 }
 
 S.on(render);window.addEventListener('hashchange',()=>{tab=location.hash.slice(1)||'inventory';render();});
-S.load().then(()=>{render();checkResetUrlParams();}).catch(e=>{$('#app-root').innerHTML='<p style="padding:20px">Failed to load data: '+esc(e.message)+'</p>';});
+S.load().then(()=>{render();checkResetUrlParams();maybePromptCriteria();}).catch(e=>{$('#app-root').innerHTML='<p style="padding:20px">Failed to load data: '+esc(e.message)+'</p>';});
 })();
