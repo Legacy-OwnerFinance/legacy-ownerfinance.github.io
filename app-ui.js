@@ -26,7 +26,7 @@ const initTab=()=>{
   return 'inventory';
 };
 let PIDX={},CMP=new Set(),CHIP='ALL',MARK={};
-let tab=initTab(),F={q:'',area:'',beds:'',baths:'',maxDown:'',maxMonthly:'',maxPrice:'',status:'',sort:'priceAsc'},map=null;
+let tab=initTab(),F={q:'',area:'',beds:'',baths:'',maxDown:'',maxMonthly:'',maxPrice:'',status:'',sort:(()=>{try{return localStorage.getItem('lof.sort')||'newest'}catch(e){return 'newest'}})()},map=null;
 
 const L10N={
   en:{
@@ -53,6 +53,7 @@ const L10N={
     maxPrice:'Max price $',
     status:'Status',
     sort:'Sort',
+    sortBy:'Sort by',sortNewest:'Newest',sortCityAz:'City A–Z',sortPriceAscL:'Price: low to high',sortPriceDescL:'Price: high to low',sortDownAscL:'Down payment: low to high',sortMonthlyAscL:'Monthly payment: low to high',
     sortPriceAsc:'Price ↑',
     sortPriceDesc:'Price ↓',
     sortDownAsc:'Down ↑',
@@ -188,6 +189,7 @@ const L10N={
     maxPrice:'Precio máx $',
     status:'Estado',
     sort:'Ordenar',
+    sortBy:'Ordenar por',sortNewest:'Más recientes',sortCityAz:'Ciudad A–Z',sortPriceAscL:'Precio: menor a mayor',sortPriceDescL:'Precio: mayor a menor',sortDownAscL:'Enganche: menor a mayor',sortMonthlyAscL:'Pago mensual: menor a mayor',
     sortPriceAsc:'Precio ↑',
     sortPriceDesc:'Precio ↓',
     sortDownAsc:'Enganche ↑',
@@ -420,7 +422,12 @@ function filtered(){let L=S.data.listings.filter(l=>{const q=F.q.toLowerCase();
     if(F.maxPrice&&l.askingPrice>F.maxPrice*100)return false;if(F.status&&l.status!==F.status)return false;
   }
   return true;});
-  const k={priceAsc:['askingPrice',1],priceDesc:['askingPrice',-1],downAsc:['downPayment',1],monthlyAsc:['monthlyPayment',1],bedsDesc:['beds',-1]}[F.sort]||['askingPrice',1];
+  const PRIV=['priceAsc','priceDesc','downAsc','monthlyAsc','bedsDesc'];let so=F.sort||'newest';if(!S.user&&PRIV.includes(so))so='newest';
+  const ts=l=>{const t=Date.parse(l.createdAt||l.created_at||l.listedAt||l.updatedAt||l.updated_at||'');return isNaN(t)?0:t;};
+  const idx=new Map(S.data.listings.map((l,i)=>[l.id,i]));
+  if(so==='newest')return L.sort((a,b)=>(ts(b)-ts(a))||(idx.get(b.id)-idx.get(a.id)));
+  if(so==='cityAz')return L.sort((a,b)=>(a.city||'').localeCompare(b.city||'')||partialAddr(a).localeCompare(partialAddr(b)));
+  const k={priceAsc:['askingPrice',1],priceDesc:['askingPrice',-1],downAsc:['downPayment',1],monthlyAsc:['monthlyPayment',1],bedsDesc:['beds',-1]}[so];
   return L.sort((a,b)=>((a[k[0]]||0)-(b[k[0]]||0))*k[1]);}
 
 // ===== Client search criteria ("What are you looking for?") =====
@@ -510,10 +517,10 @@ function inventory(){const all=S.data.listings,L=filtered();
     <div class="stat-box"><div class="stat-num">${nAv}</div><div class="stat-lbl">${es?'Disponibles':'Available Now'}</div></div>
     ${S.user&&minDown?`<div class="stat-box"><div class="stat-num">$${(minDown/100000).toFixed(1)}k+</div><div class="stat-lbl">${es?'Enganche Mín':'Min Down'}</div></div>`:''}</div></div></section>
   <form id="filters" class="interactive-controls" onsubmit="return false"><div class="filter-row">
-   <div class="search-box"><input name="q" placeholder="${S.user?tr('searchPlaceholder'):tr('searchPlaceholderGuest')}" value="${esc(F.q)}"></div>
+   <div class="search-box"><input name="q" placeholder="${S.user?tr('searchPlaceholder'):tr('searchPlaceholderGuest')}" value="${esc(F.q)}"></div>${(()=>{const o=[['newest',tr('sortNewest')],['cityAz',tr('sortCityAz')]].concat(S.user?[['priceAsc',tr('sortPriceAscL')],['priceDesc',tr('sortPriceDescL')],['downAsc',tr('sortDownAscL')],['monthlyAsc',tr('sortMonthlyAscL')]]:[]);const cur=o.some(x=>x[0]===F.sort)?F.sort:'newest';return `<select name="sort" class="filter-select sort-select" aria-label="${tr('sortBy')}" title="${tr('sortBy')}">${o.map(([v,t])=>`<option value="${v}" ${cur===v?'selected':''}>${esc(tr('sortBy'))}: ${esc(t)}</option>`).join('')}</select>`})()}
    ${S.user?`<div class="slider-group">${tr('maxDown').replace(' $','')}: <b>${dv>=40000?(es?'Cualquiera':'Any'):'$'+(+dv).toLocaleString()}</b><input type="range" name="maxDownR" min="3000" max="40000" step="500" value="${dv}"></div>
    <div class="slider-group">${tr('maxMonthly').replace(' $','')}: <b>${mv>=3000?(es?'Cualquiera':'Any'):'$'+(+mv).toLocaleString()}</b><input type="range" name="maxMonthlyR" min="800" max="3000" step="50" value="${mv}"></div>
-   ${sel('beds',[1,2,3,4,5].map(n=>[n,n+tr('bedsPlus')]),tr('beds'))}${sel('status',S.STATUSES.map(s=>[s,S.statusText(s)]),tr('status'))}${sel('sort',[['priceAsc',tr('sortPriceAsc')],['priceDesc',tr('sortPriceDesc')],['downAsc',tr('sortDownAsc')],['monthlyAsc',tr('sortMonthlyAsc')],['bedsDesc',tr('sortBedsDesc')]],tr('sort'))}`:''}</div>
+   ${sel('beds',[1,2,3,4,5].map(n=>[n,n+tr('bedsPlus')]),tr('beds'))}${sel('status',S.STATUSES.map(s=>[s,S.statusText(s)]),tr('status'))}`:''}</div>
    <div class="quick-chips">${chips.map(([k,v])=>`<button type="button" class="chip ${CHIP===k?'active':''}" data-chip="${k}">${v}</button>`).join('')}</div></form>
   <div class="workspace-split"><div class="map-pane"><div id="inventory-map"></div></div>
    <div class="cards-pane">${guestNotice}<div class="cards-toolbar"><b style="font-size:14px">${L.length} ${tr('homesCount')}</b><span style="font-size:12px;color:var(--muted)">💡 ${es?'Usa ‹ › en la foto para ver la galería':'Click ‹ › on any photo to swipe the gallery'}</span></div>
@@ -660,7 +667,7 @@ function bind(){const r=$('#app-root');
   };
   const f=$('#filters');if(f){f.oninput=f.onchange=e=>{const v=fd(f);if('maxDownR' in v){v.maxDown=+v.maxDownR>=40000?'':v.maxDownR;delete v.maxDownR;}if('maxMonthlyR' in v){v.maxMonthly=+v.maxMonthlyR>=3000?'':v.maxMonthlyR;delete v.maxMonthlyR;}
     if(e.type==='input'&&e.target.type==='range'){const b=e.target.parentNode.querySelector('b');if(b)b.textContent='$'+(+e.target.value).toLocaleString();return;}
-    F=Object.assign(F,v);const pos=e.target.name==='q'?e.target.selectionStart:null;render();if(pos!=null){const q=$('#filters [name=q]');q.focus();q.setSelectionRange(pos,pos);}};f.onsubmit=e=>e.preventDefault();}
+    F=Object.assign(F,v);if('sort' in v){try{localStorage.setItem('lof.sort',v.sort)}catch(_){}}const pos=e.target.name==='q'?e.target.selectionStart:null;render();if(pos!=null){const q=$('#filters [name=q]');q.focus();q.setSelectionRange(pos,pos);}};f.onsubmit=e=>e.preventDefault();}
   r.onchange=async e=>{
    try{
      const t=e.target;if(t.dataset.status)return S.setListingStatus(t.dataset.status,t.value);

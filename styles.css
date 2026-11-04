@@ -216,7 +216,7 @@ a:hover {
   gap: 10px;
 }
 .search-box {
-  flex: 1 1 100%;
+  flex: 1 1 320px;
   position: relative;
 }
 .search-box input {
@@ -690,3 +690,6 @@ form.interactive-controls .chip.active{background:var(--accent);color:#fff;borde
 .sc-opts{display:flex;flex-wrap:wrap;gap:8px}.sc-opt{display:inline-flex!important;align-items:center;gap:6px;border:1px solid #cbd5e1;border-radius:999px;padding:6px 12px;cursor:pointer;font-weight:500!important}
 .sc-opt input{width:auto;margin:0}.sc-nav{display:flex;gap:8px;align-items:center}
 .crit-list{list-style:none;padding:0;margin:8px 0;display:grid;gap:4px}.crit-list li{display:flex;justify-content:space-between;gap:10px;border-bottom:1px solid #e2e8f0;padding:4px 0;font-size:14px}
+
+.filter-row .search-box + .sort-select { flex: 0 0 auto; width: auto; max-width: 100%; }
+.filter-row .search-box + .sort-select ~ * { }
