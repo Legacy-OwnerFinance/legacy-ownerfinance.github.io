@@ -426,9 +426,10 @@ const checkPw=(u,pw)=>{
   return false;
 };
 
-S.login=(email,pw)=>{
+S.login=async(email,pw)=>{
   const u=byEmail(email);
   if(!u||!checkPw(u,pw))throw new Error(S.lang==='es'?'Correo o contraseña inválidos. Si olvidaste tu contraseña, haz clic en "¿Olvidaste tu contraseña?" abajo para crear una nueva.':'Invalid email or password. If you forgot your password, click "Forgot password?" below to set a new one.');
+  if(!(await S.isEmailVerified(u.email)))return {needsVerify:true,email:u.email};
   setUser(u);
   return u;
 };
@@ -464,9 +465,23 @@ S.register=f=>{
   }
   setUser(u);
   S.save();
-  sbUpsert('app_users',userToRow(u),'id');
+  S._regUpsert=sbUpsert('app_users',userToRow(u),'id');
   return u;
 };
+// Email verification (Edge Function email-verify). Returns {enabled:false} until a sender key is configured.
+S.emailVerify=async(action,email,code)=>{
+  try{
+    const r=await fetch(`${SUPABASE_URL}/functions/v1/email-verify`,{method:'POST',headers:sbHeaders(),body:JSON.stringify({action,email:String(email||'').trim().toLowerCase(),code,lang:S.lang})});
+    return await r.json().catch(()=>({enabled:false}));
+  }catch(e){return {enabled:false};}
+};
+S.isEmailVerified=async email=>{
+  try{
+    const r=await fetch(`${SUPABASE_URL}/rest/v1/app_users?email=eq.${encodeURIComponent(String(email||'').trim().toLowerCase())}&select=email_verified`,{headers:sbHeaders(),cache:'no-store'});
+    if(!r.ok)return true;const rows=await r.json();return !(rows[0]&&rows[0].email_verified===false);
+  }catch(e){return true;}
+};
+S.loginAfterVerify=email=>{const u=byEmail(email);if(u){setUser(u);}return u;};
 S.forgotPassword=email=>{const u=byEmail(email);if(!u)throw new Error(S.lang==='es'?'No existe cuenta con ese correo':'No account with that email');
   u.resetCode=String(Math.floor(100000+Math.random()*900000));u.resetExpires=Date.now()+3600e3;u.updatedAt=now();S.save();sbUpsert('app_users',userToRow(u),'id');return u.resetCode;};
 S.resetPassword=(email,codeIn,pw)=>{const u=byEmail(email);

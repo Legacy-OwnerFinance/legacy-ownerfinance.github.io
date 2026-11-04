@@ -159,6 +159,7 @@ const L10N={
     requestedAlert:'Requested!',
     savedAlert:'Saved',
     pwUpdatedAlert:'Password updated and signed in!',
+    evTitle:'Verify your email',evDesc:'We sent a 6-digit code to',evNeed:'Your email is not verified yet. We are sending you a new code.',evCode:'6-digit code',evVerify:'Verify',evResend:'Resend code',evLater:'Later',evBad:'Incorrect code. Please try again.',evExpired:'The code expired. Tap "Resend code".',evTooMany:'Too many attempts. Please try again later.',evWait:'Please wait a few seconds before requesting another code.',evSendFail:'We could not send the email. Please try again.',evSent:'A new code was sent to your email.',evDone:'Email verified! Welcome.',
     pwResetAlert:'Password reset.',
     offerSubmitted:'Submitted',
     offerAccepted:'Accepted',
@@ -295,6 +296,7 @@ const L10N={
     requestedAlert:'¡Solicitud enviada!',
     savedAlert:'Guardado',
     pwUpdatedAlert:'¡Contraseña actualizada y sesión iniciada!',
+    evTitle:'Verifica tu correo',evDesc:'Enviamos un código de 6 dígitos a',evNeed:'Tu correo aún no está verificado. Te enviamos un código nuevo.',evCode:'Código de 6 dígitos',evVerify:'Verificar',evResend:'Reenviar código',evLater:'Más tarde',evBad:'Código incorrecto. Intenta de nuevo.',evExpired:'El código venció. Toca "Reenviar código".',evTooMany:'Demasiados intentos. Intenta más tarde.',evWait:'Espera unos segundos antes de pedir otro código.',evSendFail:'No pudimos enviar el correo. Intenta de nuevo.',evSent:'Te enviamos un código nuevo a tu correo.',evDone:'¡Correo verificado! Bienvenido.',
     pwResetAlert:'Contraseña restablecida.',
     offerSubmitted:'Enviada',
     offerAccepted:'Aceptada',
@@ -678,12 +680,26 @@ function bind(){const r=$('#app-root');
    }catch(err){alert(err.message);}
   };
   const sub=(id,fn)=>{const el=$(id);if(el)el.onsubmit=wrap(()=>fn(fd(el)));};
-  sub('#loginF',v=>{const u=S.login(v.email,v.password);go(u&&u.role==='ADMIN'?'admin':'dashboard');maybePromptCriteria();});
-  sub('#regF',v=>{S.register(v);go('dashboard');maybePromptCriteria();});
+  sub('#loginF',async v=>{const u=await S.login(v.email,v.password);if(u&&u.needsVerify)return openVerifyEmail(u.email,false);go(u&&u.role==='ADMIN'?'admin':'dashboard');maybePromptCriteria();});
+  sub('#regF',async v=>{const u=S.register(v);try{await S._regUpsert;}catch(e){}const r=await S.emailVerify('send',u.email);if(r&&r.enabled&&r.sent){S.logout();return openVerifyEmail(u.email,true);}go('dashboard');maybePromptCriteria();});
   sub('#profF',v=>{S.updateProfile(v);alert(tr('savedAlert'));});
   sub('#pwF',v=>{S.changePassword(v.cur,v.pw);alert(tr('pwUpdatedAlert'));});
   sub('#msgF',v=>{S.sendMessage(v);});}
 
+function openVerifyEmail(email,justSent){
+  const m=modal(`<form id="evF" class="card" style="padding:20px;max-width:420px;width:92%"><h2>✉️ ${tr('evTitle')}</h2>
+   <p style="font-size:14px">${tr('evDesc')} <b>${esc(email)}</b></p>${justSent?'':`<p style="font-size:13px;color:var(--muted)">${tr('evNeed')}</p>`}
+   <input name="code" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="${tr('evCode')}" required style="font-size:22px;letter-spacing:6px;text-align:center">
+   <p id="evMsg" style="font-size:13px;min-height:18px;color:#b91c1c"></p>
+   <div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn-card primary">${tr('evVerify')}</button><button type="button" class="btn-card" id="evResend">${tr('evResend')}</button><button type="button" class="btn-card" id="evClose">${tr('evLater')}</button></div></form>`);
+  const msg=t=>{m.querySelector('#evMsg').textContent=t;};
+  const err=r=>msg(tr({bad_code:'evBad',expired:'evExpired',too_many:'evTooMany',wait:'evWait',send_failed:'evSendFail'}[r&&r.error]||'evSendFail'));
+  m.querySelector('#evClose').onclick=()=>{m.remove();go('auth');};
+  m.querySelector('#evResend').onclick=async()=>{const r=await S.emailVerify('send',email);if(r&&r.sent){msg('');alert(tr('evSent'));}else if(r&&r.verified)msg('');else err(r);};
+  m.querySelector('#evF').onsubmit=async e=>{e.preventDefault();const code=new FormData(e.target).get('code');const r=await S.emailVerify('verify',email,code);
+    if(r&&(r.verified||r.enabled===false)){m.remove();alert(tr('evDone'));const u=S.loginAfterVerify(email);go(u?(u.role==='ADMIN'?'admin':'dashboard'):'auth');if(u)maybePromptCriteria();}else err(r);};
+  if(!justSent)S.emailVerify('send',email);
+}
 function checkResetUrlParams(){
   try{
     const sp=new URLSearchParams(location.search);
