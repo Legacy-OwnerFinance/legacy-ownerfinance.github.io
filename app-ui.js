@@ -26,7 +26,7 @@ const initTab=()=>{
   return 'inventory';
 };
 let PIDX={},CMP=new Set(),CHIP='ALL',MARK={};
-let tab=initTab(),F={q:'',city:'',area:'',beds:'',baths:'',maxDown:'',maxMonthly:'',maxPrice:'',status:'',sort:'priceAsc'},map=null;
+let tab=initTab(),F={q:'',area:'',beds:'',baths:'',maxDown:'',maxMonthly:'',maxPrice:'',status:'',sort:'priceAsc'},map=null;
 
 const L10N={
   en:{
@@ -411,7 +411,7 @@ function guides(){
 function filtered(){let L=S.data.listings.filter(l=>{const q=F.q.toLowerCase();
   const searchable=S.user?(l.address+' '+(l.publicTitle||'')+' '+l.city+' '+l.zip):(partialAddr(l)+' '+l.city);
   if(q&&!searchable.toLowerCase().includes(q))return false;
-  if(F.city&&l.city!==F.city)return false;if(F.area&&!(l.areas||[]).includes(F.area))return false;
+  if(F.area&&!(l.areas||[]).includes(F.area))return false;
   if(CHIP==='AVAILABLE'&&l.status!=='AVAILABLE')return false;if(CHIP==='COMING_SOON'&&l.status!=='COMING_SOON')return false;
   if(S.user){
     if(CHIP==='LOW_DOWN'&&(l.downPayment||1e9)>1000000)return false;if(CHIP==='LOW_MONTHLY'&&(l.monthlyPayment||1e9)>150000)return false;if(CHIP==='BEDS_3'&&(l.beds||0)<3)return false;
@@ -492,7 +492,7 @@ function cardsSection(L){
   <h3 class="sc-h">${st('others')} (${rest.length})</h3><div class="cards-grid">${rest.map(x=>card(x.l,x.m)).join('')}</div>`;}
 window.__sc={matchScore,critOf};
 
-function inventory(){const all=S.data.listings,cities=[...new Set(all.map(l=>l.city))].sort(),L=filtered();
+function inventory(){const all=S.data.listings,L=filtered();
   const es=S.lang==='es';
   const sel=(n,opts,lab)=>`<select name="${n}" class="filter-select"><option value="">${lab}</option>${opts.map(o=>`<option value="${esc(o[0]??o)}" ${F[n]==(o[0]??o)?'selected':''}>${esc(o[1]??o)}</option>`).join('')}</select>`;
   const nAv=all.filter(l=>l.status==='AVAILABLE').length,nCs=all.filter(l=>l.status==='COMING_SOON').length;
@@ -510,7 +510,7 @@ function inventory(){const all=S.data.listings,cities=[...new Set(all.map(l=>l.c
     <div class="stat-box"><div class="stat-num">${nAv}</div><div class="stat-lbl">${es?'Disponibles':'Available Now'}</div></div>
     ${S.user&&minDown?`<div class="stat-box"><div class="stat-num">$${(minDown/100000).toFixed(1)}k+</div><div class="stat-lbl">${es?'Enganche Mín':'Min Down'}</div></div>`:''}</div></div></section>
   <form id="filters" class="interactive-controls" onsubmit="return false"><div class="filter-row">
-   <div class="search-box"><input name="q" placeholder="${S.user?tr('searchPlaceholder'):tr('searchPlaceholderGuest')}" value="${esc(F.q)}"></div>${sel('city',cities,tr('city'))}
+   <div class="search-box"><input name="q" placeholder="${S.user?tr('searchPlaceholder'):tr('searchPlaceholderGuest')}" value="${esc(F.q)}"></div>
    ${S.user?`<div class="slider-group">${tr('maxDown').replace(' $','')}: <b>${dv>=40000?(es?'Cualquiera':'Any'):'$'+(+dv).toLocaleString()}</b><input type="range" name="maxDownR" min="3000" max="40000" step="500" value="${dv}"></div>
    <div class="slider-group">${tr('maxMonthly').replace(' $','')}: <b>${mv>=3000?(es?'Cualquiera':'Any'):'$'+(+mv).toLocaleString()}</b><input type="range" name="maxMonthlyR" min="800" max="3000" step="50" value="${mv}"></div>
    ${sel('beds',[1,2,3,4,5].map(n=>[n,n+tr('bedsPlus')]),tr('beds'))}${sel('status',S.STATUSES.map(s=>[s,S.statusText(s)]),tr('status'))}${sel('sort',[['priceAsc',tr('sortPriceAsc')],['priceDesc',tr('sortPriceDesc')],['downAsc',tr('sortDownAsc')],['monthlyAsc',tr('sortMonthlyAsc')],['bedsDesc',tr('sortBedsDesc')]],tr('sort'))}`:''}</div>
