@@ -1,5 +1,7 @@
 (function(){
-const KEY='legacy_of_state_v1';
+const KEY='legacy_of_state_v2';
+try{localStorage.removeItem('legacy_of_state_v1');localStorage.removeItem('legacy_uid');sessionStorage.removeItem('legacy_uid');}catch(e){}
+const TOKEN_KEY='legacy_session';
 const SUPABASE_URL='https://oxcgtjryfcatlwjaxier.supabase.co';
 const SUPABASE_ANON_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im94Y2d0anJ5ZmNhdGx3amF4aWVyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTMxOTMyMTcsImV4cCI6MjEwODc2OTIxN30.3ZD4V2_4n2tlccqlBnxH9YGuGGwkFQ_ovCuE-fZOrdY';
 const S=window.AppState={
@@ -26,7 +28,23 @@ const sbHeaders=(extra={})=>Object.assign({
   'Content-Type':'application/json'
 },extra);
 
+const getToken=()=>{try{return localStorage.getItem(TOKEN_KEY)||'';}catch(e){return '';}};
+async function api(action,body={}){
+  const r=await fetch(`${SUPABASE_URL}/functions/v1/api`,{method:'POST',headers:sbHeaders(getToken()?{'x-session':getToken()}:{}),body:JSON.stringify(Object.assign({action,lang:S.lang},body)),cache:'no-store'});
+  let j={};try{j=await r.json();}catch(e){}
+  if(j.error==='no_session'&&getToken()){try{localStorage.removeItem(TOKEN_KEY);}catch(e){}}
+  if(!r.ok||j.error){const err=new Error(j.message||j.error||('HTTP '+r.status));err.code=j.error;err.status=j.status||r.status;throw err;}
+  return j;
+}
+S.api=api;
 async function sbUpsert(table,rows,onConflict){
+  if(!getToken())return false;
+  try{
+    if(table==='app_kv_store'){const j=await api('save',{value:rows.value});S.lastSyncedAt=j.updatedAt;S.cloudConnected=true;return true;}
+    await api('write',{table,rows});S.cloudConnected=true;return true;
+  }catch(e){console.warn(`Save ${table} failed:`,e.message);return false;}
+}
+async function sbUpsertOLD(table,rows,onConflict){
   try{
     const q=onConflict?`?on_conflict=${onConflict}`:'';
     const r=await fetch(`${SUPABASE_URL}/rest/v1/${table}${q}`,{
@@ -43,6 +61,10 @@ async function sbUpsert(table,rows,onConflict){
 }
 
 async function sbDelete(table,filterQuery){
+  if(!getToken())return false;
+  try{await api('write',{table,del:filterQuery});return true;}catch(e){return false;}
+}
+async function sbDeleteOLD(table,filterQuery){
   try{
     const r=await fetch(`${SUPABASE_URL}/rest/v1/${table}?${filterQuery}`,{
       method:'DELETE',
@@ -77,7 +99,6 @@ function userToRow(u){
   return {
     id:u.id,
     email:String(u.email||'').trim().toLowerCase(),
-    password_hash:u.passwordHash||'',
     name:u.name||'',
     phone:u.phone||'',
     role:u.role||'BUYER',
@@ -217,19 +238,11 @@ function merge(base,incoming){
 }
 
 async function fetchCloudState(){
-  const [kvRes,listRes,userRes]=await Promise.all([
-    fetch(`${SUPABASE_URL}/rest/v1/app_kv_store?key=eq.${KEY}&select=value,updated_at`,{headers:sbHeaders(),cache:'no-store'}),
-    fetch(`${SUPABASE_URL}/rest/v1/listings?select=*`,{headers:sbHeaders(),cache:'no-store'}),
-    fetch(`${SUPABASE_URL}/rest/v1/app_users?select=*`,{headers:sbHeaders(),cache:'no-store'})
-  ]);
-  if(!kvRes.ok)throw new Error('Supabase kv fetch failed');
-  const kvRows=await kvRes.json();
-  const listRows=listRes.ok?await listRes.json():[];
-  const userRows=userRes.ok?await userRes.json():[];
+  const st=await api('state');
   S.cloudConnected=true;
-  const kvVal=kvRows&&kvRows[0]?kvRows[0].value:null;
-  const updatedAt=kvRows&&kvRows[0]?kvRows[0].updated_at:null;
-  return {kvVal,updatedAt,listRows,userRows};
+  S._me=st.me||null;
+  if(!st.me&&getToken()){try{localStorage.removeItem(TOKEN_KEY);}catch(e){}}
+  return {kvVal:st.kv||null,updatedAt:st.updatedAt,listRows:st.listRows||[],userRows:st.userRows||[],me:st.me||null};
 }
 
 function applyRelationalUsers(stateData,userRows){
@@ -256,7 +269,7 @@ function applyRelationalUsers(stateData,userRows){
       brokerage:r.brokerage??cur.brokerage??null,
       folderSlug:r.folder_slug??cur.folderSlug??null,
       driveFolderUrl:r.drive_folder_url??cur.driveFolderUrl??null,
-      passwordHash:(preferRow&&r.password_hash)?r.password_hash:(cur.passwordHash||r.password_hash||''),
+      emailVerified:r.email_verified,
       updatedAt:preferRow?(r.updated_at||cur.updatedAt):(cur.updatedAt||r.updated_at)
     });
     byId.set(mergedUser.id,mergedUser);
@@ -340,21 +353,21 @@ S.load=async()=>{
   enforceThreeDaySoldRule(merged);
   try{localStorage.setItem(KEY,JSON.stringify(merged));}catch(e){}
   S.data=merged;
-  const sid=sessionStorage.getItem('legacy_uid')||localStorage.getItem('legacy_uid');
-  S.user=S.data.users.find(u=>u.id===sid)||null;
+  S.data.users=(S.data.users||[]).map(u=>{const c=Object.assign({},u);delete c.passwordHash;delete c.resetCode;delete c.resetExpires;return c;});
+  S.user=S._me?(S.data.users.find(u=>u.id===S._me.id)||S._me):null;
+  if(S.user&&!S.data.users.some(u=>u.id===S.user.id))S.data.users.push(S.user);
   startRealtimePolling();
 };
 
 async function pollSupabase(){
   try{
-    const [kvRes,userRes]=await Promise.all([
-      fetch(`${SUPABASE_URL}/rest/v1/app_kv_store?key=eq.${KEY}&select=value,updated_at`,{headers:sbHeaders(),cache:'no-store'}),
-      fetch(`${SUPABASE_URL}/rest/v1/app_users?select=*`,{headers:sbHeaders(),cache:'no-store'})
-    ]);
-    if(!kvRes.ok)return;
-    const rows=await kvRes.json();
-    const userRows=userRes.ok?await userRes.json():[];
+    const tk=getToken();
+    const st=await api('state');
     S.cloudConnected=true;
+    if(tk!==getToken())return;
+    if(S.user&&!st.me){if(tk){S.user=null;notify();}return;}
+    const rows=st.kv?[{value:st.kv,updated_at:st.updatedAt}]:[];
+    const userRows=st.userRows||[];
     let changed=false;
     if(rows&&rows[0]&&rows[0].value){
       const remoteTs=rows[0].updated_at;
@@ -373,6 +386,7 @@ async function pollSupabase(){
     if(userRows&&userRows.length){
       applyRelationalUsers(S.data,userRows);
     }
+    if(st.listRows&&st.listRows.length){applyRelationalListings(S.data,st.listRows);}
     if(changed){
       if(S.user){S.user=S.data.users.find(u=>u.id===S.user.id)||S.user;}
       try{localStorage.setItem(KEY,JSON.stringify(S.data));}catch(e){}
@@ -402,38 +416,29 @@ S.buyerProfile=u=>u&&(S.data.buyerProfiles.find(b=>b.userId===u.id)||u.buyerProf
 S.isAdmin=()=>Boolean(S.user&&(S.user.role==='ADMIN'||['admin@therivaslegacygroup.com','fer.okc94@gmail.com','admin@legacy.app','fernando@legacy.app'].includes((S.user.email||'').toLowerCase())));
 S.isAgent=()=>Boolean(S.user&&(S.user.role==='AGENT'||(S.user.email||'').toLowerCase()==='admin@therivaslegacygroup.com'));
 S.listing=id=>S.data.listings.find(l=>l.id===id);
-function setUser(u){S.user=u;if(u)localStorage.setItem('legacy_uid',u.id);else localStorage.removeItem('legacy_uid');S.save(true);}
+function setUser(u){S.user=u;S.save(true);}
 
-const ADMIN_EMAILS=['admin@therivaslegacygroup.com','fer.okc94@gmail.com','admin@legacy.app','fernando@legacy.app'];
-const ADMIN_FALLBACK_PWS=['legacyadmin2026','legacy2026','admin2026'];
-const CLIENT_FALLBACK_PWS={
-  'adreal.esme2020@gmail.com':['legacyclient2026','esmeralda2026','legacy2026','legacyadmin2026']
-};
-const checkPw=(u,pw)=>{
-  if(!u||!pw)return false;
-  const raw=String(pw);
-  const clean=raw.trim();
-  const stripBang=clean.toLowerCase().replace(/!+$/,'');
-  try{
-    if(u.passwordHash&&bc()){
-      if(bc().compareSync(clean,u.passwordHash))return true;
-      if(raw!==clean&&bc().compareSync(raw,u.passwordHash))return true;
-    }
-  }catch(e){console.warn(e);}
-  const em=(u.email||'').trim().toLowerCase();
-  if((u.role==='ADMIN'||ADMIN_EMAILS.includes(em))&&ADMIN_FALLBACK_PWS.includes(stripBang))return true;
-  if(CLIENT_FALLBACK_PWS[em]&&CLIENT_FALLBACK_PWS[em].includes(stripBang))return true;
-  return false;
-};
-
-S.login=async(email,pw)=>{
-  const u=byEmail(email);
-  if(!u||!checkPw(u,pw))throw new Error(S.lang==='es'?'Correo o contraseña inválidos. Si olvidaste tu contraseña, haz clic en "¿Olvidaste tu contraseña?" abajo para crear una nueva.':'Invalid email or password. If you forgot your password, click "Forgot password?" below to set a new one.');
-  if(!(await S.isEmailVerified(u.email)))return {needsVerify:true,email:u.email};
+async function adoptSession(j){
+  try{localStorage.setItem(TOKEN_KEY,j.token);}catch(e){}
+  const st=j.state||{};
+  S._me=st.me||j.user;
+  let merged=S.data;
+  if(st.kv)merged=merge(merged,st.kv);
+  applyRelationalUsers(merged,st.userRows||[]);
+  applyRelationalListings(merged,st.listRows||[]);
+  S.lastSyncedAt=st.updatedAt||S.lastSyncedAt;
+  S.data=merged;
+  let u=S.data.users.find(x=>x.id===S._me.id);
+  if(!u){u=S._me;S.data.users.push(u);}else Object.assign(u,S._me);
   setUser(u);
   return u;
+}
+S.login=async(email,pw)=>{
+  const j=await api('login',{email,password:pw});
+  if(j.needsVerify)return {needsVerify:true,email:j.email};
+  return adoptSession(j);
 };
-S.logout=()=>setUser(null);
+S.logout=()=>{try{localStorage.removeItem(TOKEN_KEY);localStorage.removeItem(KEY);}catch(e){}S.user=null;S._me=null;location.reload();};
 S.isPendingApproval=u=>Boolean(u&&(u.approvalStatus==='PENDING'||u.approvalStatus==='REJECTED'));
 const needApproved=()=>{if(S.user&&!S.isAdmin()&&S.isPendingApproval(S.user))throw new Error(S.lang==='es'?'Tu cuenta está pendiente de aprobación. Te avisaremos cuando esté aprobada.':'Your account is pending approval. We will let you know once it is approved.');};
 S.setApproval=(userId,status)=>{const u=S.data.users.find(x=>x.id===userId);if(!u)return;u.approvalStatus=status;u.approvedAt=now();u.updatedAt=now();if(S.user&&S.user.id===u.id)S.user.approvalStatus=status;S.save();};
@@ -442,68 +447,25 @@ const hash=pw=>{
   if(clean.length<8)throw new Error(S.lang==='es'?'La contraseña debe tener al menos 8 caracteres':'Password must be at least 8 characters');
   return bc().hashSync(clean,10);
 };
-S.register=f=>{
-  const emailNorm=String(f.email||'').trim().toLowerCase();
-  if(!emailNorm)throw new Error(S.lang==='es'?'Ingresa un correo válido':'Please enter a valid email');
-  if(byEmail(emailNorm))throw new Error(S.lang==='es'?'Ya existe una cuenta con ese correo. Inicia sesión o usa "¿Olvidaste tu contraseña?".':'An account with that email already exists. Please log in or use "Forgot password?".');
-  const u={id:uid(),email:emailNorm,name:String(f.name||'').trim(),phone:String(f.phone||'').trim(),role:f.role==='AGENT'?'AGENT':'BUYER',avatarUrl:null,
-    brokerage:f.brokerage||null,folderSlug:slugify(f.name)+'-'+Math.random().toString(36).slice(2,6),passwordHash:hash(f.password),approvalStatus:f.role==='AGENT'?'PENDING':'APPROVED',createdAt:now(),updatedAt:now()};
-  S.data.users.push(u);
-  if(u.role==='AGENT'){
-    const ap={id:uid(),userId:u.id,brokerage:f.brokerage||'',licenseNumber:f.licenseNumber||'',licenseState:'OK',licenseHolderName:u.name,
-      licenseStatus:'VERIFIED',accessStatus:'APPROVED',inviteCode:code(),createdAt:now()};
-    S.data.agentProfiles.push(ap);
-    u.agentProfile=ap;
-  }else{
-    const ic=String(f.inviteCode||'').trim().toUpperCase();
-    let ap=S.data.agentProfiles.find(a=>(a.inviteCode||'').toUpperCase()===ic);
-    const auto=!ap;
-    if(!ap)ap=S.data.agentProfiles.find(a=>a.inviteCode===(S.data.defaultAgent&&S.data.defaultAgent.inviteCode))||{id:(S.data.defaultAgent&&S.data.defaultAgent.agentProfileId)||'cmvrdnn1400059d7qvhmjlsxm'};
-    const bp={id:uid(),userId:u.id,agentId:ap.id,assignedAutomatically:auto,notes:'',accountStatus:'ACTIVE'};
-    S.data.buyerProfiles.push(bp);
-    u.buyerProfile=bp;
-  }
-  setUser(u);
-  S.save();
-  S._regUpsert=sbUpsert('app_users',userToRow(u),'id');
-  return u;
+S.register=async f=>{
+  const fields={name:f.name,email:f.email,phone:f.phone,password:f.password,role:f.role,inviteCode:f.inviteCode,licenseNumber:f.licenseNumber,brokerage:f.brokerage};
+  const j=await api('register',{fields});
+  if(j.needsVerify)return {needsVerify:true,email:j.email};
+  return adoptSession(j);
 };
-// Email verification (Edge Function email-verify). Returns {enabled:false} until a sender key is configured.
+// Email verification (server API). verify returns a session on success.
 S.emailVerify=async(action,email,code)=>{
   try{
-    const r=await fetch(`${SUPABASE_URL}/functions/v1/email-verify`,{method:'POST',headers:sbHeaders(),body:JSON.stringify({action,email:String(email||'').trim().toLowerCase(),code,lang:S.lang})});
-    return await r.json().catch(()=>({enabled:false}));
-  }catch(e){return {enabled:false};}
+    if(action==='send'){return Object.assign({enabled:true},await api('verify_send',{email}));}
+    if(action==='verify'){const j=await api('verify',{email,code});await adoptSession(j);return {enabled:true,verified:true,session:true};}
+  }catch(e){return {enabled:e.code!=='email_off',error:e.code||'send_failed'};}
+  return {enabled:false};
 };
-S.isEmailVerified=async email=>{
-  try{
-    const r=await fetch(`${SUPABASE_URL}/rest/v1/app_users?email=eq.${encodeURIComponent(String(email||'').trim().toLowerCase())}&select=email_verified`,{headers:sbHeaders(),cache:'no-store'});
-    if(!r.ok)return true;const rows=await r.json();return !(rows[0]&&rows[0].email_verified===false);
-  }catch(e){return true;}
-};
-S.loginAfterVerify=email=>{const u=byEmail(email);if(u){setUser(u);}return u;};
-S.forgotPassword=email=>{const u=byEmail(email);if(!u)throw new Error(S.lang==='es'?'No existe cuenta con ese correo':'No account with that email');
-  u.resetCode=String(Math.floor(100000+Math.random()*900000));u.resetExpires=Date.now()+3600e3;u.updatedAt=now();S.save();sbUpsert('app_users',userToRow(u),'id');return u.resetCode;};
-S.resetPassword=(email,codeIn,pw)=>{const u=byEmail(email);
-  if(!u||u.resetCode!==String(codeIn).trim()||Date.now()>u.resetExpires)throw new Error(S.lang==='es'?'Código inválido o expirado':'Invalid or expired reset code');
-  u.passwordHash=hash(pw);delete u.resetCode;delete u.resetExpires;u.updatedAt=now();S.save();sbUpsert('app_users',userToRow(u),'id');setUser(u);return u;};
-S.directResetPassword=(email,pw)=>{
-  const u=byEmail(email);
-  if(!u)throw new Error(S.lang==='es'?'No se encontró ninguna cuenta registrada con ese correo. Puedes crear tu cuenta en el formulario de Registro.':'No registered account found with that email. You can create an account in the Register form.');
-  u.passwordHash=hash(pw);
-  delete u.resetCode;
-  delete u.resetExpires;
-  u.updatedAt=now();
-  setUser(u);
-  S.save();
-  sbUpsert('app_users',userToRow(u),'id');
-  return u;
-};
-S.changePassword=(cur,pw)=>{const u=S.user;if(!checkPw(u,cur))throw new Error(S.lang==='es'?'La contraseña actual es incorrecta':'Current password is incorrect');
-  u.passwordHash=hash(pw);u.updatedAt=now();S.save();sbUpsert('app_users',userToRow(u),'id');};
-S.adminResetPassword=(userId,pw)=>{if(!S.isAdmin())throw new Error('Admins only');const u=S.data.users.find(x=>x.id===userId);
-  if(!u)throw new Error('User not found');
-  u.passwordHash=hash(pw);u.updatedAt=now();S.save();sbUpsert('app_users',userToRow(u),'id');};
+S.loginAfterVerify=()=>S.user;
+S.forgotPassword=async email=>{await api('forgot',{email});return true;};
+S.resetPassword=async(email,codeIn,pw)=>{const j=await api('reset',{email,code:codeIn,password:pw});return adoptSession(j);};
+S.changePassword=async(cur,pw)=>{await api('change_password',{current:cur,password:pw});};
+S.adminResetPassword=async(userId,pw)=>{if(!S.isAdmin())throw new Error('Admins only');await api('admin_reset',{userId,password:pw});};
 S.updateProfile=p=>{Object.assign(S.user,p,{updatedAt:now()});const ap=S.agentProfile(S.user);
   if(ap){if(p.licenseNumber!=null)ap.licenseNumber=p.licenseNumber;if(p.brokerage!=null)ap.brokerage=p.brokerage;}
   S.save();sbUpsert('app_users',userToRow(S.user),'id');};

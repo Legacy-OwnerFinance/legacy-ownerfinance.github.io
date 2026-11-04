@@ -97,7 +97,7 @@ const L10N={
     password:'Password',
     forgotPw:'Forgot password? / Reset password',
     forgotModalTitle:'Reset Your Password',
-    forgotModalDesc:'Enter your registered email address and choose a new password (at least 8 characters). You will be signed in immediately.',
+    forgotModalDesc:'Enter your registered email. We will email you a 6-digit code to set a new password.',forgotSendBtn:'Email me a code',forgotCodeSent:'If that email has an account, a code is on its way. Enter it and your new password (8+ characters).',
     forgotConfirmPw:'Confirm new password (8+)',
     forgotSubmitBtn:'Save New Password & Sign In',
     pwMismatch:'Passwords do not match.',
@@ -234,7 +234,7 @@ const L10N={
     password:'Contraseña',
     forgotPw:'¿Olvidaste tu contraseña? / Restablecer',
     forgotModalTitle:'Restablecer tu Contraseña',
-    forgotModalDesc:'Ingresa tu correo electrónico registrado y escribe tu nueva contraseña (mínimo 8 caracteres). Iniciarás sesión automáticamente.',
+    forgotModalDesc:'Ingresa tu correo registrado. Te enviaremos un código de 6 dígitos para crear una nueva contraseña.',forgotSendBtn:'Enviarme un código',forgotCodeSent:'Si ese correo tiene cuenta, ya va un código en camino. Escríbelo junto con tu nueva contraseña (mínimo 8 caracteres).',
     forgotConfirmPw:'Confirmar nueva contraseña (8+)',
     forgotSubmitBtn:'Guardar Contraseña e Iniciar Sesión',
     pwMismatch:'Las contraseñas no coinciden.',
@@ -338,17 +338,23 @@ function openForgotModal(prefillEmail=''){
   const initialEmail=prefillEmail||(loginEmailInput?loginEmailInput.value:'');
   const m=modal(`<h2>${tr('forgotModalTitle')}</h2>
     <p style="font-size:14px;color:#475569;margin-bottom:12px">${tr('forgotModalDesc')}</p>
-    <form id="forgotModalF" style="display:grid;gap:10px">
+    <form id="forgotSendF" style="display:grid;gap:10px">
       <input name="email" type="email" placeholder="${tr('email')}" value="${esc(initialEmail)}" required>
+      <button type="submit" style="padding:10px 14px;font-weight:600">${tr('forgotSendBtn')}</button>
+    </form>
+    <form id="forgotModalF" style="display:none;gap:10px;margin-top:12px">
+      <p style="font-size:13px;color:#475569">${tr('forgotCodeSent')}</p>
+      <input name="code" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="${tr('evCode')}" required>
       <input name="pw" type="password" placeholder="${tr('newPw')}" minlength="8" required>
       <input name="pw2" type="password" placeholder="${tr('forgotConfirmPw')}" minlength="8" required>
       <button type="submit" style="padding:10px 14px;font-weight:600">${tr('forgotSubmitBtn')}</button>
     </form>`);
-  const f=m.querySelector('#forgotModalF');
-  f.onsubmit=wrap(()=>{
+  const fs=m.querySelector('#forgotSendF'),f=m.querySelector('#forgotModalF');let email='';
+  fs.onsubmit=wrap(async()=>{email=fd(fs).email;await S.forgotPassword(email);f.style.display='grid';fs.querySelector('button').textContent=tr('evResend');});
+  f.onsubmit=wrap(async()=>{
     const v=fd(f);
     if(String(v.pw||'').trim()!==String(v.pw2||'').trim())throw new Error(tr('pwMismatch'));
-    const u=S.directResetPassword(v.email,v.pw);
+    const u=await S.resetPassword(email,v.code,v.pw);
     m.remove();
     alert(tr('pwUpdatedAlert'));
     go(u&&u.role==='ADMIN'?'admin':'dashboard');
@@ -370,9 +376,9 @@ function openAdminResetModal(userId){
       <input type="text" readonly value="${esc(resetUrl)}" style="width:100%;margin-top:4px;font-size:12px" onclick="this.select()">
     </div>`);
   const f=m.querySelector('#adminResetF');
-  f.onsubmit=wrap(()=>{
+  f.onsubmit=wrap(async()=>{
     const v=fd(f);
-    S.adminResetPassword(userId,v.pw);
+    await S.adminResetPassword(userId,v.pw);
     m.remove();
     alert(tr('pwResetAlert'));
   });
@@ -405,11 +411,11 @@ function guides(){
     <li><b>Inventario</b>: una vez dentro de tu cuenta, busca por dirección, filtra por ciudad, zona, recámaras, enganche o mensualidad, explora el mapa interactivo y toca ♥ para guardar casas favoritas.</li>
     <li>Abre cualquier propiedad para ver fotos, solicitar una cita, enviar una oferta o compartir la casa con tu agente.</li>
     <li><b>Mi Panel / Perfil</b>: consulta tu perfil, favoritos, mensajes privados con tu agente, ofertas y tu carpeta personal de documentos. Cuando tu oferta es aceptada, se desbloquea el recuadro para subir tu Identificación (ID) y Comprobante de Ingresos.</li>
-    <li>¿Olvidaste tu contraseña? Usa “¿Olvidaste tu contraseña?” en la pantalla de inicio de sesión para crear una nueva al instante.</li></ol></section>`;
+    <li>¿Olvidaste tu contraseña? Usa “¿Olvidaste tu contraseña?” en la pantalla de inicio de sesión y te enviaremos un código por correo para crear una nueva.</li></ol></section>`;
   }
   return `<section class="card" style="padding:20px"><h2>How It Works</h2><h3>Create a Buyer account</h3><ol><li>Click <b>Login / Register</b> and choose <b>Buyer</b>.</li><li>Enter your agent's invite code (e.g. D2D-XXXXXX). No agent? Choose “I don't have an agent, yet” — a licensed agent will be assigned to you.</li><li>Set a password (8+ characters) and submit to unlock all full addresses, prices, and property details.</li></ol>
 <h3>Create an Agent account</h3><ol><li>Choose <b>Agent</b>, enter your OREC license # and brokerage.</li><li>After registering you receive your own invite code to share with clients.</li></ol>
-<h3>Navigating</h3><ol><li><b>Inventory</b>: once signed in, search by address, filter, view the map, and tap ♥ to save homes.</li><li>Open a home to see photos, request a showing, make an offer or share it with your agent.</li><li><b>Dashboard</b>: profile, favorites, messages, offers and your document folder. Once an offer is accepted, upload your ID and Proof of Income there.</li><li>Forgot your password? Click “Forgot password?” on the login screen to set a new password right away.</li></ol></section>`;
+<h3>Navigating</h3><ol><li><b>Inventory</b>: once signed in, search by address, filter, view the map, and tap ♥ to save homes.</li><li>Open a home to see photos, request a showing, make an offer or share it with your agent.</li><li><b>Dashboard</b>: profile, favorites, messages, offers and your document folder. Once an offer is accepted, upload your ID and Proof of Income there.</li><li>Forgot your password? Click “Forgot password?” on the login screen and we will email you a code to set a new one.</li></ol></section>`;
 }
 
 function filtered(){let L=S.data.listings.filter(l=>{const q=F.q.toLowerCase();
@@ -681,9 +687,9 @@ function bind(){const r=$('#app-root');
   };
   const sub=(id,fn)=>{const el=$(id);if(el)el.onsubmit=wrap(()=>fn(fd(el)));};
   sub('#loginF',async v=>{const u=await S.login(v.email,v.password);if(u&&u.needsVerify)return openVerifyEmail(u.email,false);go(u&&u.role==='ADMIN'?'admin':'dashboard');maybePromptCriteria();});
-  sub('#regF',async v=>{const u=S.register(v);try{await S._regUpsert;}catch(e){}const r=await S.emailVerify('send',u.email);if(r&&r.enabled&&r.sent){S.logout();return openVerifyEmail(u.email,true);}go('dashboard');maybePromptCriteria();});
+  sub('#regF',async v=>{const u=await S.register(v);if(u&&u.needsVerify)return openVerifyEmail(u.email,true);go('dashboard');maybePromptCriteria();});
   sub('#profF',v=>{S.updateProfile(v);alert(tr('savedAlert'));});
-  sub('#pwF',v=>{S.changePassword(v.cur,v.pw);alert(tr('pwUpdatedAlert'));});
+  sub('#pwF',async v=>{await S.changePassword(v.cur,v.pw);alert(tr('pwUpdatedAlert'));});
   sub('#msgF',v=>{S.sendMessage(v);});}
 
 function openVerifyEmail(email,justSent){
@@ -698,7 +704,7 @@ function openVerifyEmail(email,justSent){
   m.querySelector('#evResend').onclick=async()=>{const r=await S.emailVerify('send',email);if(r&&r.sent){msg('');alert(tr('evSent'));}else if(r&&r.verified)msg('');else err(r);};
   m.querySelector('#evF').onsubmit=async e=>{e.preventDefault();const code=new FormData(e.target).get('code');const r=await S.emailVerify('verify',email,code);
     if(r&&(r.verified||r.enabled===false)){m.remove();alert(tr('evDone'));const u=S.loginAfterVerify(email);go(u?(u.role==='ADMIN'?'admin':'dashboard'):'auth');if(u)maybePromptCriteria();}else err(r);};
-  if(!justSent)S.emailVerify('send',email);
+  
 }
 window.__openVerifyEmail=(e,s)=>openVerifyEmail(e,s);
 function checkResetUrlParams(){
