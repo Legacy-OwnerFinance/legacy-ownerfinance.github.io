@@ -700,6 +700,7 @@ function openVerifyEmail(email,justSent){
     if(r&&(r.verified||r.enabled===false)){m.remove();alert(tr('evDone'));const u=S.loginAfterVerify(email);go(u?(u.role==='ADMIN'?'admin':'dashboard'):'auth');if(u)maybePromptCriteria();}else err(r);};
   if(!justSent)S.emailVerify('send',email);
 }
+window.__openVerifyEmail=(e,s)=>openVerifyEmail(e,s);
 function checkResetUrlParams(){
   try{
     const sp=new URLSearchParams(location.search);
