@@ -693,3 +693,57 @@ form.interactive-controls .chip.active{background:var(--accent);color:#fff;borde
 
 .filter-row .search-box + .sort-select { flex: 0 0 auto; width: auto; max-width: 100%; }
 .filter-row .search-box + .sort-select ~ * { }
+
+
+/* Today's approved showing indicator on property cards */
+.appt-today {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  background: #ecfdf5;
+  border: 1px solid #6ee7b7;
+  color: #065f46;
+  border-radius: 10px;
+  padding: 8px 10px;
+  font-size: 12.5px;
+  line-height: 1.35;
+}
+.appt-today-label { font-weight: 700; }
+.appt-today-day { color: #047857; font-size: 11px; }
+.appt-today-times { font-weight: 700; font-size: 13px; color: #064e3b; }
+
+/* Shared approved-showings calendar */
+.cal-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 10px;
+}
+.cal-day {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 10px;
+  min-height: 110px;
+}
+.cal-day.cal-today {
+  border-color: #059669;
+  box-shadow: 0 0 0 1px #a7f3d0;
+}
+.cal-day-head {
+  font-weight: 700;
+  font-size: 13px;
+  margin-bottom: 8px;
+  color: var(--text);
+}
+.cal-item {
+  background: #f0fdf4;
+  border: 1px solid #bbf7d0;
+  border-radius: 8px;
+  padding: 7px 8px;
+  margin-bottom: 6px;
+  font-size: 12.5px;
+}
+.cal-empty {
+  font-size: 12px;
+  color: var(--muted);
+}

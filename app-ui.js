@@ -22,11 +22,12 @@ const initTab=()=>{
   if(p.includes('/login')||p.includes('/register')||p.includes('/forgot-password')||p.includes('/reset-password'))return 'auth';
   if(p.includes('/admin'))return 'admin';
   if(p.includes('/dashboard'))return 'dashboard';
+  if(p.includes('/calendar'))return 'calendar';
   if(p.includes('/guides'))return 'guides';
   return 'inventory';
 };
 let PIDX={},CMP=new Set(),CHIP='ALL',MARK={};
-let tab=initTab(),F={q:'',area:'',beds:'',baths:'',maxDown:'',maxMonthly:'',maxPrice:'',status:'',sort:(()=>{try{return localStorage.getItem('lof.sort')||'newest'}catch(e){return 'newest'}})()},map=null;
+let tab=initTab(),F={q:'',area:'',beds:'',baths:'',maxDown:'',maxMonthly:'',maxPrice:'',status:'',sort:(()=>{try{return localStorage.getItem('lof.sort')||'newest'}catch(e){return 'newest'}})()},map=null,CAL={mode:'week',anchor:null};
 
 const L10N={
   en:{
@@ -34,6 +35,7 @@ const L10N={
     navGuides:'How It Works / Guides',
     navDashboard:'Dashboard / My Profile',
     navAdmin:'Admin Portal',
+    navCalendar:'Showings Calendar',
     navAuth:'Login / Register',
     logout:'Logout',
     cloudLive:'● Cloud Database Connected (24/7 Live)',
@@ -171,6 +173,7 @@ const L10N={
     navGuides:'Cómo Funciona / Guías',
     navDashboard:'Mi Panel / Perfil',
     navAdmin:'Portal de Administración',
+    navCalendar:'Calendario de Visitas',
     navAuth:'Iniciar Sesión / Registrarse',
     logout:'Cerrar sesión',
     cloudLive:'● Base de Datos en la Nube Conectada (24/7)',
@@ -386,6 +389,7 @@ function openAdminResetModal(userId){
 
 function header(){
   const T=[['inventory',tr('navInventory')],['guides',tr('navGuides')],['dashboard',tr('navDashboard')]];
+  if(S.canSeeShowingCalendar&&S.canSeeShowingCalendar())T.push(['calendar',tr('navCalendar')]);
   if(S.isAdmin())T.push(['admin',tr('navAdmin')]);
   if(!S.user)T.push(['auth',tr('navAuth')]);
   const cloudPill=`<span style="background:${S.cloudConnected?'#dcfce7':'#fef3c7'};color:${S.cloudConnected?'#166534':'#92400e'};padding:2px 8px;border-radius:999px;font-weight:700;font-size:11px">${S.cloudConnected?tr('cloudLive'):tr('cloudOffline')}</span>`;
@@ -535,6 +539,16 @@ function inventory(){const all=S.data.listings,L=filtered();
    ${cardsSection(L)}</div></div>
   ${S.user?`<div class="compare-tray ${CMP.size?'show':''}"><span>⚖️ <b>${CMP.size}</b> ${es?'casas para comparar':'homes selected to compare'}</span><button type="button" class="btn-card primary" data-cmpopen="1">${es?'Comparar':'Compare Side-by-Side'}</button><button type="button" class="btn-card" data-cmpclear="1">${es?'Limpiar':'Clear'}</button></div>`:''}`;}
 
+
+function todayApptHtml(listingId){
+  const times=(S.todayApprovedForListing?S.todayApprovedForListing(listingId):[])||[];
+  if(!times.length)return '';
+  const label=S.lang==='es'?'Citas de hoy (aprobadas)':"Today's approved showings";
+  const bits=times.map(t=>esc(S.formatShowingTimeOnly?S.formatShowingTimeOnly(t):t));
+  const dayLabel=esc(S.chicagoYmd?S.chicagoYmd():'');
+  return `<div class="appt-today" title="${label}"><span class="appt-today-label">📅 ${label}</span><span class="appt-today-day">${dayLabel}</span><span class="appt-today-times">${bits.join(' · ')}</span></div>`;
+}
+
 function card(l,mt){
   const ph=(l.photoUrls&&l.photoUrls.length)?l.photoUrls:[l.photoUrl||'listing-placeholder.svg'],i=(PIDX[l.id]||0)%ph.length,multi=ph.length>1;
   const media=badgeHtml=>`<div class="card-media">${badgeHtml}<img src="${esc(ph[i])}" data-img="${l.id}" referrerpolicy="no-referrer" loading="lazy" onerror="window.imgFallback&&window.imgFallback(this)" data-open="${l.id}" style="cursor:pointer">
@@ -542,6 +556,7 @@ function card(l,mt){
   if(!S.user){
     return `<article class="prop-card" data-card="${l.id}">${media(`<span class="badge-top-left" style="background:#0f172a">🔒 ${S.lang==='es'?'Vista Previa':'Guest Preview'}</span>`)}</div>
       <div class="card-body"><p class="addr-line">📍 ${partialAddr(l)}</p><div style="font-size:12px;color:var(--muted);background:var(--surface-2);border:1px dashed var(--border);padding:8px 10px;border-radius:9px">🔒 ${tr('guestCardPrompt')}</div>
+      ${todayApptHtml(l.id)}
       <div class="card-actions"><button type="button" class="btn-card primary" data-register="1">${tr('guestCardBtn')}</button><button type="button" class="btn-card" data-open="${l.id}">${tr('viewPhotos')} (${ph.length})</button></div></div></article>`;
   }
   const col=({AVAILABLE:'#16a34a',COMING_SOON:'#2563eb',SOLD:'#475569',CLOSED:'#475569'})[l.status]||'#d97706';
@@ -550,6 +565,7 @@ function card(l,mt){
     <div class="card-body">${matchBadge(mt)}<div class="price-strip"><span class="main-price">${S.money(l.askingPrice)}</span><span class="monthly-pill">${S.money(l.monthlyPayment)}${tr('perMo')}</span></div>
     <p class="addr-line">${title(l)}</p>
     <div class="down-box"><div>${tr('down')}<b>${S.money(l.downPayment)}</b></div><div>${tr('beds')}/${tr('baths')}<b>${l.beds??'—'} · ${l.baths??'—'}</b></div><div>Sq Ft<b>${l.sqft?(+l.sqft).toLocaleString():'—'}</b></div></div>
+    ${todayApptHtml(l.id)}
     <div class="card-actions"><button type="button" class="btn-card primary" data-open="${l.id}">${S.lang==='es'?'Ver Detalles':'View Details'}</button></div></div></article>`;
 }
 
@@ -630,6 +646,68 @@ function dashboard(){if(!S.user)return auth();const u=S.user,ap=S.agentProfile(u
   <div class="card" style="padding:16px"><h2>${tr('myDocFolder')}</h2><p style="font-size:12px">${tr('folder')}: ${esc(u.folderSlug)}</p><input type="file" id="docUp"><ul>${docs.map(d=>`<li><a href="${d.dataUrl}" target="_blank" rel="noopener" download="${esc(d.name)}">${esc(d.name)}</a> <i>${esc(d.docType)}</i></li>`).join('')||`<li>${tr('noDocs')}</li>`}</ul></div>
   ${ap?`<div class="card" style="padding:16px"><h2>${tr('myClients')}</h2><ul>${S.clientsOf(u).map(c=>`<li><a href="#" data-client="${c.id}">${esc(c.name)}</a> — ${esc(c.email)} ${esc(c.phone)}</li>`).join('')||`<li>${tr('noClients')}</li>`}</ul></div>`:''}</section>`;}
 
+
+function calendarView(){
+  if(!(S.canSeeShowingCalendar&&S.canSeeShowingCalendar())){
+    return `<p style="padding:18px">${S.lang==='es'?'El calendario de visitas es solo para agentes y administradores.':'The showings calendar is for agents and admins only.'}</p>`;
+  }
+  if(!CAL.anchor)CAL.anchor=S.chicagoYmd();
+  const mode=CAL.mode||'week';
+  const anchor=CAL.anchor;
+  const parseYmd=s=>{const [y,m,d]=String(s).split('-').map(Number);return new Date(y,m-1,d);};
+  const fmt=d=>`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+  const addDays=(s,n)=>{const d=parseYmd(s);d.setDate(d.getDate()+n);return fmt(d);};
+  let start=anchor,end=anchor;
+  if(mode==='day'){start=anchor;end=anchor;}
+  else if(mode==='week'){
+    const d=parseYmd(anchor);const dow=d.getDay(); // 0 Sun
+    d.setDate(d.getDate()-dow);start=fmt(d);end=addDays(start,6);
+  }else{ // month-ish: 28-day window centered-ish on week of anchor
+    const d=parseYmd(anchor);d.setDate(1);start=fmt(d);
+    const last=new Date(d.getFullYear(),d.getMonth()+1,0);end=fmt(last);
+  }
+  const items=(S.approvedShowingsCalendar||[]).filter(ev=>{
+    const y=S.preferredYmd(ev.preferredAt);return y&&y>=start&&y<=end;
+  });
+  const byDay={};
+  items.forEach(ev=>{const y=S.preferredYmd(ev.preferredAt);(byDay[y]=byDay[y]||[]).push(ev);});
+  const days=[];for(let cur=start;;cur=addDays(cur,1)){days.push(cur);if(cur===end)break;if(days.length>40)break;}
+  const title=mode==='day'?anchor:(mode==='week'?`${start} → ${end}`:`${start.slice(0,7)}`);
+  const es=S.lang==='es';
+  const propLabel=ev=>{
+    const l=S.listing(ev.listingId);
+    if(l)return `${l.address||''}, ${l.city||''}`.trim().replace(/^,\s*/,'');
+    return `${ev.address||''}${ev.city?', '+ev.city:''}`.trim()||(es?'Propiedad':'Property');
+  };
+  return `<section style="padding:18px;display:grid;gap:14px">
+    <div class="card" style="padding:16px">
+      <div style="display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between">
+        <h2 style="margin:0">📅 ${es?'Calendario de visitas aprobadas':'Approved Showings Calendar'}</h2>
+        <div style="display:flex;gap:6px;flex-wrap:wrap">
+          <button type="button" class="btn-card ${mode==='day'?'primary':''}" data-calmode="day">${es?'Día':'Day'}</button>
+          <button type="button" class="btn-card ${mode==='week'?'primary':''}" data-calmode="week">${es?'Semana':'Week'}</button>
+          <button type="button" class="btn-card ${mode==='month'?'primary':''}" data-calmode="month">${es?'Mes':'Month'}</button>
+        </div>
+      </div>
+      <div style="display:flex;gap:8px;align-items:center;margin-top:12px;flex-wrap:wrap">
+        <button type="button" class="btn-card" data-calnav="-1">‹</button>
+        <b>${esc(title)}</b>
+        <button type="button" class="btn-card" data-calnav="1">›</button>
+        <button type="button" class="btn-card" data-calnav="today">${es?'Hoy':'Today'}</button>
+        <label style="font-size:13px;color:var(--muted)">${es?'Ir a fecha':'Jump to'} <input type="date" id="calJump" value="${esc(anchor)}"></label>
+      </div>
+      <p style="font-size:13px;color:var(--muted);margin:10px 0 0">${es?'Solo visitas aprobadas. Sin nombres de agentes ni clientes. Las tarjetas de propiedad muestran únicamente las de hoy.':"Approved showings only. No agent or client names. Property cards show today's visits only."}</p>
+    </div>
+    <div class="cal-grid">${days.map(day=>{
+      const list=byDay[day]||[];
+      const isToday=day===S.chicagoYmd();
+      return `<div class="cal-day ${isToday?'cal-today':''}"><div class="cal-day-head">${esc(day)}${isToday?' · '+(es?'Hoy':'Today'):''}</div>
+        ${list.length?list.map(ev=>`<div class="cal-item"><b>${esc(S.formatShowingTimeOnly(ev.preferredAt))}</b><div>${esc(propLabel(ev))}</div></div>`).join(''):`<div class="cal-empty">${es?'Sin citas':'No showings'}</div>`}
+      </div>`;
+    }).join('')}</div>
+  </section>`;
+}
+
 function admin(){if(!S.isAdmin())return `<p style="padding:18px">${tr('adminsOnly')}</p>`;const D=S.data;
   return `<section style="padding:18px;display:grid;gap:16px">
   ${(()=>{const pend=D.users.filter(u=>u.approvalStatus==='PENDING');return `<div class="card" style="padding:16px;border:2px solid #d97706"><h2>⏳ ${S.lang==='es'?'Cuentas Pendientes de Aprobación':'Accounts Pending Approval'} (${pend.length})</h2><table><tr><th>${tr('colName')}</th><th>${tr('email')}</th><th>${tr('colRole')}</th><th>${S.lang==='es'?'Licencia / Correduría':'License / Brokerage'}</th><th>${S.lang==='es'?'Registro':'Signed up'}</th><th>${tr('colActions')}</th></tr>${pend.map(u=>{const ap=S.agentProfile(u);return `<tr><td>${esc(u.name)}</td><td>${esc(u.email)}</td><td>${u.role==='AGENT'?'Agent':'Client'}</td><td>${esc(ap?(ap.licenseNumber||'')+' / '+(ap.brokerage||''):'—')}</td><td>${esc(new Date(u.createdAt).toLocaleDateString())}</td><td><button data-approve="${u.id}" style="background:#16a34a;color:#fff">${S.lang==='es'?'Aprobar':'Approve'}</button> <button data-decline="${u.id}" style="background:#dc2626;color:#fff">${S.lang==='es'?'Rechazar':'Decline'}</button></td></tr>`;}).join('')||`<tr><td colspan=6>${S.lang==='es'?'No hay cuentas pendientes':'No accounts pending'}</td></tr>`}</table></div>`;})()}
@@ -637,12 +715,23 @@ function admin(){if(!S.isAdmin())return `<p style="padding:18px">${tr('adminsOnl
   ${D.offers.slice().reverse().map(o=>`<tr><td>${esc((S.listing(o.listingId)||{}).address)}</td><td>${esc((D.users.find(u=>u.id===o.userId)||{}).name)}</td><td>${S.money(o.offerPrice)} / ${S.money(o.downPayment)} / ${S.money(o.monthlyPayment)}</td><td>${offerBadge(o.status)}</td>
    <td><button data-acc="${o.id}" style="background:#16a34a;color:#fff">${tr('accept')}</button> <button data-ctr="${o.id}" style="background:#d97706;color:#fff">${tr('counterOffer')}</button> <button data-rej="${o.id}" style="background:#dc2626;color:#fff">${tr('reject')}</button></td></tr>`).join('')||`<tr><td colspan=5>${tr('noOffers')}</td></tr>`}</table></div>
   <div class="card" style="padding:16px"><h2>${tr('usersAgents')}</h2><table><tr><th>${tr('colName')}</th><th>${tr('email')}</th><th>${tr('colRole')}</th><th>${tr('colInvite')}</th><th>${tr('colResetPw')}</th></tr>${D.users.map(u=>{const ap=S.agentProfile(u);return `<tr><td>${esc(u.name)}</td><td>${esc(u.email)}</td><td>${u.role}</td><td>${esc(ap&&ap.inviteCode)}</td><td><button data-reset="${u.id}">${tr('reset')}</button></td></tr>`;}).join('')}</table></div>
+  <div class="card" style="padding:16px"><h2>${S.lang==='es'?'Solicitudes de visita':'Showing requests'}</h2>
+  <table><tr><th>${tr('colProperty')}</th><th>${S.lang==='es'?'Solicitado por':'Requested by'}</th><th>${S.lang==='es'?'Fecha/hora':'Date/time'}</th><th>${tr('colStatus')}</th><th>${tr('colActions')}</th></tr>
+  ${(D.showings||[]).slice().sort((a,b)=>String(b.preferredAt||'').localeCompare(String(a.preferredAt||''))).map(sh=>{
+    const l=S.listing(sh.listingId)||{};
+    const u=(D.users.find(x=>x.id===sh.userId)||{});
+    const st=String(sh.status||'REQUESTED').toUpperCase();
+    const badge=st==='APPROVED'?'✅ APPROVED':st==='DENIED'?'❌ DENIED':'⏳ REQUESTED';
+    const acts=st==='REQUESTED'?`<button data-showacc="${sh.id}" style="background:#16a34a;color:#fff">${S.lang==='es'?'Aprobar':'Approve'}</button> <button data-showden="${sh.id}" style="background:#dc2626;color:#fff">${S.lang==='es'?'Rechazar':'Deny'}</button>`:'—';
+    return `<tr><td>${esc(l.address||sh.listingId)}${l.city?', '+esc(l.city):''}</td><td>${esc(u.name||'—')}</td><td>${esc(S.formatShowingWhen?S.formatShowingWhen(sh.preferredAt):sh.preferredAt)}</td><td>${badge}</td><td>${acts}</td></tr>`;
+  }).join('')||`<tr><td colspan=5>${S.lang==='es'?'Aún no hay solicitudes de visita':'No showing requests yet'}</td></tr>`}
+  </table></div>
   <div class="card" style="padding:16px"><h2>${tr('listings')}</h2><table><tr><th>${tr('colAddress')}</th><th>${tr('colStatus')}</th><th>${tr('price')} $</th><th>${tr('down')} $</th><th>${tr('monthly')} $</th><th></th></tr>${D.listings.map(l=>`<tr data-row="${l.id}"><td>${esc(l.address)}, ${esc(l.city)}</td>
    <td><select data-status="${l.id}">${S.STATUSES.map(s=>`<option value="${s}" ${l.status===s?'selected':''}>${S.statusText(s)}</option>`).join('')}</select></td>
    <td><input data-f="askingPrice" type="number" value="${l.askingPrice/100}" style="width:90px"></td><td><input data-f="downPayment" type="number" value="${l.downPayment/100}" style="width:80px"></td><td><input data-f="monthlyPayment" type="number" value="${l.monthlyPayment/100}" style="width:80px"></td><td><button data-save="${l.id}">${tr('save')}</button></td></tr>`).join('')}</table></div></section>`;}
 
 function render(){const root=$('#app-root');if(!S.data)return;document.documentElement.lang=S.lang;if(map){try{map.stop();map.off();map.remove();}catch(e){}map=null;}
-  const body={inventory,guides,dashboard,admin,auth}[tab]||inventory;root.innerHTML=header()+`<main>${body()}</main><footer style="padding:18px;font-size:12px;text-align:center">© Legacy - Owner Finance · Brokerage By: KLC Real Estate, LLC</footer>`;bind();if(tab==='inventory')drawMap();}
+  const body={inventory,guides,dashboard,admin,auth,calendar:calendarView}[tab]||inventory;root.innerHTML=header()+`<main>${body()}</main><footer style="padding:18px;font-size:12px;text-align:center">© Legacy - Owner Finance · Brokerage By: KLC Real Estate, LLC</footer>`;bind();if(tab==='inventory')drawMap();}
 function bind(){const r=$('#app-root');
   r.onclick=async e=>{
    const c=e.target.closest('[data-view],[data-editsearch],[data-prev],[data-next],[data-compare],[data-chip],[data-cmpopen],[data-cmpclear]');
@@ -658,7 +747,7 @@ function bind(){const r=$('#app-root');
        modal(`<h2>⚖️ ${S.lang==='es'?'Comparación de Casas':'Side-by-Side Comparison'}</h2><div style="display:grid;grid-template-columns:repeat(${it.length},1fr);gap:12px">${it.map(l=>`<div class="card" style="padding:10px"><img src="${esc(l.photoUrl||'listing-placeholder.svg')}" referrerpolicy="no-referrer" onerror="window.imgFallback&&window.imgFallback(this)" style="width:100%;height:120px;object-fit:cover;border-radius:8px"><h4 style="margin:8px 0">${title(l)}</h4>
        <div style="font-size:13px;line-height:1.8">${tr('price')}: <b>${S.money(l.askingPrice)}</b><br>${tr('down')}: <b>${S.money(l.downPayment)}</b><br>${tr('monthly')}: <b>${S.money(l.monthlyPayment)}</b><br>${l.beds??'—'} bd · ${l.baths??'—'} ba<br>${l.sqft?(+l.sqft).toLocaleString()+' sqft':''}${l.sqft&&l.askingPrice?'<br>$'+Math.round(l.askingPrice/100/l.sqft)+'/sqft':''}</div></div>`).join('')}</div>`);return;}
    }
-   const t=e.target.closest('[data-tab],[data-lang],[data-open],[data-fav],[data-acc],[data-rej],[data-ctr],[data-reset],[data-save],[data-client],[data-register],#logout,#forgot');
+   const t=e.target.closest('[data-tab],[data-lang],[data-open],[data-fav],[data-acc],[data-rej],[data-ctr],[data-reset],[data-save],[data-client],[data-register],[data-calmode],[data-calnav],[data-showacc],[data-showden],[data-approve],[data-decline],[data-inspsched],[data-inspcancel],#logout,#forgot');
    if(!t)return;
    e.preventDefault();
    try{
@@ -666,6 +755,16 @@ function bind(){const r=$('#app-root');
      if(d.register)return go('auth','#regF [name="name"]');
      if(d.tab)return go(d.tab);if(d.lang)return S.setLang(d.lang);if(d.fav)return S.toggleFavorite(d.fav);if(d.open)return openListing(d.open);if(t.id==='logout'){S.logout();return go('inventory');}
      if(t.id==='forgot')return openForgotModal();
+     if(d.calmode){CAL.mode=d.calmode;return render();}
+     if(d.calnav){const a=CAL.anchor||S.chicagoYmd();const parse=s=>{const[y,m,d]=s.split('-').map(Number);return new Date(y,m-1,d);};const fmt=d=>`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+       if(d.calnav==='today'){CAL.anchor=S.chicagoYmd();return render();}
+       const delta=+d.calnav;const dt=parse(a);
+       if(CAL.mode==='day')dt.setDate(dt.getDate()+delta);
+       else if(CAL.mode==='week')dt.setDate(dt.getDate()+7*delta);
+       else dt.setMonth(dt.getMonth()+delta);
+       CAL.anchor=fmt(dt);return render();}
+     if(d.showacc){S.respondShowing(d.showacc,'APPROVED');return render();}
+     if(d.showden){if(confirm(S.lang==='es'?'¿Rechazar esta visita?':'Deny this showing?')){S.respondShowing(d.showden,'DENIED');render();}return;}
      if(d.approve){S.setApproval(d.approve,'APPROVED');return render();}if(d.decline){if(confirm(S.lang==='es'?'¿Rechazar esta cuenta?':'Decline this account?')){S.setApproval(d.decline,'REJECTED');render();}return;}if(d.inspsched){const v=($('#insp-'+d.inspsched)||{}).value;if(!v)return alert(S.lang==='es'?'Selecciona fecha y hora':'Pick a date and time');S.setInspection(d.inspsched,v);return render();}if(d.inspcancel){if(confirm(S.lang==='es'?'¿Cancelar la inspección?':'Cancel the inspection?')){S.setInspection(d.inspcancel,null);render();}return;}if(d.acc)return S.respondOffer(d.acc,'ACCEPTED');if(d.rej)return S.respondOffer(d.rej,'REJECTED');
      if(d.ctr){const p=prompt('Counter price $'),dn=prompt('Counter down $'),mo=prompt('Counter monthly $'),n=prompt('Admin notes')||'';if(p)S.respondOffer(d.ctr,'COUNTERED',{counterPrice:p,counterDown:dn,counterMonthly:mo,adminNotes:n});return;}
      if(d.reset)return openAdminResetModal(d.reset);
@@ -676,6 +775,7 @@ function bind(){const r=$('#app-root');
   const f=$('#filters');if(f){f.oninput=f.onchange=e=>{const v=fd(f);if('maxDownR' in v){v.maxDown=+v.maxDownR>=40000?'':v.maxDownR;delete v.maxDownR;}if('maxMonthlyR' in v){v.maxMonthly=+v.maxMonthlyR>=3000?'':v.maxMonthlyR;delete v.maxMonthlyR;}
     if(e.type==='input'&&e.target.type==='range'){const b=e.target.parentNode.querySelector('b');if(b)b.textContent='$'+(+e.target.value).toLocaleString();return;}
     F=Object.assign(F,v);if('sort' in v){try{localStorage.setItem('lof.sort',v.sort)}catch(_){}}const pos=e.target.name==='q'?e.target.selectionStart:null;render();if(pos!=null){const q=$('#filters [name=q]');q.focus();q.setSelectionRange(pos,pos);}};f.onsubmit=e=>e.preventDefault();}
+  const cj=$('#calJump');if(cj)cj.onchange=()=>{if(cj.value){CAL.anchor=cj.value;render();}};
   r.onchange=async e=>{
    try{
      const t=e.target;if(t.dataset.status)return S.setListingStatus(t.dataset.status,t.value);

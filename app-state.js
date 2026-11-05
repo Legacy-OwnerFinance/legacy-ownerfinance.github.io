@@ -11,6 +11,8 @@ const S=window.AppState={
   cloudConnected:false,
   lastSyncedAt:null,
   SUPABASE_URL:SUPABASE_URL,
+  todayApprovedShowings:[],
+  approvedShowingsCalendar:[],
   listeners:[]
 };
 const uid=()=>'id'+Date.now().toString(36)+Math.random().toString(36).slice(2,8);
@@ -242,7 +244,9 @@ async function fetchCloudState(){
   S.cloudConnected=true;
   S._me=st.me||null;
   if(!st.me&&getToken()){try{localStorage.removeItem(TOKEN_KEY);}catch(e){}}
-  return {kvVal:st.kv||null,updatedAt:st.updatedAt,listRows:st.listRows||[],userRows:st.userRows||[],me:st.me||null};
+  S.todayApprovedShowings=Array.isArray(st.todayApprovedShowings)?st.todayApprovedShowings:[];
+  S.approvedShowingsCalendar=Array.isArray(st.approvedShowingsCalendar)?st.approvedShowingsCalendar:[];
+  return {kvVal:st.kv||null,updatedAt:st.updatedAt,listRows:st.listRows||[],userRows:st.userRows||[],me:st.me||null,todayApprovedShowings:S.todayApprovedShowings,approvedShowingsCalendar:S.approvedShowingsCalendar};
 }
 
 function applyRelationalUsers(stateData,userRows){
@@ -387,6 +391,12 @@ async function pollSupabase(){
       applyRelationalUsers(S.data,userRows);
     }
     if(st.listRows&&st.listRows.length){applyRelationalListings(S.data,st.listRows);}
+    const nextToday=Array.isArray(st.todayApprovedShowings)?st.todayApprovedShowings:[];
+    const nextCal=Array.isArray(st.approvedShowingsCalendar)?st.approvedShowingsCalendar:[];
+    const todayChanged=JSON.stringify(nextToday)!==JSON.stringify(S.todayApprovedShowings||[]);
+    const calChanged=JSON.stringify(nextCal)!==JSON.stringify(S.approvedShowingsCalendar||[]);
+    if(todayChanged){S.todayApprovedShowings=nextToday;changed=true;}
+    if(calChanged){S.approvedShowingsCalendar=nextCal;changed=true;}
     if(changed){
       if(S.user){S.user=S.data.users.find(u=>u.id===S.user.id)||S.user;}
       try{localStorage.setItem(KEY,JSON.stringify(S.data));}catch(e){}
@@ -547,6 +557,40 @@ S.submitOffer=f=>{if(!S.user)throw new Error(S.lang==='es'?'Inicia sesión prime
   },'id');
   return o;
 };
+S.chicagoYmd=(d=new Date())=>{try{return new Intl.DateTimeFormat('en-CA',{timeZone:'America/Chicago',year:'numeric',month:'2-digit',day:'2-digit'}).format(d);}catch(e){return d.toISOString().slice(0,10);}};
+S.preferredYmd=at=>{const s=String(at||'').trim();if(!s)return '';if(/^\d{4}-\d{2}-\d{2}/.test(s)&&!/[zZ]|[+\-]\d{2}:?\d{2}$/.test(s))return s.slice(0,10);const d=new Date(s);if(isNaN(d.getTime()))return s.slice(0,10);return S.chicagoYmd(d);};
+S.todayApprovedForListing=lid=>{
+  const today=S.chicagoYmd();
+  const fromServer=(S.todayApprovedShowings||[]).filter(x=>x&&x.listingId===lid);
+  if(fromServer.length)return fromServer.filter(x=>S.preferredYmd(x.preferredAt)===today).map(x=>x.preferredAt);
+  // Fallback for logged-in admin who already has showings in local state
+  return (S.data&&S.data.showings||[]).filter(sh=>sh.listingId===lid&&String(sh.status||'').toUpperCase()==='APPROVED'&&S.preferredYmd(sh.preferredAt)===today).map(sh=>sh.preferredAt);
+};
+S.formatShowingWhen=at=>{
+  const s=String(at||'');
+  const m=s.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/);
+  if(m){
+    const monthsEn=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    const monthsEs=['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
+    const wdEn=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+    const wdEs=['dom','lun','mar','mié','jue','vie','sáb'];
+    const dt=new Date(+m[1],+m[2]-1,+m[3],+m[4],+m[5]);
+    const wd=(S.lang==='es'?wdEs:wdEn)[dt.getDay()];
+    const mon=(S.lang==='es'?monthsEs:monthsEn)[+m[2]-1];
+    let h=+m[4], ap=h>=12?'PM':'AM'; h=h%12; if(!h)h=12;
+    return `${wd}, ${mon} ${+m[3]}, ${h}:${m[5]} ${ap}`;
+  }
+  const d=new Date(s);
+  if(isNaN(d.getTime()))return s;
+  try{return new Intl.DateTimeFormat(S.lang==='es'?'es-US':'en-US',{timeZone:'America/Chicago',weekday:'short',month:'short',day:'numeric',hour:'numeric',minute:'2-digit'}).format(d);}catch(e){return d.toLocaleString();}
+};
+S.formatShowingTimeOnly=at=>{
+  const m=String(at||'').match(/T(\d{2}):(\d{2})/);
+  if(m){let h=+m[1],ap=h>=12?'PM':'AM';h=h%12;if(!h)h=12;return `${h}:${m[2]} ${ap}`;}
+  const d=new Date(at);if(isNaN(d.getTime()))return String(at||'');
+  try{return new Intl.DateTimeFormat(S.lang==='es'?'es-US':'en-US',{timeZone:'America/Chicago',hour:'numeric',minute:'2-digit'}).format(d);}catch(e){return d.toLocaleTimeString();}
+};
+S.canSeeShowingCalendar=()=>Boolean(S.isAdmin()||S.isAgent());
 S.requestShowing=f=>{if(!S.user)throw new Error(S.lang==='es'?'Inicia sesión primero':'Please log in');needApproved();
   const sh={id:uid(),userId:S.user.id,listingId:f.listingId,preferredAt:f.preferredAt,notes:f.notes||'',status:'REQUESTED',createdAt:now()};
   S.data.showings.push(sh);
@@ -560,6 +604,26 @@ S.requestShowing=f=>{if(!S.user)throw new Error(S.lang==='es'?'Inicia sesión pr
     status:sh.status,
     created_at:sh.createdAt
   },'id');
+};
+S.respondShowing=(sid,status)=>{
+  if(!S.isAdmin())throw new Error('Admins only');
+  const sh=S.data.showings.find(x=>x.id===sid);
+  if(!sh)throw new Error('Showing not found');
+  const st=String(status||'').toUpperCase();
+  if(st!=='APPROVED'&&st!=='DENIED')throw new Error('Bad status');
+  sh.status=st;sh.respondedAt=now();sh.updatedAt=now();
+  S.save();
+  sbUpsert('showings',{
+    id:sh.id,
+    listing_id:sh.listingId,
+    user_id:sh.userId,
+    preferred_at:sh.preferredAt,
+    notes:sh.notes||'',
+    status:sh.status,
+    created_at:sh.createdAt
+  },'id');
+  // Refresh public today/calendar payload soon
+  setTimeout(()=>{try{api('state').then(st=>{S.todayApprovedShowings=Array.isArray(st.todayApprovedShowings)?st.todayApprovedShowings:S.todayApprovedShowings;S.approvedShowingsCalendar=Array.isArray(st.approvedShowingsCalendar)?st.approvedShowingsCalendar:S.approvedShowingsCalendar;notify();});}catch(e){}},400);
 };
 S.uploadDocument=async(file,{listingId,docType,offerId}={})=>{if(!S.user)throw new Error(S.lang==='es'?'Inicia sesión primero':'Please log in');
   const cloudUrl=await sbUploadFile(file,S.user.folderSlug||'documents');
