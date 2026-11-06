@@ -549,6 +549,15 @@ function todayApptHtml(listingId){
   return `<div class="appt-today" title="${label}"><span class="appt-today-label">📅 ${label}</span><span class="appt-today-day">${dayLabel}</span><span class="appt-today-times">${bits.join(' · ')}</span></div>`;
 }
 
+function tenureHtml(l){
+  if(!S.user||!l||typeof S.listingTenure!=='function')return '';
+  const info=S.listingTenure(l);
+  if(!info||!info.text)return '';
+  const kind=info.kind==='active'||info.kind==='pending'||info.kind==='sold'?info.kind:'sold';
+  const sub=info.sub?`<span class="tenure-sub">${esc(info.sub)}</span>`:'';
+  return `<div class="tenure-note tenure-${kind}"><span class="tenure-main">${esc(info.text)}</span>${sub}</div>`;
+}
+
 function card(l,mt){
   const ph=(l.photoUrls&&l.photoUrls.length)?l.photoUrls:[l.photoUrl||'listing-placeholder.svg'],i=(PIDX[l.id]||0)%ph.length,multi=ph.length>1;
   const media=badgeHtml=>`<div class="card-media">${badgeHtml}<img src="${esc(ph[i])}" data-img="${l.id}" referrerpolicy="no-referrer" loading="lazy" onerror="window.imgFallback&&window.imgFallback(this)" data-open="${l.id}" style="cursor:pointer">
@@ -564,6 +573,7 @@ function card(l,mt){
     <div class="card-top-actions"><button type="button" class="icon-circle-btn" title="Compare" data-compare="${l.id}">${CMP.has(l.id)?'✅':'⚖️'}</button><button type="button" class="icon-circle-btn" title="Favorite" data-fav="${l.id}">${S.isFavorite(l.id)?'❤️':'🤍'}</button></div></div>
     <div class="card-body">${matchBadge(mt)}<div class="price-strip"><span class="main-price">${S.money(l.askingPrice)}</span><span class="monthly-pill">${S.money(l.monthlyPayment)}${tr('perMo')}</span></div>
     <p class="addr-line">${title(l)}</p>
+    ${tenureHtml(l)}
     <div class="down-box"><div>${tr('down')}<b>${S.money(l.downPayment)}</b></div><div>${tr('beds')}/${tr('baths')}<b>${l.beds??'—'} · ${l.baths??'—'}</b></div><div>Sq Ft<b>${l.sqft?(+l.sqft).toLocaleString():'—'}</b></div></div>
     ${todayApptHtml(l.id)}
     <div class="card-actions"><button type="button" class="btn-card primary" data-open="${l.id}">${S.lang==='es'?'Ver Detalles':'View Details'}</button></div></div></article>`;
@@ -600,7 +610,7 @@ function openListing(id){const l=S.listing(id);if(!l)return;S.recordView(id);con
     return;
   }
   const ag=S.user&&S.agentFor(S.user);
-  const m=modal(`<h2>${title(l)}</h2>${badge(l.status)}<div class="gallery" style="display:flex;gap:6px;overflow-x:auto;margin:10px 0">${ph.map(p=>`<img src="${esc(p)}" referrerpolicy="no-referrer" loading="lazy" onerror="window.imgFallback&&window.imgFallback(this)" style="height:200px;border-radius:8px">`).join('')}</div>
+  const m=modal(`<h2>${title(l)}</h2>${badge(l.status)}${tenureHtml(l)}<div class="gallery" style="display:flex;gap:6px;overflow-x:auto;margin:10px 0">${ph.map(p=>`<img src="${esc(p)}" referrerpolicy="no-referrer" loading="lazy" onerror="window.imgFallback&&window.imgFallback(this)" style="height:200px;border-radius:8px">`).join('')}</div>
    ${l.photosUrl?`<a href="${esc(l.photosUrl)}" target="_blank" rel="noopener">${tr('morePhotos')}</a>`:''}
    <p>${tr('price')} <b>${S.money(l.askingPrice)}</b> · ${tr('down')} <b>${S.money(l.downPayment)}</b> · ${tr('monthly')} <b>${S.money(l.monthlyPayment)}</b> · ${l.termYears||'—'} ${tr('yrs')}</p>
    <p style="font-size:14px;color:#475569">${l.beds??'—'} bd · ${l.baths??'—'} ba · ${l.sqft?l.sqft+' sqft':''}</p>

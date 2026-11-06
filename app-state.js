@@ -115,6 +115,7 @@ function userToRow(u){
 }
 
 function listingToRow(l){
+  // Writable listing columns only. Tenure counters are computed by the API and must not be sent back.
   return {
     id:l.id,
     slug:l.slug||null,
@@ -149,13 +150,47 @@ function listingToRow(l){
   };
 }
 
+const TENURE_PERSIST_KEYS=['firstActiveDate','activeSince','activeDaysAccum','pendingSince','pendingDaysAccum','daysActive','daysPending','first_active_date','active_since','active_days_accum','pending_since','pending_days_accum','days_active','days_pending'];
+function listingWithoutTenure(l){
+  if(!l||typeof l!=='object')return l;
+  const out=Object.assign({},l);
+  TENURE_PERSIST_KEYS.forEach(k=>{delete out[k];});
+  return out;
+}
+function stateWithoutTenure(data){
+  if(!data||typeof data!=='object')return data;
+  const out=Object.assign({},data);
+  if(Array.isArray(data.listings))out.listings=data.listings.map(listingWithoutTenure);
+  if(Array.isArray(data.closedArchive))out.closedArchive=data.closedArchive.map(listingWithoutTenure);
+  return out;
+}
+function persistLocalState(data){
+  try{localStorage.setItem(KEY,JSON.stringify(stateWithoutTenure(data)));}catch(e){console.warn(e);}
+}
+function blankTenure(){
+  return {firstActiveDate:null,activeSince:null,activeDaysAccum:null,pendingSince:null,pendingDaysAccum:null,daysActive:null,daysPending:null};
+}
+function tenureFromRow(r){
+  const keys=['first_active_date','active_since','active_days_accum','pending_since','pending_days_accum','days_active','days_pending'];
+  if(!r||!keys.some(k=>Object.prototype.hasOwnProperty.call(r,k)))return blankTenure();
+  return {
+    firstActiveDate:r.first_active_date??null,
+    activeSince:r.active_since??null,
+    activeDaysAccum:r.active_days_accum??null,
+    pendingSince:r.pending_since??null,
+    pendingDaysAccum:r.pending_days_accum??null,
+    daysActive:r.days_active??null,
+    daysPending:r.days_pending??null
+  };
+}
+
 S.save=(skipCloud=false)=>{
-  try{localStorage.setItem(KEY,JSON.stringify(S.data));}catch(e){console.warn(e);}
+  persistLocalState(S.data);
   notify();
   if(!skipCloud&&S.data){
     const ts=now();
     S.lastSyncedAt=ts;
-    sbUpsert('app_kv_store',{key:KEY,value:S.data,updated_at:ts},'key');
+    sbUpsert('app_kv_store',{key:KEY,value:stateWithoutTenure(S.data),updated_at:ts},'key');
   }
 };
 
@@ -291,12 +326,15 @@ function applyRelationalUsers(stateData,userRows){
   stateData.users=[...byId.values()];
 }
 
-function applyRelationalListings(stateData,listRows){
-  if(!Array.isArray(listRows)||!listRows.length)return;
+function applyRelationalListings(stateData,listRows,opts){
+  if(!Array.isArray(listRows)||!listRows.length)return false;
+  const allowTenure=!!(opts&&opts.allowTenure);
   const byId=new Map((stateData.listings||[]).map(l=>[l.id,l]));
+  let tenureChanged=false;
   listRows.forEach(r=>{
     const cur=byId.get(r.id)||{};
-    byId.set(r.id,Object.assign({},cur,{
+    const tenure=allowTenure?tenureFromRow(r):blankTenure();
+    const next=Object.assign({},cur,{
       id:r.id,
       slug:r.slug??cur.slug,
       address:r.address??cur.address,
@@ -325,11 +363,21 @@ function applyRelationalListings(stateData,listRows){
       longitude:r.longitude!=null?+r.longitude:cur.longitude,
       approxLocation:r.approx_location??cur.approxLocation,
       areas:r.areas??cur.areas,
-      soldAt:r.sold_at??cur.soldAt??null
-    }));
+      soldAt:r.sold_at??cur.soldAt??null,
+      firstActiveDate:tenure.firstActiveDate,
+      activeSince:tenure.activeSince,
+      activeDaysAccum:tenure.activeDaysAccum,
+      pendingSince:tenure.pendingSince,
+      pendingDaysAccum:tenure.pendingDaysAccum,
+      daysActive:tenure.daysActive,
+      daysPending:tenure.daysPending
+    });
+    if(['firstActiveDate','activeSince','activeDaysAccum','pendingSince','pendingDaysAccum','daysActive','daysPending'].some(k=>String(cur[k]??'')!==String(next[k]??'')))tenureChanged=true;
+    byId.set(r.id,next);
   });
   const live=new Set(listRows.map(r=>r.id));
   stateData.listings=[...byId.values()].filter(l=>live.has(l.id));
+  return tenureChanged;
 }
 
 S.load=async()=>{
@@ -348,14 +396,14 @@ S.load=async()=>{
       }
     }
     applyRelationalUsers(merged,userRows);
-    applyRelationalListings(merged,listRows);
+    applyRelationalListings(merged,listRows,{allowTenure:!!S._me});
     S.lastSyncedAt=updatedAt;
   }catch(e){
     console.warn('Offline or fallback to app-data.json:',e);
     S.cloudConnected=false;
   }
   enforceThreeDaySoldRule(merged);
-  try{localStorage.setItem(KEY,JSON.stringify(merged));}catch(e){}
+  persistLocalState(merged);
   S.data=merged;
   S.data.users=(S.data.users||[]).map(u=>{const c=Object.assign({},u);delete c.passwordHash;delete c.resetCode;delete c.resetExpires;return c;});
   S.user=S._me?(S.data.users.find(u=>u.id===S._me.id)||S._me):null;
@@ -390,7 +438,7 @@ async function pollSupabase(){
     if(userRows&&userRows.length){
       applyRelationalUsers(S.data,userRows);
     }
-    if(st.listRows&&st.listRows.length){applyRelationalListings(S.data,st.listRows);}
+    if(st.listRows&&st.listRows.length){if(applyRelationalListings(S.data,st.listRows,{allowTenure:!!st.me}))changed=true;}
     const nextToday=Array.isArray(st.todayApprovedShowings)?st.todayApprovedShowings:[];
     const nextCal=Array.isArray(st.approvedShowingsCalendar)?st.approvedShowingsCalendar:[];
     const todayChanged=JSON.stringify(nextToday)!==JSON.stringify(S.todayApprovedShowings||[]);
@@ -399,7 +447,7 @@ async function pollSupabase(){
     if(calChanged){S.approvedShowingsCalendar=nextCal;changed=true;}
     if(changed){
       if(S.user){S.user=S.data.users.find(u=>u.id===S.user.id)||S.user;}
-      try{localStorage.setItem(KEY,JSON.stringify(S.data));}catch(e){}
+      persistLocalState(S.data);
       const active=document.activeElement;
       const isTyping=active&&(active.tagName==='INPUT'||active.tagName==='TEXTAREA'||active.tagName==='SELECT')&&active.name!=='q';
       if(!isTyping&&!document.querySelector('.modal-backdrop'))notify();
@@ -435,7 +483,7 @@ async function adoptSession(j){
   let merged=S.data;
   if(st.kv)merged=merge(merged,st.kv);
   applyRelationalUsers(merged,st.userRows||[]);
-  applyRelationalListings(merged,st.listRows||[]);
+  applyRelationalListings(merged,st.listRows||[],{allowTenure:!!S._me});
   S.lastSyncedAt=st.updatedAt||S.lastSyncedAt;
   S.data=merged;
   let u=S.data.users.find(x=>x.id===S._me.id);
@@ -558,6 +606,102 @@ S.submitOffer=f=>{if(!S.user)throw new Error(S.lang==='es'?'Inicia sesión prime
   return o;
 };
 S.chicagoYmd=(d=new Date())=>{try{return new Intl.DateTimeFormat('en-CA',{timeZone:'America/Chicago',year:'numeric',month:'2-digit',day:'2-digit'}).format(d);}catch(e){return d.toISOString().slice(0,10);}};
+const TENURE_MONTHS_EN=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+const TENURE_MONTHS_ES=['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
+function ctYmdOf(value){
+  if(value==null||value==='')return '';
+  const s=String(value).trim();
+  if(/^\d{4}-\d{2}-\d{2}$/.test(s))return s;
+  if(/^\d{4}-\d{2}-\d{2}T/.test(s)&&!/[zZ]$/.test(s)&&!/[+\-]\d{2}:?\d{2}$/.test(s))return s.slice(0,10);
+  const d=new Date(s);
+  if(isNaN(d.getTime()))return '';
+  return S.chicagoYmd(d);
+}
+function ctDaysBetween(startYmd,endYmd){
+  if(!/^\d{4}-\d{2}-\d{2}$/.test(startYmd||'')||!/^\d{4}-\d{2}-\d{2}$/.test(endYmd||''))return null;
+  const ps=startYmd.split('-').map(Number),pe=endYmd.split('-').map(Number);
+  const a=Date.UTC(ps[0],ps[1]-1,ps[2]),b=Date.UTC(pe[0],pe[1]-1,pe[2]);
+  if(!Number.isFinite(a)||!Number.isFinite(b))return null;
+  return Math.round((b-a)/86400000);
+}
+function tenureNum(v){
+  if(v==null||v==='')return null;
+  const n=typeof v==='number'?v:Number(String(v).trim());
+  if(!Number.isFinite(n))return null;
+  return Math.max(0,Math.trunc(n));
+}
+function tenureExplicit(l,camel,snake){
+  if(!l)return null;
+  if(Object.prototype.hasOwnProperty.call(l,camel)&&l[camel]!=null&&l[camel]!==''){
+    const n=tenureNum(l[camel]);
+    if(n!=null)return n;
+  }
+  if(Object.prototype.hasOwnProperty.call(l,snake)&&l[snake]!=null&&l[snake]!==''){
+    const n=tenureNum(l[snake]);
+    if(n!=null)return n;
+  }
+  return null;
+}
+function tenureFallbackDays(l,camelAccum,snakeAccum,camelSince,snakeSince){
+  const accumRaw=(l[camelAccum]!=null&&l[camelAccum]!=='')?l[camelAccum]:l[snakeAccum];
+  const sinceRaw=(l[camelSince]!=null&&l[camelSince]!=='')?l[camelSince]:l[snakeSince];
+  const accum=tenureNum(accumRaw);
+  const sinceYmd=ctYmdOf(sinceRaw);
+  if(accum==null&&!sinceYmd)return null;
+  let days=accum==null?0:accum;
+  if(sinceYmd){
+    const extra=ctDaysBetween(sinceYmd,S.chicagoYmd());
+    if(extra!=null&&extra>0)days+=extra;
+  }
+  return days;
+}
+function tenureDays(l,camelEx,snakeEx,camelAccum,snakeAccum,camelSince,snakeSince){
+  const explicit=tenureExplicit(l,camelEx,snakeEx);
+  if(explicit!=null)return explicit;
+  return tenureFallbackDays(l,camelAccum,snakeAccum,camelSince,snakeSince);
+}
+function tenureKind(status){
+  const st=String(status||'').toUpperCase();
+  if(st==='AVAILABLE')return 'active';
+  if(st==='PENDING'||st==='PENDING_NO_EM'||st==='PENDING_EM')return 'pending';
+  if(st==='SOLD'||st==='CLOSED')return 'sold';
+  return 'none';
+}
+S.formatCtDate=value=>{
+  const ymd=ctYmdOf(value);
+  if(!ymd)return '';
+  const parts=ymd.split('-').map(Number);
+  const mon=(S.lang==='es'?TENURE_MONTHS_ES:TENURE_MONTHS_EN)[parts[1]-1];
+  if(!mon||!parts[0]||!parts[2])return '';
+  return S.lang==='es'?`${parts[2]} ${mon} ${parts[0]}`:`${mon} ${parts[2]}, ${parts[0]}`;
+};
+S.listingTenure=l=>{
+  const empty={kind:'none',text:'',sub:''};
+  if(!l)return empty;
+  const kind=tenureKind(l.status);
+  if(kind==='none')return empty;
+  if(kind==='sold'){
+    const raw=(l.soldAt!=null&&l.soldAt!=='')?l.soldAt:((l.sold_at!=null&&l.sold_at!=='')?l.sold_at:null);
+    const date=S.formatCtDate(raw);
+    if(!date)return empty;
+    return {kind:'sold',text:S.t('tenure.sold',{date}),sub:''};
+  }
+  const daysActive=tenureDays(l,'daysActive','days_active','activeDaysAccum','active_days_accum','activeSince','active_since');
+  if(kind==='pending'){
+    const daysPending=tenureDays(l,'daysPending','days_pending','pendingDaysAccum','pending_days_accum','pendingSince','pending_since');
+    if(daysPending==null)return empty;
+    const text=S.t(daysPending===1?'tenure.pendingOne':'tenure.pending',{days:daysPending});
+    const sub=(daysActive!=null&&daysActive>0)?S.t(daysActive===1?'tenure.activeDaysOne':'tenure.activeDays',{days:daysActive}):'';
+    return {kind:'pending',text,sub};
+  }
+  const first=(l.firstActiveDate!=null&&l.firstActiveDate!=='')?l.firstActiveDate:((l.first_active_date!=null&&l.first_active_date!=='')?l.first_active_date:null);
+  const since=(l.activeSince!=null&&l.activeSince!=='')?l.activeSince:((l.active_since!=null&&l.active_since!=='')?l.active_since:null);
+  const date=S.formatCtDate(first)||S.formatCtDate(since);
+  if(!date&&daysActive==null)return empty;
+  if(date&&daysActive!=null)return {kind:'active',text:S.t(daysActive===1?'tenure.activeOne':'tenure.active',{date,days:daysActive}),sub:''};
+  if(date)return {kind:'active',text:S.t('tenure.activeDate',{date}),sub:''};
+  return {kind:'active',text:S.t(daysActive===1?'tenure.activeDaysOne':'tenure.activeDays',{days:daysActive}),sub:''};
+};
 S.preferredYmd=at=>{const s=String(at||'').trim();if(!s)return '';if(/^\d{4}-\d{2}-\d{2}/.test(s)&&!/[zZ]|[+\-]\d{2}:?\d{2}$/.test(s))return s.slice(0,10);const d=new Date(s);if(isNaN(d.getTime()))return s.slice(0,10);return S.chicagoYmd(d);};
 S.todayApprovedForListing=lid=>{
   const today=S.chicagoYmd();

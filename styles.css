@@ -695,6 +695,28 @@ form.interactive-controls .chip.active{background:var(--accent);color:#fff;borde
 .filter-row .search-box + .sort-select ~ * { }
 
 
+/* How long a listing has been active or pending. Separate from the green showing strip. */
+.tenure-note {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 1.35;
+  color: #1e293b;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-left: 3px solid #64748b;
+  border-radius: 8px;
+  padding: 6px 10px;
+}
+.tenure-main { font-weight: 700; }
+.tenure-sub { font-size: 11px; font-weight: 600; color: #64748b; }
+.tenure-note.tenure-active { border-left-color: #16a34a; }
+.tenure-note.tenure-pending { border-left-color: #d97706; }
+.tenure-note.tenure-sold { border-left-color: #475569; }
+.drawer-panel .tenure-note { margin: 8px 0 4px; }
+
 /* Today's approved showing indicator on property cards */
 .appt-today {
   display: flex;
