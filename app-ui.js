@@ -27,7 +27,7 @@ const initTab=()=>{
   return 'inventory';
 };
 let PIDX={},CMP=new Set(),CHIP='ALL',MARK={};
-let tab=initTab(),F={q:'',area:'',beds:'',baths:'',maxDown:'',maxMonthly:'',maxPrice:'',status:'',sort:(()=>{try{return localStorage.getItem('lof.sort')||'newest'}catch(e){return 'newest'}})()},map=null,CAL={mode:'week',anchor:null};
+let tab=initTab(),F={q:'',area:'',beds:'',baths:'',maxDown:'',maxMonthly:'',maxPrice:'',status:'',sort:(()=>{try{return localStorage.getItem('lof.sort')||'newest'}catch(e){return 'newest'}})()},map=null,CAL={mode:'week',anchor:null},sharedDetailFor='';
 
 const L10N={
   en:{
@@ -307,7 +307,16 @@ const L10N={
     offerCountered:'Contraoferta'
   }
 };
-const tr=k=>(L10N[S.lang]||L10N.en)[k]||L10N.en[k]||k;
+const tr=k=>{
+  const pack=L10N[S.lang]||L10N.en;
+  const local=pack[k]||L10N.en[k];
+  if(local)return local;
+  if(window.translateI18n){
+    const v=window.translateI18n(S.lang,k);
+    if(v&&v!==k)return v;
+  }
+  return k;
+};
 
 const go=(t,focusSel)=>{
   tab=t;
@@ -328,6 +337,46 @@ const partialAddr=l=>{
   const city=l.city||'';
   return `${esc(street)}${city?', '+esc(city):''}`;
 };
+function shareId(){
+  try{
+    const p=new URLSearchParams(location.search).get('p');
+    return p?String(p).trim():'';
+  }catch(e){return '';}
+}
+function resetQueryActive(){
+  try{
+    const sp=new URLSearchParams(location.search);
+    return !!(sp.get('reset')||sp.get('email')||sp.get('token'));
+  }catch(e){return false;}
+}
+function propertyShareUrl(id){
+  return location.origin+'/?p='+encodeURIComponent(id);
+}
+function clearShareParam(){
+  try{
+    const u=new URL(location.href);
+    if(!u.searchParams.has('p'))return;
+    u.searchParams.delete('p');
+    history.replaceState(null,'',u.pathname+u.search+u.hash);
+  }catch(e){}
+}
+function copyText(text){
+  if(navigator.clipboard&&window.isSecureContext)return navigator.clipboard.writeText(text);
+  return new Promise((res,rej)=>{
+    const ta=document.createElement('textarea');
+    ta.value=text;ta.setAttribute('readonly','');
+    ta.style.position='fixed';ta.style.left='-9999px';
+    document.body.appendChild(ta);
+    ta.select();
+    try{document.execCommand('copy')?res():rej(new Error('copy'));}
+    catch(err){rej(err);}
+    finally{ta.remove();}
+  });
+}
+function shareDetailAllowed(){
+  const h=(location.hash||'').replace(/^#/,'');
+  return !h||h==='inventory';
+}
 const title=l=>S.user?`${esc(l.address)}, ${esc(l.city)}, ${esc(l.state||'OK')} ${esc(l.zip||'')}`:partialAddr(l);
 
 function modal(html){const m=document.createElement('div');m.className='modal-backdrop';m.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.55);display:flex;align-items:center;justify-content:center;z-index:9999';
@@ -511,7 +560,38 @@ function cardsSection(L){
   <h3 class="sc-h">${st('others')} (${rest.length})</h3><div class="cards-grid">${rest.map(x=>card(x.l,x.m)).join('')}</div>`;}
 window.__sc={matchScore,critOf};
 
-function inventory(){const all=S.data.listings,L=filtered();
+function guestShare(l){
+  const ph=(l.photoUrls&&l.photoUrls.length)?l.photoUrls:[l.photoUrl||'listing-placeholder.svg'];
+  const alt=partialAddr(l);
+  return `<section class="share-view">
+    <div class="share-toolbar"><button type="button" class="btn-card" data-shareclear="1">${tr('share.back')}</button></div>
+    <article class="card share-card">
+      <div class="share-head"><h2 class="share-addr">📍 ${alt}</h2><div class="share-status">${badge(l.status)}</div></div>
+      <div class="share-gallery" aria-label="${esc(tr('share.gallery'))}">${ph.map((p,i)=>`<img src="${esc(p)}" alt="${alt}" referrerpolicy="no-referrer" ${i===0?'fetchpriority="high"':'loading="lazy"'} onerror="window.imgFallback&&window.imgFallback(this)">`).join('')}</div>
+      <p class="share-count">${ph.length} ${tr('photosCount')}</p>
+      <div class="share-cta">
+        <h3>${tr('guestModalTitle')}</h3>
+        <p>${tr('guestModalBody')}</p>
+        <div class="share-cta-actions">
+          <button type="button" class="btn-card primary" data-register="1">${tr('guestCreateBtn')}</button>
+          <button type="button" class="btn-card" data-login="1">${tr('guestLoginBtn')}</button>
+        </div>
+      </div>
+    </article>
+  </section>`;
+}
+function shareMissingNotice(){
+  const id=shareId();
+  if(!id||resetQueryActive()||S.listing(id))return '';
+  return `<div class="share-notice" role="status">${tr('share.missing')}</div>`;
+}
+function inventory(){
+  const sid=shareId();
+  if(sid&&!S.user&&!resetQueryActive()){
+    const shared=S.listing(sid);
+    if(shared)return guestShare(shared);
+  }
+  const all=S.data.listings,L=filtered();
   const es=S.lang==='es';
   const sel=(n,opts,lab)=>`<select name="${n}" class="filter-select"><option value="">${lab}</option>${opts.map(o=>`<option value="${esc(o[0]??o)}" ${F[n]==(o[0]??o)?'selected':''}>${esc(o[1]??o)}</option>`).join('')}</select>`;
   const nAv=all.filter(l=>l.status==='AVAILABLE').length,nCs=all.filter(l=>l.status==='COMING_SOON').length;
@@ -535,7 +615,7 @@ function inventory(){const all=S.data.listings,L=filtered();
    ${sel('beds',[1,2,3,4,5].map(n=>[n,n+tr('bedsPlus')]),tr('beds'))}${sel('status',S.STATUSES.map(s=>[s,S.statusText(s)]),tr('status'))}`:''}</div>
    <div class="quick-chips">${chips.map(([k,v])=>`<button type="button" class="chip ${CHIP===k?'active':''}" data-chip="${k}">${v}</button>`).join('')}</div></form>
   <div class="workspace-split"><div class="map-pane"><div id="inventory-map"></div></div>
-   <div class="cards-pane">${guestNotice}<div class="cards-toolbar"><b style="font-size:14px">${L.length} ${tr('homesCount')}</b><span style="font-size:12px;color:var(--muted)">💡 ${es?'Usa ‹ › en la foto para ver la galería':'Click ‹ › on any photo to swipe the gallery'}</span></div>
+   <div class="cards-pane">${shareMissingNotice()}${guestNotice}<div class="cards-toolbar"><b style="font-size:14px">${L.length} ${tr('homesCount')}</b><span style="font-size:12px;color:var(--muted)">💡 ${es?'Usa ‹ › en la foto para ver la galería':'Click ‹ › on any photo to swipe the gallery'}</span></div>
    ${cardsSection(L)}</div></div>
   ${S.user?`<div class="compare-tray ${CMP.size?'show':''}"><span>⚖️ <b>${CMP.size}</b> ${es?'casas para comparar':'homes selected to compare'}</span><button type="button" class="btn-card primary" data-cmpopen="1">${es?'Comparar':'Compare Side-by-Side'}</button><button type="button" class="btn-card" data-cmpclear="1">${es?'Limpiar':'Clear'}</button></div>`:''}`;}
 
@@ -736,12 +816,19 @@ function admin(){if(!S.isAdmin())return `<p style="padding:18px">${tr('adminsOnl
     return `<tr><td>${esc(l.address||sh.listingId)}${l.city?', '+esc(l.city):''}</td><td>${esc(u.name||'—')}</td><td>${esc(S.formatShowingWhen?S.formatShowingWhen(sh.preferredAt):sh.preferredAt)}</td><td>${badge}</td><td>${acts}</td></tr>`;
   }).join('')||`<tr><td colspan=5>${S.lang==='es'?'Aún no hay solicitudes de visita':'No showing requests yet'}</td></tr>`}
   </table></div>
-  <div class="card" style="padding:16px"><h2>${tr('listings')}</h2><table><tr><th>${tr('colAddress')}</th><th>${tr('colStatus')}</th><th>${tr('price')} $</th><th>${tr('down')} $</th><th>${tr('monthly')} $</th><th></th></tr>${D.listings.map(l=>`<tr data-row="${l.id}"><td>${esc(l.address)}, ${esc(l.city)}</td>
+  <div class="card" style="padding:16px"><h2>${tr('listings')}</h2><div class="table-scroll"><table><tr><th>${tr('colAddress')}</th><th>${tr('colStatus')}</th><th>${tr('price')} $</th><th>${tr('down')} $</th><th>${tr('monthly')} $</th><th></th></tr>${D.listings.map(l=>`<tr data-row="${l.id}"><td>${esc(l.address)}, ${esc(l.city)}</td>
    <td><select data-status="${l.id}">${S.STATUSES.map(s=>`<option value="${s}" ${l.status===s?'selected':''}>${S.statusText(s)}</option>`).join('')}</select></td>
-   <td><input data-f="askingPrice" type="number" value="${l.askingPrice/100}" style="width:90px"></td><td><input data-f="downPayment" type="number" value="${l.downPayment/100}" style="width:80px"></td><td><input data-f="monthlyPayment" type="number" value="${l.monthlyPayment/100}" style="width:80px"></td><td><button data-save="${l.id}">${tr('save')}</button></td></tr>`).join('')}</table></div></section>`;}
+   <td><input data-f="askingPrice" type="number" value="${l.askingPrice/100}" style="width:90px"></td><td><input data-f="downPayment" type="number" value="${l.downPayment/100}" style="width:80px"></td><td><input data-f="monthlyPayment" type="number" value="${l.monthlyPayment/100}" style="width:80px"></td><td class="listing-actions"><button type="button" data-save="${esc(l.id)}">${tr('save')}</button><button type="button" class="copy-link-btn" data-copylink="${esc(l.id)}">${tr('share.copyLink')}</button></td></tr>`).join('')}</table></div></div></section>`;}
 
+function maybeOpenSharedDetail(){
+  if(!S.user||!S.data||resetQueryActive()||!shareDetailAllowed())return;
+  const id=shareId();
+  if(!id||sharedDetailFor===id||!S.listing(id))return;
+  sharedDetailFor=id;
+  openListing(id);
+}
 function render(){const root=$('#app-root');if(!S.data)return;document.documentElement.lang=S.lang;if(map){try{map.stop();map.off();map.remove();}catch(e){}map=null;}
-  const body={inventory,guides,dashboard,admin,auth,calendar:calendarView}[tab]||inventory;root.innerHTML=header()+`<main>${body()}</main><footer style="padding:18px;font-size:12px;text-align:center">© Legacy - Owner Finance · Brokerage By: KLC Real Estate, LLC</footer>`;bind();if(tab==='inventory')drawMap();}
+  const body={inventory,guides,dashboard,admin,auth,calendar:calendarView}[tab]||inventory;root.innerHTML=header()+`<main>${body()}</main><footer style="padding:18px;font-size:12px;text-align:center">© Legacy - Owner Finance · Brokerage By: KLC Real Estate, LLC</footer>`;bind();if(tab==='inventory')drawMap();maybeOpenSharedDetail();}
 function bind(){const r=$('#app-root');
   r.onclick=async e=>{
    const c=e.target.closest('[data-view],[data-editsearch],[data-prev],[data-next],[data-compare],[data-chip],[data-cmpopen],[data-cmpclear]');
@@ -757,11 +844,19 @@ function bind(){const r=$('#app-root');
        modal(`<h2>⚖️ ${S.lang==='es'?'Comparación de Casas':'Side-by-Side Comparison'}</h2><div style="display:grid;grid-template-columns:repeat(${it.length},1fr);gap:12px">${it.map(l=>`<div class="card" style="padding:10px"><img src="${esc(l.photoUrl||'listing-placeholder.svg')}" referrerpolicy="no-referrer" onerror="window.imgFallback&&window.imgFallback(this)" style="width:100%;height:120px;object-fit:cover;border-radius:8px"><h4 style="margin:8px 0">${title(l)}</h4>
        <div style="font-size:13px;line-height:1.8">${tr('price')}: <b>${S.money(l.askingPrice)}</b><br>${tr('down')}: <b>${S.money(l.downPayment)}</b><br>${tr('monthly')}: <b>${S.money(l.monthlyPayment)}</b><br>${l.beds??'—'} bd · ${l.baths??'—'} ba<br>${l.sqft?(+l.sqft).toLocaleString()+' sqft':''}${l.sqft&&l.askingPrice?'<br>$'+Math.round(l.askingPrice/100/l.sqft)+'/sqft':''}</div></div>`).join('')}</div>`);return;}
    }
-   const t=e.target.closest('[data-tab],[data-lang],[data-open],[data-fav],[data-acc],[data-rej],[data-ctr],[data-reset],[data-save],[data-client],[data-register],[data-calmode],[data-calnav],[data-showacc],[data-showden],[data-approve],[data-decline],[data-inspsched],[data-inspcancel],#logout,#forgot');
+   const t=e.target.closest('[data-tab],[data-lang],[data-open],[data-fav],[data-acc],[data-rej],[data-ctr],[data-reset],[data-save],[data-client],[data-register],[data-login],[data-shareclear],[data-copylink],[data-calmode],[data-calnav],[data-showacc],[data-showden],[data-approve],[data-decline],[data-inspsched],[data-inspcancel],#logout,#forgot');
    if(!t)return;
    e.preventDefault();
    try{
      const d=t.dataset;
+     if(d.shareclear){clearShareParam();return render();}
+     if(d.copylink){
+       const url=propertyShareUrl(d.copylink);
+       const btn=t;
+       copyText(url).then(()=>{btn.textContent=tr('share.copied');setTimeout(()=>{if(btn.isConnected)btn.textContent=tr('share.copyLink');},1600);}).catch(()=>{window.prompt(tr('share.copyLink'),url);});
+       return;
+     }
+     if(d.login)return go('auth','#loginF [name="email"]');
      if(d.register)return go('auth','#regF [name="name"]');
      if(d.tab)return go(d.tab);if(d.lang)return S.setLang(d.lang);if(d.fav)return S.toggleFavorite(d.fav);if(d.open)return openListing(d.open);if(t.id==='logout'){S.logout();return go('inventory');}
      if(t.id==='forgot')return openForgotModal();

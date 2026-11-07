@@ -769,3 +769,127 @@ form.interactive-controls .chip.active{background:var(--accent);color:#fff;borde
   font-size: 12px;
   color: var(--muted);
 }
+
+/* Public ?p= property share */
+.share-view {
+  padding: 18px 16px 28px;
+  max-width: 980px;
+  margin: 0 auto;
+}
+.share-toolbar {
+  display: flex;
+  margin-bottom: 12px;
+}
+.share-toolbar .btn-card {
+  flex: 0 0 auto;
+  min-height: 44px;
+}
+.share-card {
+  padding: 16px;
+}
+.share-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+.share-addr {
+  margin: 0;
+  font-size: 22px;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+}
+.share-gallery {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding-bottom: 6px;
+  -webkit-overflow-scrolling: touch;
+}
+.share-gallery img {
+  height: 220px;
+  width: auto;
+  max-width: min(420px, 86vw);
+  flex: 0 0 auto;
+  object-fit: cover;
+  border-radius: 10px;
+  background: var(--surface-2);
+}
+.share-count {
+  margin: 10px 0 0;
+  font-size: 13px;
+  color: var(--muted);
+}
+.share-cta {
+  background: #f8fafc;
+  border: 2px solid #d4af37;
+  border-radius: 12px;
+  padding: 16px;
+  margin-top: 14px;
+  text-align: center;
+}
+.share-cta h3 {
+  margin: 0 0 8px;
+  color: #0f172a;
+  font-size: 18px;
+}
+.share-cta p {
+  margin: 0 0 14px;
+  font-size: 14px;
+  color: #334155;
+}
+.share-cta-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: center;
+}
+.share-cta-actions .btn-card {
+  flex: 1 1 180px;
+  max-width: 280px;
+  min-height: 44px;
+  padding: 10px 14px;
+}
+.share-notice {
+  margin: 0 0 14px;
+  padding: 12px 14px;
+  border-radius: 10px;
+  background: #fff7ed;
+  border: 1px solid #fdba74;
+  color: #9a3412;
+  font-size: 14px;
+  font-weight: 600;
+}
+.table-scroll {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+.listing-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+.copy-link-btn {
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  padding: 8px 10px;
+  min-height: 44px;
+  font-weight: 700;
+  font-size: 12px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.copy-link-btn:hover {
+  border-color: var(--accent);
+}
+@media (max-width: 640px) {
+  .share-view { padding: 12px; }
+  .share-addr { font-size: 18px; }
+  .share-gallery img { height: 180px; }
+  .share-cta-actions .btn-card { max-width: none; }
+}
