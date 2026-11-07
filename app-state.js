@@ -4,10 +4,32 @@ try{localStorage.removeItem('legacy_of_state_v1');localStorage.removeItem('legac
 const TOKEN_KEY='legacy_session';
 const SUPABASE_URL='https://oxcgtjryfcatlwjaxier.supabase.co';
 const SUPABASE_ANON_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im94Y2d0anJ5ZmNhdGx3amF4aWVyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTMxOTMyMTcsImV4cCI6MjEwODc2OTIxN30.3ZD4V2_4n2tlccqlBnxH9YGuGGwkFQ_ovCuE-fZOrdY';
+function savedManualLang(){
+  try{
+    const saved=localStorage.getItem('legacy_lang');
+    if(saved==='en'||saved==='es')return saved;
+  }catch(e){}
+  return '';
+}
+function detectDeviceLang(){
+  let tags=[];
+  try{
+    if(navigator.languages&&navigator.languages.length)tags=Array.prototype.slice.call(navigator.languages);
+    else if(navigator.language)tags=[navigator.language];
+  }catch(e){}
+  const primary=String(tags[0]||'').toLowerCase();
+  return primary.indexOf('en')===0?'en':'es';
+}
+function resolveLegacyLang(){
+  return savedManualLang()||detectDeviceLang();
+}
+const initialLang=resolveLegacyLang();
+try{document.documentElement.lang=initialLang;}catch(e){}
+window.__legacyLang=initialLang;
 const S=window.AppState={
   data:null,
   user:null,
-  lang:localStorage.getItem('legacy_lang')||'en',
+  lang:initialLang,
   cloudConnected:false,
   lastSyncedAt:null,
   SUPABASE_URL:SUPABASE_URL,
@@ -195,7 +217,14 @@ S.save=(skipCloud=false)=>{
 };
 
 S.t=(k,v)=>window.translateI18n?window.translateI18n(S.lang,k,v):k;
-S.setLang=l=>{S.lang=l;localStorage.setItem('legacy_lang',l);notify();};
+S.setLang=l=>{
+  if(l!=='en'&&l!=='es')return;
+  S.lang=l;
+  window.__legacyLang=l;
+  try{document.documentElement.lang=l;}catch(e){}
+  try{localStorage.setItem('legacy_lang',l);}catch(e){}
+  notify();
+};
 
 const SOLD_RULE_CUTOFF_MS=Date.parse('2026-10-28T19:10:00.000Z');
 const THREE_DAYS_MS=3*24*60*60*1000;
