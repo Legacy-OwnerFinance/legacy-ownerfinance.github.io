@@ -166,7 +166,30 @@ const L10N={
     offerSubmitted:'Submitted',
     offerAccepted:'Accepted',
     offerRejected:'Rejected',
-    offerCountered:'Counter Offer'
+    offerCountered:'Counter Offer',
+    streetHidden:'Street Address Hidden',
+    compare:'Compare',
+    favorite:'Favorite',
+    sqft:'Sq Ft',
+    bdShort:'bd',
+    baShort:'ba',
+    sqftUnit:'sqft',
+    perSqft:'/sqft',
+    allAsking:'All asking (full asking price, down & monthly)',
+    allAskingNote:'All asking',
+    roleAgentShort:'Agent',
+    roleClientShort:'Client',
+    roleAdminShort:'Admin',
+    showingApproved:'APPROVED',
+    showingDenied:'DENIED',
+    showingRequested:'REQUESTED',
+    promptCounterPrice:'Counter price $',
+    promptCounterDown:'Counter down $',
+    promptCounterMonthly:'Counter monthly $',
+    promptAdminNotes:'Admin notes',
+    selfServiceReset:'Self-Service Reset Link:',
+    loadFail:'Failed to load data',
+    docInspection:'Inspection report'
   },
   es:{
     navInventory:'Inventario',
@@ -304,9 +327,33 @@ const L10N={
     offerSubmitted:'Enviada',
     offerAccepted:'Aceptada',
     offerRejected:'Rechazada',
-    offerCountered:'Contraoferta'
+    offerCountered:'Contraoferta',
+    streetHidden:'Dirección oculta',
+    compare:'Comparar',
+    favorite:'Favorita',
+    sqft:'Pies²',
+    bdShort:'rec.',
+    baShort:'baños',
+    sqftUnit:'pies²',
+    perSqft:'/pie²',
+    allAsking:'Todo lo que pide (precio, enganche y mensualidad que pide el vendedor)',
+    allAskingNote:'Todo lo que pide',
+    roleAgentShort:'Agente',
+    roleClientShort:'Cliente',
+    roleAdminShort:'Admin',
+    showingApproved:'APROBADA',
+    showingDenied:'RECHAZADA',
+    showingRequested:'SOLICITADA',
+    promptCounterPrice:'Precio de contraoferta $',
+    promptCounterDown:'Enganche de contraoferta $',
+    promptCounterMonthly:'Mensualidad de contraoferta $',
+    promptAdminNotes:'Notas del administrador',
+    selfServiceReset:'Enlace para que restablezca su contraseña:',
+    loadFail:'No se pudieron cargar los datos',
+    docInspection:'Reporte de inspección'
   }
 };
+const ALL_ASK_NOTES=[L10N.en.allAskingNote,L10N.es.allAskingNote];
 const tr=k=>{
   const pack=L10N[S.lang]||L10N.en;
   const local=pack[k]||L10N.en[k];
@@ -317,6 +364,31 @@ const tr=k=>{
   }
   return k;
 };
+const kindLabel=k=>{
+  const u=String(k||'').toUpperCase();
+  if(u==='MESSAGE')return tr('kindMsg');
+  if(u==='REQUEST_ACCESS')return tr('requestAccess');
+  if(u==='SHARE_HOUSE')return tr('shareHouse');
+  return k||'';
+};
+const roleLabel=r=>r==='AGENT'?tr('roleAgentShort'):r==='ADMIN'?tr('roleAdminShort'):r==='BUYER'?tr('roleClientShort'):(r||'');
+function docTypeLabel(t){
+  if(t==='INSPECTION_REPORT')return tr('docInspection');
+  const d=(S.TX_DOCS||[]).find(x=>x.type===t);
+  if(!d)return t||'';
+  return S.lang==='es'?(d.labelEs||d.label):d.label;
+}
+function startsWithAsk(value){
+  const s=String(value||'');
+  if(!s)return false;
+  return ALL_ASK_NOTES.some(p=>s.indexOf(p)===0);
+}
+function stripAllAsk(value){
+  let out=String(value||'');
+  if(!out)return out;
+  ALL_ASK_NOTES.forEach(p=>{if(p&&out.indexOf(p)===0)out=out.slice(p.length).replace(/^( - )?/, '');});
+  return out;
+}
 
 const go=(t,focusSel)=>{
   tab=t;
@@ -333,7 +405,7 @@ const offerBadge=s=>{
 };
 const partialAddr=l=>{
   const rawStreet=(l.approxLocation&&l.approxLocation.streetOnly)||String(l.address||'').replace(/^\s*\d+[A-Za-z\-]*\s+/,'').trim();
-  const street=rawStreet.replace(/^\s*\d+[A-Za-z\-]*\s+/,'').trim()||'Street Address Hidden';
+  const street=rawStreet.replace(/^\s*\d+[A-Za-z\-]*\s+/,'').trim()||tr('streetHidden');
   const city=l.city||'';
   return `${esc(street)}${city?', '+esc(city):''}`;
 };
@@ -424,7 +496,7 @@ function openAdminResetModal(userId){
       <button type="submit">${tr('save')}</button>
     </form>
     <div style="margin-top:14px;padding:10px;background:#f8fafc;border-radius:8px;font-size:12px">
-      <b>Self-Service Reset Link:</b><br>
+      <b>${tr('selfServiceReset')}</b><br>
       <input type="text" readonly value="${esc(resetUrl)}" style="width:100%;margin-top:4px;font-size:12px" onclick="this.select()">
     </div>`);
   const f=m.querySelector('#adminResetF');
@@ -650,11 +722,11 @@ function card(l,mt){
   }
   const col=({AVAILABLE:'#16a34a',COMING_SOON:'#2563eb',SOLD:'#475569',CLOSED:'#475569'})[l.status]||'#d97706';
   return `<article class="prop-card" data-card="${l.id}">${media(`<span class="badge-top-left" style="background:${col}">${esc(S.statusText?S.statusText(l.status):l.status)}</span>`)}
-    <div class="card-top-actions"><button type="button" class="icon-circle-btn" title="Compare" data-compare="${l.id}">${CMP.has(l.id)?'✅':'⚖️'}</button><button type="button" class="icon-circle-btn" title="Favorite" data-fav="${l.id}">${S.isFavorite(l.id)?'❤️':'🤍'}</button></div></div>
+    <div class="card-top-actions"><button type="button" class="icon-circle-btn" title="${esc(tr('compare'))}" data-compare="${l.id}">${CMP.has(l.id)?'✅':'⚖️'}</button><button type="button" class="icon-circle-btn" title="${esc(tr('favorite'))}" data-fav="${l.id}">${S.isFavorite(l.id)?'❤️':'🤍'}</button></div></div>
     <div class="card-body">${matchBadge(mt)}<div class="price-strip"><span class="main-price">${S.money(l.askingPrice)}</span><span class="monthly-pill">${S.money(l.monthlyPayment)}${tr('perMo')}</span></div>
     <p class="addr-line">${title(l)}</p>
     ${tenureHtml(l)}
-    <div class="down-box"><div>${tr('down')}<b>${S.money(l.downPayment)}</b></div><div>${tr('beds')}/${tr('baths')}<b>${l.beds??'—'} · ${l.baths??'—'}</b></div><div>Sq Ft<b>${l.sqft?(+l.sqft).toLocaleString():'—'}</b></div></div>
+    <div class="down-box"><div>${tr('down')}<b>${S.money(l.downPayment)}</b></div><div>${tr('beds')}/${tr('baths')}<b>${l.beds??'—'} · ${l.baths??'—'}</b></div><div>${tr('sqft')}<b>${l.sqft?(+l.sqft).toLocaleString():'—'}</b></div></div>
     ${todayApptHtml(l.id)}
     <div class="card-actions"><button type="button" class="btn-card primary" data-open="${l.id}">${S.lang==='es'?'Ver Detalles':'View Details'}</button></div></div></article>`;
 }
@@ -693,16 +765,16 @@ function openListing(id){const l=S.listing(id);if(!l)return;S.recordView(id);con
   const m=modal(`<h2>${title(l)}</h2>${badge(l.status)}${tenureHtml(l)}<div class="gallery" style="display:flex;gap:6px;overflow-x:auto;margin:10px 0">${ph.map(p=>`<img src="${esc(p)}" referrerpolicy="no-referrer" loading="lazy" onerror="window.imgFallback&&window.imgFallback(this)" style="height:200px;border-radius:8px">`).join('')}</div>
    ${l.photosUrl?`<a href="${esc(l.photosUrl)}" target="_blank" rel="noopener">${tr('morePhotos')}</a>`:''}
    <p>${tr('price')} <b>${S.money(l.askingPrice)}</b> · ${tr('down')} <b>${S.money(l.downPayment)}</b> · ${tr('monthly')} <b>${S.money(l.monthlyPayment)}</b> · ${l.termYears||'—'} ${tr('yrs')}</p>
-   <p style="font-size:14px;color:#475569">${l.beds??'—'} bd · ${l.baths??'—'} ba · ${l.sqft?l.sqft+' sqft':''}</p>
+   <p style="font-size:14px;color:#475569">${l.beds??'—'} ${tr('bdShort')} · ${l.baths??'—'} ${tr('baShort')} · ${l.sqft?l.sqft+' '+tr('sqftUnit'):''}</p>
    <p>${esc(l.description)}</p>
-   <h3>${tr('makeOffer')}</h3><form id="offerF"><label style="display:flex;gap:8px;align-items:center;font-weight:600;margin-bottom:6px"><input type="checkbox" id="allAsk" style="width:auto"> All asking (${S.lang==='es'?'precio, enganche y mensualidad que pide el vendedor':'full asking price, down & monthly'})</label><input name="offerPrice" type="number" placeholder="${tr('offerPrice')}" required><input name="downPayment" type="number" placeholder="${tr('downPayment')}" required><input name="monthlyPayment" type="number" placeholder="${tr('monthlyPayment')}" required><label style="font-weight:600">${S.lang==='es'?'¿Piensas hacer inspecciones?':'Do you plan to do inspections?'}</label><select name="inspections" required><option value="">—</option><option value="YES">${S.lang==='es'?'Sí':'Yes'}</option><option value="NO">No</option></select><textarea name="notes" placeholder="${tr('notes')}"></textarea><button>${tr('submitOffer')}</button></form>
+   <h3>${tr('makeOffer')}</h3><form id="offerF"><label style="display:flex;gap:8px;align-items:center;font-weight:600;margin-bottom:6px"><input type="checkbox" id="allAsk" style="width:auto"> ${tr('allAsking')}</label><input name="offerPrice" type="number" placeholder="${tr('offerPrice')}" required><input name="downPayment" type="number" placeholder="${tr('downPayment')}" required><input name="monthlyPayment" type="number" placeholder="${tr('monthlyPayment')}" required><label style="font-weight:600">${S.lang==='es'?'¿Piensas hacer inspecciones?':'Do you plan to do inspections?'}</label><select name="inspections" required><option value="">—</option><option value="YES">${S.lang==='es'?'Sí':'Yes'}</option><option value="NO">No</option></select><textarea name="notes" placeholder="${tr('notes')}"></textarea><button>${tr('submitOffer')}</button></form>
    <h3>${tr('requestShowing')}</h3><form id="showF"><input name="preferredAt" type="datetime-local" required><input name="notes" placeholder="${tr('notes')}"><button>${tr('requestShowingBtn')}</button></form>
    ${ag?`<h3>${tr('shareHouse')}</h3><form id="shareF"><textarea name="body" placeholder="${tr('msgToAgent')}">${tr('defaultShareMsg')}</textarea><button>${tr('shareHouse')}</button> <button type="button" id="reqAcc">${tr('requestAccess')}</button></form>`:''}`);
-  const aa=m.querySelector('#allAsk');if(aa)aa.onchange=()=>{const f=m.querySelector('#offerF');const v={offerPrice:l.askingPrice,downPayment:l.downPayment,monthlyPayment:l.monthlyPayment};['offerPrice','downPayment','monthlyPayment'].forEach(k=>{const i=f.elements[k];if(aa.checked){i.value=Math.round((v[k]||0)/100);i.readOnly=true;}else{i.readOnly=false;}});const n=f.elements.notes;if(aa.checked&&!/^All asking/.test(n.value))n.value='All asking'+(n.value?' - '+n.value:'');if(!aa.checked)n.value=n.value.replace(/^All asking( - )?/,'');};
+  const aa=m.querySelector('#allAsk');if(aa)aa.onchange=()=>{const f=m.querySelector('#offerF');const v={offerPrice:l.askingPrice,downPayment:l.downPayment,monthlyPayment:l.monthlyPayment};['offerPrice','downPayment','monthlyPayment'].forEach(k=>{const i=f.elements[k];if(aa.checked){i.value=Math.round((v[k]||0)/100);i.readOnly=true;}else{i.readOnly=false;}});const n=f.elements.notes;if(aa.checked&&!startsWithAsk(n.value))n.value=tr('allAskingNote')+(n.value?' - '+n.value:'');if(!aa.checked)n.value=stripAllAsk(n.value);};
   const on=(s,f)=>{const el=m.querySelector(s);if(el)el.onsubmit=wrap(()=>{f(fd(el));alert(tr('sentAlert'));m.remove();render();});};
   on('#offerF',v=>S.submitOffer({...v,listingId:id}));on('#showF',v=>S.requestShowing({...v,listingId:id}));
   on('#shareF',v=>S.sendMessage({toUserId:ag.id,listingId:id,kind:'SHARE_HOUSE',body:v.body}));
-  const ra=m.querySelector('#reqAcc');if(ra)ra.onclick=wrap(()=>{S.sendMessage({toUserId:ag.id,listingId:id,kind:'REQUEST_ACCESS',body:'Request Property Access'});alert(tr('requestedAlert'));});}
+  const ra=m.querySelector('#reqAcc');if(ra)ra.onclick=wrap(()=>{S.sendMessage({toUserId:ag.id,listingId:id,kind:'REQUEST_ACCESS',body:tr('requestAccess')});alert(tr('requestedAlert'));});}
 
 function auth(){return `<section style="display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:18px;padding:18px">
  <form id="loginF" class="card" style="padding:16px"><h2>${tr('loginTitle')}</h2><input name="email" type="email" placeholder="${tr('email')}" required><input name="password" type="password" placeholder="${tr('password')}" required><button>${tr('loginTitle')}</button>
@@ -727,13 +799,13 @@ function dashboard(){if(!S.user)return auth();const u=S.user,ap=S.agentProfile(u
   <div class="card" style="padding:16px"><h2>${tr('messages')}</h2>${contacts.length?`<form id="msgF"><select name="toUserId">${contacts.map(c=>`<option value="${c.id}">${esc(c.name)}</option>`).join('')}</select>
    <select name="listingId"><option value="">${tr('propAddress')}</option>${D.listings.map(l=>`<option value="${l.id}">${esc(l.address)}, ${esc(l.city)}</option>`).join('')}</select>
    <select name="kind"><option value="MESSAGE">${tr('kindMsg')}</option><option value="REQUEST_ACCESS">${tr('requestAccess')}</option><option value="SHARE_HOUSE">${tr('shareHouse')}</option></select><textarea name="body" placeholder="${tr('kindMsg')}" required></textarea><button>${tr('send')}</button></form>`:`<p>${tr('noAgentLinked')}</p>`}
-   <ul>${msgs.map(m=>`<li><b>${esc(nm(m.fromUserId))}</b> → ${esc(nm(m.toUserId))} ${m.listingId?'('+esc((S.listing(m.listingId)||{}).address)+')':''} <i>${esc(m.kind)}</i>: ${esc(m.body)}</li>`).join('')}</ul></div>
+   <ul>${msgs.map(m=>`<li><b>${esc(nm(m.fromUserId))}</b> → ${esc(nm(m.toUserId))} ${m.listingId?'('+esc((S.listing(m.listingId)||{}).address)+')':''} <i>${esc(kindLabel(m.kind))}</i>: ${esc(m.body)}</li>`).join('')}</ul></div>
   <div class="card" style="padding:16px"><h2>${tr('myOffers')}</h2><ul>${offers.map(o=>{const l=S.listing(o.listingId)||{};return `<li>${esc(l.address)} — ${S.money(o.offerPrice)} ${offerBadge(o.status)}
    ${o.status==='COUNTERED'?`<div style="color:#d97706">${tr('counterLabel')}: ${S.money(o.counterPrice)} / ${tr('down')} ${S.money(o.counterDown)} / ${S.money(o.counterMonthly)}${tr('perMo')}. ${esc(o.adminNotes)}</div>`:''}
    ${o.status==='ACCEPTED'?`<div class="tx-box" style="border:2px solid #16a34a;padding:8px;border-radius:8px;margin:6px 0"><b>${tr('txDocs')}</b>${S.TX_DOCS.map(t=>{const has=docs.find(d=>d.offerId===o.id&&d.docType===t.type);
      const docLabel=S.lang==='es'?(t.labelEs||t.label):t.label;
      return `<div>${docLabel}: ${has?'✅ '+esc(has.name):`<input type="file" data-txdoc="${t.type}" data-offer="${o.id}" data-listing="${o.listingId}">`}</div>`;}).join('')}${o.inspections?(()=>{const rep=docs.find(d=>d.offerId===o.id&&d.docType==='INSPECTION_REPORT');return `<div style="margin-top:8px;padding:8px;border:1px dashed #0284c7;border-radius:8px"><b>🔍 ${S.lang==='es'?'Inspecciones':'Inspections'}</b><br>${o.inspectionStatus==='SCHEDULED'?`${S.lang==='es'?'Programada':'Scheduled'}: <b>${esc(new Date(o.inspectionAt).toLocaleString())}</b> <button type="button" data-inspcancel="${o.id}" style="background:#dc2626;color:#fff">${S.lang==='es'?'Cancelar inspección':'Cancel inspection'}</button>`:`${o.inspectionStatus==='CANCELLED'?`<i>${S.lang==='es'?'Inspección cancelada':'Inspection cancelled'}</i><br>`:''}${S.lang==='es'?'Fecha y hora':'Date & time'}: <input type="datetime-local" id="insp-${o.id}"> <button type="button" data-inspsched="${o.id}">${S.lang==='es'?'Programar':'Schedule'}</button>`}<div style="margin-top:6px">${S.lang==='es'?'Reporte de inspección':'Inspection report'}: ${rep?'✅ '+esc(rep.name):`<input type="file" data-txdoc="INSPECTION_REPORT" data-offer="${o.id}" data-listing="${o.listingId}">`}</div></div>`;})():''}</div>`:''}</li>`;}).join('')||`<li>${tr('noneYet')}</li>`}</ul></div>
-  <div class="card" style="padding:16px"><h2>${tr('myDocFolder')}</h2><p style="font-size:12px">${tr('folder')}: ${esc(u.folderSlug)}</p><input type="file" id="docUp"><ul>${docs.map(d=>`<li><a href="${d.dataUrl}" target="_blank" rel="noopener" download="${esc(d.name)}">${esc(d.name)}</a> <i>${esc(d.docType)}</i></li>`).join('')||`<li>${tr('noDocs')}</li>`}</ul></div>
+  <div class="card" style="padding:16px"><h2>${tr('myDocFolder')}</h2><p style="font-size:12px">${tr('folder')}: ${esc(u.folderSlug)}</p><input type="file" id="docUp"><ul>${docs.map(d=>`<li><a href="${d.dataUrl}" target="_blank" rel="noopener" download="${esc(d.name)}">${esc(d.name)}</a> <i>${esc(docTypeLabel(d.docType))}</i></li>`).join('')||`<li>${tr('noDocs')}</li>`}</ul></div>
   ${ap?`<div class="card" style="padding:16px"><h2>${tr('myClients')}</h2><ul>${S.clientsOf(u).map(c=>`<li><a href="#" data-client="${c.id}">${esc(c.name)}</a> — ${esc(c.email)} ${esc(c.phone)}</li>`).join('')||`<li>${tr('noClients')}</li>`}</ul></div>`:''}</section>`;}
 
 
@@ -800,18 +872,18 @@ function calendarView(){
 
 function admin(){if(!S.isAdmin())return `<p style="padding:18px">${tr('adminsOnly')}</p>`;const D=S.data;
   return `<section style="padding:18px;display:grid;gap:16px">
-  ${(()=>{const pend=D.users.filter(u=>u.approvalStatus==='PENDING');return `<div class="card" style="padding:16px;border:2px solid #d97706"><h2>⏳ ${S.lang==='es'?'Cuentas Pendientes de Aprobación':'Accounts Pending Approval'} (${pend.length})</h2><table><tr><th>${tr('colName')}</th><th>${tr('email')}</th><th>${tr('colRole')}</th><th>${S.lang==='es'?'Licencia / Correduría':'License / Brokerage'}</th><th>${S.lang==='es'?'Registro':'Signed up'}</th><th>${tr('colActions')}</th></tr>${pend.map(u=>{const ap=S.agentProfile(u);return `<tr><td>${esc(u.name)}</td><td>${esc(u.email)}</td><td>${u.role==='AGENT'?'Agent':'Client'}</td><td>${esc(ap?(ap.licenseNumber||'')+' / '+(ap.brokerage||''):'—')}</td><td>${esc(new Date(u.createdAt).toLocaleDateString())}</td><td><button data-approve="${u.id}" style="background:#16a34a;color:#fff">${S.lang==='es'?'Aprobar':'Approve'}</button> <button data-decline="${u.id}" style="background:#dc2626;color:#fff">${S.lang==='es'?'Rechazar':'Decline'}</button></td></tr>`;}).join('')||`<tr><td colspan=6>${S.lang==='es'?'No hay cuentas pendientes':'No accounts pending'}</td></tr>`}</table></div>`;})()}
+  ${(()=>{const pend=D.users.filter(u=>u.approvalStatus==='PENDING');return `<div class="card" style="padding:16px;border:2px solid #d97706"><h2>⏳ ${S.lang==='es'?'Cuentas Pendientes de Aprobación':'Accounts Pending Approval'} (${pend.length})</h2><table><tr><th>${tr('colName')}</th><th>${tr('email')}</th><th>${tr('colRole')}</th><th>${S.lang==='es'?'Licencia / Correduría':'License / Brokerage'}</th><th>${S.lang==='es'?'Registro':'Signed up'}</th><th>${tr('colActions')}</th></tr>${pend.map(u=>{const ap=S.agentProfile(u);return `<tr><td>${esc(u.name)}</td><td>${esc(u.email)}</td><td>${u.role==='AGENT'?tr('roleAgentShort'):tr('roleClientShort')}</td><td>${esc(ap?(ap.licenseNumber||'')+' / '+(ap.brokerage||''):'—')}</td><td>${esc(new Date(u.createdAt).toLocaleDateString())}</td><td><button data-approve="${u.id}" style="background:#16a34a;color:#fff">${S.lang==='es'?'Aprobar':'Approve'}</button> <button data-decline="${u.id}" style="background:#dc2626;color:#fff">${S.lang==='es'?'Rechazar':'Decline'}</button></td></tr>`;}).join('')||`<tr><td colspan=6>${S.lang==='es'?'No hay cuentas pendientes':'No accounts pending'}</td></tr>`}</table></div>`;})()}
 <div class="card" style="padding:16px"><h2>${tr('recentOffers')}</h2><table><tr><th>${tr('colProperty')}</th><th>${tr('colBuyer')}</th><th>${tr('colOffer')}</th><th>${tr('colStatus')}</th><th>${tr('colActions')}</th></tr>
   ${D.offers.slice().reverse().map(o=>`<tr><td>${esc((S.listing(o.listingId)||{}).address)}</td><td>${esc((D.users.find(u=>u.id===o.userId)||{}).name)}</td><td>${S.money(o.offerPrice)} / ${S.money(o.downPayment)} / ${S.money(o.monthlyPayment)}</td><td>${offerBadge(o.status)}</td>
    <td><button data-acc="${o.id}" style="background:#16a34a;color:#fff">${tr('accept')}</button> <button data-ctr="${o.id}" style="background:#d97706;color:#fff">${tr('counterOffer')}</button> <button data-rej="${o.id}" style="background:#dc2626;color:#fff">${tr('reject')}</button></td></tr>`).join('')||`<tr><td colspan=5>${tr('noOffers')}</td></tr>`}</table></div>
-  <div class="card" style="padding:16px"><h2>${tr('usersAgents')}</h2><table><tr><th>${tr('colName')}</th><th>${tr('email')}</th><th>${tr('colRole')}</th><th>${tr('colInvite')}</th><th>${tr('colResetPw')}</th></tr>${D.users.map(u=>{const ap=S.agentProfile(u);return `<tr><td>${esc(u.name)}</td><td>${esc(u.email)}</td><td>${u.role}</td><td>${esc(ap&&ap.inviteCode)}</td><td><button data-reset="${u.id}">${tr('reset')}</button></td></tr>`;}).join('')}</table></div>
+  <div class="card" style="padding:16px"><h2>${tr('usersAgents')}</h2><table><tr><th>${tr('colName')}</th><th>${tr('email')}</th><th>${tr('colRole')}</th><th>${tr('colInvite')}</th><th>${tr('colResetPw')}</th></tr>${D.users.map(u=>{const ap=S.agentProfile(u);return `<tr><td>${esc(u.name)}</td><td>${esc(u.email)}</td><td>${esc(roleLabel(u.role))}</td><td>${esc(ap&&ap.inviteCode)}</td><td><button data-reset="${u.id}">${tr('reset')}</button></td></tr>`;}).join('')}</table></div>
   <div class="card" style="padding:16px"><h2>${S.lang==='es'?'Solicitudes de visita':'Showing requests'}</h2>
   <table><tr><th>${tr('colProperty')}</th><th>${S.lang==='es'?'Solicitado por':'Requested by'}</th><th>${S.lang==='es'?'Fecha/hora':'Date/time'}</th><th>${tr('colStatus')}</th><th>${tr('colActions')}</th></tr>
   ${(D.showings||[]).slice().sort((a,b)=>String(b.preferredAt||'').localeCompare(String(a.preferredAt||''))).map(sh=>{
     const l=S.listing(sh.listingId)||{};
     const u=(D.users.find(x=>x.id===sh.userId)||{});
     const st=String(sh.status||'REQUESTED').toUpperCase();
-    const badge=st==='APPROVED'?'✅ APPROVED':st==='DENIED'?'❌ DENIED':'⏳ REQUESTED';
+    const badge=st==='APPROVED'?'✅ '+tr('showingApproved'):st==='DENIED'?'❌ '+tr('showingDenied'):'⏳ '+tr('showingRequested');
     const acts=st==='REQUESTED'?`<button data-showacc="${sh.id}" style="background:#16a34a;color:#fff">${S.lang==='es'?'Aprobar':'Approve'}</button> <button data-showden="${sh.id}" style="background:#dc2626;color:#fff">${S.lang==='es'?'Rechazar':'Deny'}</button>`:'—';
     return `<tr><td>${esc(l.address||sh.listingId)}${l.city?', '+esc(l.city):''}</td><td>${esc(u.name||'—')}</td><td>${esc(S.formatShowingWhen?S.formatShowingWhen(sh.preferredAt):sh.preferredAt)}</td><td>${badge}</td><td>${acts}</td></tr>`;
   }).join('')||`<tr><td colspan=5>${S.lang==='es'?'Aún no hay solicitudes de visita':'No showing requests yet'}</td></tr>`}
@@ -827,7 +899,7 @@ function maybeOpenSharedDetail(){
   sharedDetailFor=id;
   openListing(id);
 }
-function render(){const root=$('#app-root');if(!S.data)return;document.documentElement.lang=S.lang;if(map){try{map.stop();map.off();map.remove();}catch(e){}map=null;}
+function render(){document.documentElement.lang=S.lang;const root=$('#app-root');if(!S.data)return;if(map){try{map.stop();map.off();map.remove();}catch(e){}map=null;}
   const body={inventory,guides,dashboard,admin,auth,calendar:calendarView}[tab]||inventory;root.innerHTML=header()+`<main>${body()}</main><footer style="padding:18px;font-size:12px;text-align:center">© Legacy - Owner Finance · Brokerage By: KLC Real Estate, LLC</footer>`;bind();if(tab==='inventory')drawMap();maybeOpenSharedDetail();}
 function bind(){const r=$('#app-root');
   r.onclick=async e=>{
@@ -842,7 +914,7 @@ function bind(){const r=$('#app-root');
      if(d.cmpclear){CMP.clear();return render();}
      if(d.cmpopen){const it=[...CMP].map(id=>S.listing(id)).filter(Boolean);
        modal(`<h2>⚖️ ${S.lang==='es'?'Comparación de Casas':'Side-by-Side Comparison'}</h2><div style="display:grid;grid-template-columns:repeat(${it.length},1fr);gap:12px">${it.map(l=>`<div class="card" style="padding:10px"><img src="${esc(l.photoUrl||'listing-placeholder.svg')}" referrerpolicy="no-referrer" onerror="window.imgFallback&&window.imgFallback(this)" style="width:100%;height:120px;object-fit:cover;border-radius:8px"><h4 style="margin:8px 0">${title(l)}</h4>
-       <div style="font-size:13px;line-height:1.8">${tr('price')}: <b>${S.money(l.askingPrice)}</b><br>${tr('down')}: <b>${S.money(l.downPayment)}</b><br>${tr('monthly')}: <b>${S.money(l.monthlyPayment)}</b><br>${l.beds??'—'} bd · ${l.baths??'—'} ba<br>${l.sqft?(+l.sqft).toLocaleString()+' sqft':''}${l.sqft&&l.askingPrice?'<br>$'+Math.round(l.askingPrice/100/l.sqft)+'/sqft':''}</div></div>`).join('')}</div>`);return;}
+       <div style="font-size:13px;line-height:1.8">${tr('price')}: <b>${S.money(l.askingPrice)}</b><br>${tr('down')}: <b>${S.money(l.downPayment)}</b><br>${tr('monthly')}: <b>${S.money(l.monthlyPayment)}</b><br>${l.beds??'—'} ${tr('bdShort')} · ${l.baths??'—'} ${tr('baShort')}<br>${l.sqft?(+l.sqft).toLocaleString()+' '+tr('sqftUnit'):''}${l.sqft&&l.askingPrice?'<br>$'+Math.round(l.askingPrice/100/l.sqft)+tr('perSqft'):''}</div></div>`).join('')}</div>`);return;}
    }
    const t=e.target.closest('[data-tab],[data-lang],[data-open],[data-fav],[data-acc],[data-rej],[data-ctr],[data-reset],[data-save],[data-client],[data-register],[data-login],[data-shareclear],[data-copylink],[data-calmode],[data-calnav],[data-showacc],[data-showden],[data-approve],[data-decline],[data-inspsched],[data-inspcancel],#logout,#forgot');
    if(!t)return;
@@ -871,7 +943,7 @@ function bind(){const r=$('#app-root');
      if(d.showacc){S.respondShowing(d.showacc,'APPROVED');return render();}
      if(d.showden){if(confirm(S.lang==='es'?'¿Rechazar esta visita?':'Deny this showing?')){S.respondShowing(d.showden,'DENIED');render();}return;}
      if(d.approve){S.setApproval(d.approve,'APPROVED');return render();}if(d.decline){if(confirm(S.lang==='es'?'¿Rechazar esta cuenta?':'Decline this account?')){S.setApproval(d.decline,'REJECTED');render();}return;}if(d.inspsched){const v=($('#insp-'+d.inspsched)||{}).value;if(!v)return alert(S.lang==='es'?'Selecciona fecha y hora':'Pick a date and time');S.setInspection(d.inspsched,v);return render();}if(d.inspcancel){if(confirm(S.lang==='es'?'¿Cancelar la inspección?':'Cancel the inspection?')){S.setInspection(d.inspcancel,null);render();}return;}if(d.acc)return S.respondOffer(d.acc,'ACCEPTED');if(d.rej)return S.respondOffer(d.rej,'REJECTED');
-     if(d.ctr){const p=prompt('Counter price $'),dn=prompt('Counter down $'),mo=prompt('Counter monthly $'),n=prompt('Admin notes')||'';if(p)S.respondOffer(d.ctr,'COUNTERED',{counterPrice:p,counterDown:dn,counterMonthly:mo,adminNotes:n});return;}
+     if(d.ctr){const p=prompt(tr('promptCounterPrice')),dn=prompt(tr('promptCounterDown')),mo=prompt(tr('promptCounterMonthly')),n=prompt(tr('promptAdminNotes'))||'';if(p)S.respondOffer(d.ctr,'COUNTERED',{counterPrice:p,counterDown:dn,counterMonthly:mo,adminNotes:n});return;}
      if(d.reset)return openAdminResetModal(d.reset);
      if(d.save){const row=r.querySelector(`[data-row="${d.save}"]`),p={};row.querySelectorAll('[data-f]').forEach(i=>p[i.dataset.f]=Math.round(+i.value*100));S.updateListing(d.save,p);return alert(tr('savedAlert'));}
      if(d.client){const c=S.data.users.find(u=>u.id===d.client);const of=S.data.offers.filter(o=>o.userId===c.id);modal(`<h2>${esc(c.name)}</h2><p>${esc(c.email)} · ${esc(c.phone)}</p><h3>🏡 ${st('clientCrit')}</h3>${critSummary(critOf(c))}<h3>${tr('favorites')}</h3><ul>${S.data.favorites.filter(f=>f.userId===c.id).map(f=>`<li>${esc((S.listing(f.listingId)||{}).address)}</li>`).join('')}</ul><h3>${tr('myOffers')}</h3><ul>${of.map(o=>`<li>${esc((S.listing(o.listingId)||{}).address)} ${S.money(o.offerPrice)} ${offerBadge(o.status)}</li>`).join('')}</ul>`);}
@@ -930,5 +1002,5 @@ function checkResetUrlParams(){
 }
 
 S.on(render);window.addEventListener('hashchange',()=>{tab=location.hash.slice(1)||'inventory';render();});
-S.load().then(()=>{render();checkResetUrlParams();maybePromptCriteria();}).catch(e=>{$('#app-root').innerHTML='<p style="padding:20px">Failed to load data: '+esc(e.message)+'</p>';});
+S.load().then(()=>{render();checkResetUrlParams();maybePromptCriteria();}).catch(e=>{document.documentElement.lang=S.lang;$('#app-root').innerHTML='<p style="padding:20px">'+esc(tr('loadFail'))+': '+esc(e.message)+'</p>';});
 })();
