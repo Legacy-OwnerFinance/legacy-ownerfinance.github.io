@@ -35,7 +35,10 @@ const S=window.AppState={
   SUPABASE_URL:SUPABASE_URL,
   todayApprovedShowings:[],
   approvedShowingsCalendar:[],
-  caps:{v13:false,ready:false},
+  caps:{v13:false,ready:false,investor:false,version:0},
+  investorHome:null,
+  investorTx:null,
+  investorAdmin:null,
   alerts:[],
   myShowings:[],
   listeners:[]
@@ -56,8 +59,18 @@ const sbHeaders=(extra={})=>Object.assign({
 },extra);
 
 const getToken=()=>{try{return localStorage.getItem(TOKEN_KEY)||'';}catch(e){return '';}};
+function apiUrl(){
+  const live=`${SUPABASE_URL}/functions/v1/api`;
+  try{
+    const host=String(location.hostname||'');
+    if(host!=='localhost'&&host!=='127.0.0.1')return live;
+    const q=new URLSearchParams(location.search).get('api');
+    if(q&&/^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?(\/.*)?$/.test(q))return q;
+  }catch(e){}
+  return live;
+}
 async function api(action,body={}){
-  const r=await fetch(`${SUPABASE_URL}/functions/v1/api`,{method:'POST',headers:sbHeaders(getToken()?{'x-session':getToken()}:{}),body:JSON.stringify(Object.assign({action,lang:S.lang},body)),cache:'no-store'});
+  const r=await fetch(apiUrl(),{method:'POST',headers:sbHeaders(getToken()?{'x-session':getToken()}:{}),body:JSON.stringify(Object.assign({action,lang:S.lang},body)),cache:'no-store'});
   let j={};try{j=await r.json();}catch(e){}
   if(j.error==='no_session'&&getToken()){try{localStorage.removeItem(TOKEN_KEY);}catch(e){}}
   if(!r.ok||j.error){const err=new Error(j.message||j.error||('HTTP '+r.status));err.code=j.error;err.status=j.status||r.status;throw err;}
@@ -343,6 +356,10 @@ function applyRelationalUsers(stateData,userRows){
       emailVerified:r.email_verified,
       updatedAt:preferRow?(r.updated_at||cur.updatedAt):(cur.updatedAt||r.updated_at)
     });
+    if(r.investor_profile){
+      mergedUser.investorProfile=r.investor_profile;
+      if(r.investor_profile.approvalStatus)mergedUser.approvalStatus=r.investor_profile.approvalStatus;
+    }
     byId.set(mergedUser.id,mergedUser);
     if(r.agent_profile&&r.agent_profile.id){
       const idx=stateData.agentProfiles.findIndex(a=>a.id===r.agent_profile.id||a.userId===mergedUser.id);
@@ -396,6 +413,9 @@ function applyRelationalListings(stateData,listRows,opts){
       approxLocation:r.approx_location??cur.approxLocation,
       areas:r.areas??cur.areas,
       soldAt:r.sold_at??cur.soldAt??null,
+      investorId:Object.prototype.hasOwnProperty.call(r,'investor_id')?r.investor_id:(cur.investorId??null),
+      sourceSheetId:Object.prototype.hasOwnProperty.call(r,'source_sheet_id')?r.source_sheet_id:(cur.sourceSheetId??null),
+      inspectionAt:Object.prototype.hasOwnProperty.call(r,'inspection_at')?r.inspection_at:(cur.inspectionAt??null),
       firstActiveDate:tenure.firstActiveDate,
       activeSince:tenure.activeSince,
       activeDaysAccum:tenure.activeDaysAccum,
@@ -414,48 +434,88 @@ function applyRelationalListings(stateData,listRows,opts){
 
 let portalTick=0;
 function sameJson(a,b){try{return JSON.stringify(a)===JSON.stringify(b);}catch(e){return false;}}
+function capsFrom(raw){
+  const version=Number(raw&&raw.version)||0;
+  const v13=version>=13;
+  return {v13,ready:v13&&!!(raw&&raw.ready),investor:version>=14&&!!(raw&&raw.investor),version};
+}
 async function refreshPortal(opts){
   const fromPoll=!!(opts&&opts.fromPoll);
   portalTick++;
   if(fromPoll&&!(S.caps&&S.caps.ready)&&portalTick%4!==0)return false;
   try{
-    let ready=!!(S.caps&&S.caps.ready);
-    let version13=!!(S.caps&&S.caps.v13);
-    if(!ready){
-      const caps=await api('portal_caps');
-      version13=!!(caps&&caps.version>=13);
-      ready=version13&&!!caps.ready;
+    let parsed=S.caps&&S.caps.version?S.caps:null;
+    if(!parsed||!parsed.ready){
+      parsed=capsFrom(await api('portal_caps'));
     }
+    const version13=!!parsed.v13;
+    const ready=!!parsed.ready;
+    const investor=!!parsed.investor;
     if(!ready||!S.user){
-      const changed=!!(S.caps&&S.caps.ready)||(S.alerts||[]).length>0||(S.myShowings||[]).length>0;
-      S.caps={v13:version13,ready:false};
+      const changed=!!(S.caps&&S.caps.ready)||(S.alerts||[]).length>0||(S.myShowings||[]).length>0||!!(S.caps&&S.caps.investor)!==investor;
+      S.caps={v13:version13,ready:false,investor,version:parsed.version||0};
       S.alerts=[];S.myShowings=[];
       return changed;
     }
     const home=await api('portal_home');
     if(!home||home.unavailable){
       const changed=!!(S.caps&&S.caps.ready);
-      S.caps={v13:true,ready:false};
+      S.caps={v13:version13,ready:false,investor:false,version:parsed.version||0};
       S.alerts=[];S.myShowings=[];
       return changed;
     }
     const nextA=Array.isArray(home.alerts)?home.alerts:[];
     const nextS=Array.isArray(home.showings)?home.showings:[];
-    const changed=!(S.caps&&S.caps.ready)||!sameJson(S.alerts,nextA)||!sameJson(S.myShowings,nextS);
-    S.caps={v13:true,ready:true};
+    const changed=!(S.caps&&S.caps.ready)||!!(S.caps&&S.caps.investor)!==investor||!sameJson(S.alerts,nextA)||!sameJson(S.myShowings,nextS);
+    S.caps={v13:true,ready:true,investor,version:parsed.version||(investor?14:13)};
     S.alerts=nextA;
     S.myShowings=nextS;
     return changed;
   }catch(e){
     if(e&&(e.code==='bad_action'||e.status===404)){
-      const changed=!!(S.caps&&(S.caps.ready||S.caps.v13));
-      S.caps={v13:false,ready:false};
+      const changed=!!(S.caps&&(S.caps.ready||S.caps.v13||S.caps.investor));
+      S.caps={v13:false,ready:false,investor:false,version:0};
       S.alerts=[];S.myShowings=[];
       return changed;
     }
     return false;
   }
 }
+async function refreshInvestor(){
+  if(!(S.caps&&S.caps.investor)||!S.user){
+    const had=!!(S.investorHome||S.investorTx||S.investorAdmin);
+    S.investorHome=null;S.investorTx=null;
+    return had;
+  }
+  try{
+    if(S.isAdmin()){
+      const onAdmin=(location.hash==='#admin')||String(location.pathname||'').toLowerCase().indexOf('/admin')>=0;
+      if(!onAdmin&&S.investorAdmin)return false;
+      const j=await api('investor_admin');
+      if(!j||j.unavailable)return false;
+      const changed=!sameJson(S.investorAdmin,j);
+      S.investorAdmin=j;
+      return changed;
+    }
+    if(!S.isInvestor()||S.isPendingApproval(S.user)){
+      const had=!!(S.investorHome||S.investorTx);
+      S.investorHome=null;S.investorTx=null;
+      return had;
+    }
+    const home=await api('investor_home');
+    const tx=await api('investor_transactions');
+    if(!home||home.unavailable){
+      const had=!!S.investorHome;
+      S.investorHome=null;S.investorTx=null;
+      return had;
+    }
+    const changed=!sameJson(S.investorHome,home)||!sameJson(S.investorTx,tx);
+    S.investorHome=home;
+    S.investorTx=tx;
+    return changed;
+  }catch(e){return false;}
+}
+S.refreshInvestor=refreshInvestor;
 S.refreshPortal=refreshPortal;
 S.markAlertsRead=async()=>{
   if(!S.caps||!S.caps.ready||!S.user)return;
@@ -517,6 +577,8 @@ S.load=async()=>{
   S.user=S._me?(S.data.users.find(u=>u.id===S._me.id)||S._me):null;
   if(S.user&&!S.data.users.some(u=>u.id===S.user.id))S.data.users.push(S.user);
   try{await refreshPortal();}catch(e){}
+  try{if(S.user&&S._me){if(S._me.role)S.user.role=S._me.role;if(S._me.approvalStatus)S.user.approvalStatus=S._me.approvalStatus;if(S._me.investorProfile)S.user.investorProfile=S._me.investorProfile;}}catch(e){}
+  try{await refreshInvestor();}catch(e){}
   startRealtimePolling();
 };
 
@@ -555,6 +617,7 @@ async function pollSupabase(){
     if(todayChanged){S.todayApprovedShowings=nextToday;changed=true;}
     if(calChanged){S.approvedShowingsCalendar=nextCal;changed=true;}
     try{if(await refreshPortal({fromPoll:true}))changed=true;}catch(e){}
+    try{if(await refreshInvestor())changed=true;}catch(e){}
     if(changed){
       if(S.user){S.user=S.data.users.find(u=>u.id===S.user.id)||S.user;}
       persistLocalState(S.data);
@@ -583,6 +646,8 @@ S.agentProfile=u=>u&&(S.data.agentProfiles.find(a=>a.userId===u.id)||u.agentProf
 S.buyerProfile=u=>u&&(S.data.buyerProfiles.find(b=>b.userId===u.id)||u.buyerProfile||null);
 S.isAdmin=()=>Boolean(S.user&&(S.user.role==='ADMIN'||['admin@therivaslegacygroup.com','fer.okc94@gmail.com','admin@legacy.app','fernando@legacy.app'].includes((S.user.email||'').toLowerCase())));
 S.isAgent=()=>Boolean(S.user&&(S.user.role==='AGENT'||(S.user.email||'').toLowerCase()==='admin@therivaslegacygroup.com'));
+S.isInvestor=()=>Boolean(S.user&&S.user.role==='INVESTOR'&&!S.isAdmin());
+S.ownsListing=l=>Boolean(l&&S.user&&l.investorId&&l.investorId===S.user.id);
 S.listing=id=>S.data.listings.find(l=>l.id===id);
 function setUser(u){S.user=u;S.save(true);}
 
@@ -600,6 +665,7 @@ async function adoptSession(j){
   if(!u){u=S._me;S.data.users.push(u);}else Object.assign(u,S._me);
   setUser(u);
   try{await refreshPortal();}catch(e){}
+  try{await refreshInvestor();}catch(e){}
   return u;
 }
 S.login=async(email,pw)=>{
@@ -607,20 +673,64 @@ S.login=async(email,pw)=>{
   if(j.needsVerify)return {needsVerify:true,email:j.email};
   return adoptSession(j);
 };
-S.logout=()=>{try{localStorage.removeItem(TOKEN_KEY);localStorage.removeItem(KEY);}catch(e){}S.user=null;S._me=null;location.reload();};
+S.logout=()=>{try{localStorage.removeItem(TOKEN_KEY);localStorage.removeItem(KEY);}catch(e){}S.user=null;S._me=null;location.hash='inventory';location.reload();};
 S.isPendingApproval=u=>Boolean(u&&(u.approvalStatus==='PENDING'||u.approvalStatus==='REJECTED'));
 const needApproved=()=>{if(S.user&&!S.isAdmin()&&S.isPendingApproval(S.user))throw new Error(S.lang==='es'?'Tu cuenta está pendiente de aprobación. Te avisaremos cuando esté aprobada.':'Your account is pending approval. We will let you know once it is approved.');};
-S.setApproval=(userId,status)=>{const u=S.data.users.find(x=>x.id===userId);if(!u)return;u.approvalStatus=status;u.approvedAt=now();u.updatedAt=now();if(S.user&&S.user.id===u.id)S.user.approvalStatus=status;S.save();};
+S.setApproval=async(userId,status)=>{const u=S.data.users.find(x=>x.id===userId);if(!u)return;if(S.caps&&S.caps.investor&&u.role==='INVESTOR'){const j=await api('investor_review',{userId,status});if(j&&j.unavailable)throw new Error(S.lang==='es'?'Las herramientas de inversionista aún no están activas.':'Investor tools are not active yet.');}u.approvalStatus=status;u.approvedAt=now();u.updatedAt=now();if(u.investorProfile)u.investorProfile=Object.assign({},u.investorProfile,{approvalStatus:status});if(S.user&&S.user.id===u.id)S.user.approvalStatus=status;S.save();};
 const hash=pw=>{
   const clean=String(pw||'').trim();
   if(clean.length<8)throw new Error(S.lang==='es'?'La contraseña debe tener al menos 8 caracteres':'Password must be at least 8 characters');
   return bc().hashSync(clean,10);
 };
 S.register=async f=>{
-  const fields={name:f.name,email:f.email,phone:f.phone,password:f.password,role:f.role,inviteCode:f.inviteCode,licenseNumber:f.licenseNumber,brokerage:f.brokerage};
+  if(f.role==='INVESTOR'&&!(S.caps&&S.caps.investor))throw new Error(S.lang==='es'?'El registro de inversionistas todavía no está disponible.':'Investor signup is not available yet.');
+  const fields={name:f.role==='INVESTOR'?(f.representativeName||f.name):f.name,email:f.email,phone:f.phone,password:f.password,role:f.role,inviteCode:f.inviteCode,licenseNumber:f.licenseNumber,brokerage:f.brokerage,businessName:f.businessName,contactMethod:f.contactMethod,contactValue:f.contactValue,representativeName:f.representativeName};
   const j=await api('register',{fields});
-  if(j.needsVerify)return {needsVerify:true,email:j.email};
-  return adoptSession(j);
+  if(j.needsVerify)return {needsVerify:true,email:j.email,pendingReview:!!j.pendingReview,role:f.role};
+  const u=await adoptSession(j);
+  if(j.pendingReview)u.pendingReview=true;
+  return u;
+};
+S.saveOwnListing=async(id,fields)=>{
+  const j=await api('investor_listing_save',{listingId:id,fields});
+  if(!j||j.unavailable||j.error)throw new Error((j&&j.message)||(S.lang==='es'?'No se pudo guardar.':'Could not save.'));
+  const l=S.listing(id);if(l)Object.assign(l,fields,{inspectionAt:fields.inspectionAt||null,updatedAt:now()});
+  S.save(true);notify();
+  try{await refreshInvestor();}catch(e){}
+  return j;
+};
+S.saveInspection=async(listingId,inspectionAt)=>{
+  const j=await api('listing_inspection',{listingId,inspectionAt:inspectionAt||''});
+  if(!j||j.unavailable||j.error)throw new Error((j&&j.message)||(S.lang==='es'?'No se pudo guardar la inspección.':'Could not save the inspection.'));
+  const l=S.listing(listingId);if(l)l.inspectionAt=inspectionAt||null;
+  return j;
+};
+S.decideShowing=async(id,status)=>{
+  const j=await api('showing_decide',{showingId:id,status});
+  if(!j||j.unavailable||j.error)throw new Error((j&&j.message)||(S.lang==='es'?'No se pudo actualizar la visita.':'Could not update the showing.'));
+  const sh=(S.data.showings||[]).find(x=>x.id===id);if(sh)sh.status=status;
+  try{await refreshInvestor();}catch(e){}
+  setTimeout(()=>{try{api('state').then(st=>{S.todayApprovedShowings=Array.isArray(st.todayApprovedShowings)?st.todayApprovedShowings:S.todayApprovedShowings;S.approvedShowingsCalendar=Array.isArray(st.approvedShowingsCalendar)?st.approvedShowingsCalendar:S.approvedShowingsCalendar;notify();});}catch(e){}},400);
+  notify();
+  return j;
+};
+S.messageShowingAgent=async(id,body)=>{
+  const j=await api('showing_message',{showingId:id,body});
+  if(!j||j.unavailable||j.error)throw new Error((j&&j.message)||(S.lang==='es'?'No se pudo enviar el mensaje.':'Could not send the message.'));
+  return j;
+};
+S.saveInvestorSheets=async(userId,sheets)=>{
+  const j=await api('investor_sheets_save',{userId,sheets});
+  if(!j||j.unavailable||j.error)throw new Error((j&&j.message)||(S.lang==='es'?'No se pudo guardar la hoja.':'Could not save the spreadsheet.'));
+  S.investorAdmin=j;
+  return j;
+};
+S.assignInvestorListings=async(userId,listingIds,unassignIds)=>{
+  const j=await api('investor_assign',{userId,listingIds:listingIds||[],unassignIds:unassignIds||[]});
+  if(!j||j.unavailable||j.error)throw new Error((j&&j.message)||(S.lang==='es'?'No se pudo asignar la casa.':'Could not assign the home.'));
+  S.investorAdmin=j;
+  try{const st=await api('state');if(st&&st.listRows)applyRelationalListings(S.data,st.listRows,{allowTenure:!!st.me});}catch(e){}
+  return j;
 };
 // Email verification (server API). verify returns a session on success.
 S.emailVerify=async(action,email,code)=>{
