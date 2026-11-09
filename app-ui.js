@@ -27,7 +27,7 @@ const initTab=()=>{
   return 'inventory';
 };
 let PIDX={},CMP=new Set(),CHIP='ALL',MARK={};
-let tab=initTab(),F={q:'',area:'',beds:'',baths:'',maxDown:'',maxMonthly:'',maxPrice:'',status:'',sort:(()=>{try{return localStorage.getItem('lof.sort')||'newest'}catch(e){return 'newest'}})()},map=null,CAL={mode:'week',anchor:null},sharedDetailFor='';
+let tab=initTab(),F={q:'',area:'',beds:'',baths:'',maxDown:'',maxMonthly:'',maxPrice:'',status:'',sort:(()=>{try{return localStorage.getItem('lof.sort')||'newest'}catch(e){return 'newest'}})()},map=null,CAL={mode:'week',anchor:null},sharedDetailFor='',alertOpen=false;
 
 const L10N={
   en:{
@@ -508,6 +508,166 @@ function openAdminResetModal(userId){
   });
 }
 
+const INTERESTS=['NOT_INTERESTED','SOMEWHAT','INTERESTED','VERY_INTERESTED','READY_TO_OFFER'];
+const PRICE_OPINIONS=['LOW','FAIR','HIGH'];
+function portalReady(){return !!(S.user&&S.caps&&S.caps.ready);}
+function formatInstant(iso){
+  const d=new Date(iso);
+  if(!iso||isNaN(d.getTime()))return '—';
+  try{return new Intl.DateTimeFormat(S.lang==='es'?'es-US':'en-US',{timeZone:'America/Chicago',dateStyle:'medium',timeStyle:'short'}).format(d);}catch(e){return d.toLocaleString();}
+}
+function formatCtDate(iso){
+  const d=new Date(iso);
+  if(!iso||isNaN(d.getTime()))return '—';
+  try{return new Intl.DateTimeFormat(S.lang==='es'?'es-US':'en-US',{timeZone:'America/Chicago',dateStyle:'medium'}).format(d);}catch(e){return d.toLocaleDateString();}
+}
+function formatCtTime(iso){
+  const d=new Date(iso);
+  if(!iso||isNaN(d.getTime()))return '—';
+  try{return new Intl.DateTimeFormat(S.lang==='es'?'es-US':'en-US',{timeZone:'America/Chicago',timeStyle:'short'}).format(d);}catch(e){return d.toLocaleTimeString();}
+}
+function durationText(mins){
+  if(mins==null||mins==='')return '—';
+  const n=Math.max(0,Math.round(Number(mins)));
+  if(!isFinite(n))return '—';
+  const h=Math.floor(n/60),m=n%60;
+  if(h<=0)return S.t('activity.minutes',{count:n});
+  return S.t('activity.hours',{hours:h,minutes:m});
+}
+function streetCity(street,city){
+  const clean=String(street||'').replace(/^\s*\d+[A-Za-z\-]*\s+/,'').replace(/^\s*\d+[A-Za-z\-]*\s+/,'').trim();
+  return [clean,String(city||'').trim()].filter(Boolean).join(', ');
+}
+function alertPlace(a){return esc(streetCity(a&&a.street,a&&a.city)||tr('alerts.home'));}
+function showingPlace(sh){
+  const l=S.listing(sh.listingId);
+  if(l&&S.user&&(S.isAdmin()||S.isAgent()))return title(l);
+  return esc(streetCity(sh.street,sh.city)||tr('alerts.home'));
+}
+function interestLabel(key){return tr('feedback.interest.'+key);}
+function priceLabel(key){return tr('feedback.price.'+key);}
+function readGeo(){
+  return new Promise(resolve=>{
+    if(!navigator.geolocation)return resolve(null);
+    let done=false;
+    const finish=v=>{if(done)return;done=true;resolve(v);};
+    const timer=setTimeout(()=>finish(null),9000);
+    navigator.geolocation.getCurrentPosition(
+      p=>{clearTimeout(timer);finish({lat:p.coords.latitude,lng:p.coords.longitude,accuracy:p.coords.accuracy});},
+      ()=>{clearTimeout(timer);finish(null);},
+      {enableHighAccuracy:true,timeout:8000,maximumAge:0}
+    );
+  });
+}
+function bellHtml(){
+  if(!portalReady())return '';
+  const n=(S.alerts||[]).filter(a=>!a.readAt).length;
+  return `<div class="bell-wrap"><button type="button" class="nav-pill bell-btn" data-bell="1" aria-expanded="${alertOpen?'true':'false'}" aria-label="${esc(tr('alerts.bell'))}">🔔${n?`<span class="bell-count">${n>9?'9+':n}</span>`:''}</button></div>`;
+}
+function alertSheet(){
+  if(!portalReady()||!alertOpen)return '';
+  const items=(S.alerts||[]).slice(0,30);
+  return `<section class="alert-panel" role="region" aria-label="${esc(tr('alerts.title'))}"><div class="alert-panel-head"><b>${tr('alerts.title')}</b><button type="button" class="nav-pill" data-alertclose="1" aria-label="✕">✕</button></div>
+    ${items.length?items.map(a=>`<article class="alert-item ${a.readAt?'':'is-unread'}"><div class="alert-place">${alertPlace(a)}</div><div class="alert-meta">${esc(S.statusText(a.newStatus))} · ${esc(formatInstant(a.changedAt))}</div></article>`).join(''):`<p class="alert-empty">${tr('alerts.empty')}</p>`}
+  </section>`;
+}
+function alertsDash(){
+  if(!portalReady())return '';
+  const items=(S.alerts||[]).slice(0,8);
+  return `<div class="card ops-card"><h2>🔔 ${tr('alerts.dash')}</h2>${items.length?`<ul class="ops-list">${items.map(a=>`<li><b>${alertPlace(a)}</b><span>${esc(S.statusText(a.newStatus))} · ${esc(formatInstant(a.changedAt))}</span></li>`).join('')}</ul>`:`<p>${tr('alerts.empty')}</p>`}</div>`;
+}
+function sortedShowings(){
+  const list=(S.myShowings||[]).slice();
+  const today=list.filter(s=>s.today).sort((a,b)=>String(a.preferredAt).localeCompare(String(b.preferredAt)));
+  const upcoming=list.filter(s=>!s.today&&!s.past).sort((a,b)=>String(a.preferredAt).localeCompare(String(b.preferredAt)));
+  const past=list.filter(s=>!s.today&&s.past).sort((a,b)=>String(b.preferredAt).localeCompare(String(a.preferredAt)));
+  return today.concat(upcoming,past);
+}
+function visitLine(v){
+  if(!v||!v.checkedInAt)return '';
+  const bits=[S.t('showings.checkedIn',{time:formatInstant(v.checkedInAt)})];
+  if(v.checkedOutAt)bits.push(S.t('showings.checkedOut',{time:formatInstant(v.checkedOutAt)}));
+  if(v.durationMinutes!=null)bits.push(S.t('showings.duration',{duration:durationText(v.durationMinutes)}));
+  return bits.join(' · ');
+}
+function showingsDash(){
+  if(!portalReady()||!(S.isAgent()||(S.myShowings||[]).length))return '';
+  const list=sortedShowings();
+  const body=list.map(sh=>{
+    const buttons=[];
+    if(sh.today&&!(sh.visit&&sh.visit.checkedInAt))buttons.push(`<button type="button" class="btn-card primary" data-checkin="${esc(sh.id)}">${tr('showings.checkIn')}</button>`);
+    if(sh.visit&&sh.visit.checkedInAt&&!sh.visit.checkedOutAt)buttons.push(`<button type="button" class="btn-card primary" data-checkout="${esc(sh.id)}">${tr('showings.checkOut')}</button>`);
+    if(sh.past)buttons.push(`<button type="button" class="btn-card" data-feedback="${esc(sh.id)}">${tr(sh.feedback?'showings.feedbackEdit':'showings.feedback')}</button>`);
+    const summary=sh.feedback?`<p class="ops-meta">${esc(S.t('showings.feedbackSummary',{rating:sh.feedback.rating,interest:interestLabel(sh.feedback.interest),price:priceLabel(sh.feedback.priceOpinion)}))}</p>`:'';
+    const when=esc(S.formatShowingWhen?S.formatShowingWhen(sh.preferredAt):sh.preferredAt);
+    const times=visitLine(sh.visit);
+    const future=!sh.today&&!sh.past?`<p class="ops-meta">${tr('showings.future')}</p>`:'';
+    return `<article class="ops-showing"><div class="ops-showing-head"><b>${showingPlace(sh)}</b><span>${when}</span></div>
+      ${times?`<p class="ops-meta">${esc(times)}</p>`:''}${summary}
+      ${buttons.length?`<div class="ops-actions">${buttons.join('')}</div>`:''}${future}
+      ${buttons.some(b=>b.indexOf('data-checkin')>=0||b.indexOf('data-checkout')>=0)?`<p class="ops-meta">${tr('showings.geoNote')}</p>`:''}
+    </article>`;
+  }).join('');
+  return `<div class="card ops-card"><h2>📅 ${tr('showings.mine')}</h2>${body||`<p>${tr('showings.empty')}</p>`}</div>`;
+}
+function openFeedback(sh){
+  const cur=sh.feedback||{};
+  const opt=(group,key,selected)=>`<option value="${esc(key)}" ${selected===key?'selected':''}>${esc(tr('feedback.'+group+'.'+key))}</option>`;
+  const m=modal(`<h2>${tr('feedback.title')}</h2><p>${showingPlace(sh)}</p>
+    <form id="fbF" class="feedback-form">
+      <label>${tr('feedback.rating')}<select name="rating" required><option value="">—</option>${[1,2,3,4,5].map(n=>`<option value="${n}" ${String(cur.rating)===String(n)?'selected':''}>${n}</option>`).join('')}</select></label>
+      <label>${tr('feedback.interest')}<select name="interest" required><option value="">—</option>${INTERESTS.map(k=>opt('interest',k,cur.interest)).join('')}</select></label>
+      <label>${tr('feedback.price')}<select name="priceOpinion" required><option value="">—</option>${PRICE_OPINIONS.map(k=>opt('price',k,cur.priceOpinion)).join('')}</select></label>
+      <label>${tr('feedback.condition')}<textarea name="conditionNotes" maxlength="4000">${esc(cur.conditionNotes||'')}</textarea></label>
+      <label>${tr('feedback.comments')}<textarea name="comments" maxlength="4000">${esc(cur.comments||'')}</textarea></label>
+      <button class="btn-card primary" type="submit">${tr('feedback.submit')}</button>
+    </form>`);
+  const form=m.querySelector('#fbF');
+  form.onsubmit=wrap(async()=>{
+    const v=fd(form);
+    if(!v.rating||!v.interest||!v.priceOpinion)throw new Error(tr('feedback.rating'));
+    await S.saveFeedback(sh.id,{rating:+v.rating,interest:v.interest,priceOpinion:v.priceOpinion,conditionNotes:v.conditionNotes||'',comments:v.comments||''});
+    m.remove();
+    alert(tr('showings.feedbackSaved'));
+    render();
+  });
+}
+function coordText(lat,lng){
+  if(lat==null||lng==null||lat===''||lng==='')return tr('activity.none');
+  const n=Number(lat),g=Number(lng);
+  if(!isFinite(n)||!isFinite(g))return tr('activity.none');
+  return n.toFixed(5)+', '+g.toFixed(5);
+}
+function activityHtml(j){
+  const views=j.views||{};
+  const showings=j.showings||{};
+  const events=views.events||[];
+  const feedback=j.feedback||[];
+  const visits=j.visits||[];
+  const history=j.statusHistory||[];
+  const viewRows=events.map(v=>`<tr><td>${esc(v.name||'—')}</td><td>${esc(roleLabel(v.role))}</td><td>${esc(formatInstant(v.viewedAt))}</td></tr>`).join('')||`<tr><td colspan="3">${tr('activity.none')}</td></tr>`;
+  const fbRows=feedback.map(f=>`<article class="ops-showing"><b>${esc(f.agentName||'—')}</b> · ${esc(formatInstant(f.createdAt))}<p class="ops-meta">${esc(S.t('showings.feedbackSummary',{rating:f.rating,interest:interestLabel(f.interest),price:priceLabel(f.priceOpinion)}))}</p>${f.conditionNotes?`<p>${esc(f.conditionNotes)}</p>`:''}${f.comments?`<p>${esc(f.comments)}</p>`:''}</article>`).join('')||`<p>${tr('activity.noFeedback')}</p>`;
+  const logRows=visits.map(v=>`<tr><td>${esc(v.agentName||'—')}</td><td>${esc(formatCtDate(v.checkedInAt))}</td><td>${esc(formatCtTime(v.checkedInAt))}</td><td>${v.checkedOutAt?esc(formatCtTime(v.checkedOutAt)):'—'}</td><td>${esc(durationText(v.durationMinutes))}</td><td>${esc(coordText(v.inLat,v.inLng))}</td></tr>`).join('')||`<tr><td colspan="6">${tr('activity.noLog')}</td></tr>`;
+  const histRows=history.map(h=>`<tr><td>${esc(formatInstant(h.changedAt))}</td><td>${esc(h.oldStatus?S.statusText(h.oldStatus):'—')}</td><td>${esc(S.statusText(h.newStatus))}</td></tr>`).join('')||`<tr><td colspan="3">${tr('activity.noHistory')}</td></tr>`;
+  return `<h2>${tr('activity.title')}</h2>
+    <div class="ops-stats"><div><b>${views.total||0}</b><span>${tr('activity.views')}</span></div><div><b>${views.uniqueAgents||0}</b><span>${tr('activity.uniqueAgents')}</span></div><div><b>${showings.requested||0}</b><span>${tr('activity.requested')}</span></div><div><b>${showings.approved||0}</b><span>${tr('activity.approved')}</span></div><div><b>${showings.completed||0}</b><span>${tr('activity.completed')}</span></div></div>
+    <p class="ops-meta">${tr('activity.completedNote')}</p>
+    <h3>${tr('activity.viewedBy')}</h3>${views.truncated?`<p class="ops-meta">${tr('activity.truncated')}</p>`:''}<div class="table-scroll"><table class="ops-table"><tr><th>${tr('activity.who')}</th><th>${tr('activity.role')}</th><th>${tr('activity.when')}</th></tr>${viewRows}</table></div>
+    <h3>${tr('activity.feedback')}</h3>${fbRows}
+    <h3>${tr('activity.log')}</h3><div class="table-scroll"><table class="ops-table"><tr><th>${tr('activity.agent')}</th><th>${tr('activity.date')}</th><th>${tr('activity.timeIn')}</th><th>${tr('activity.timeOut')}</th><th>${tr('activity.duration')}</th><th>${tr('activity.location')}</th></tr>${logRows}</table></div>
+    <h3>${tr('activity.history')}</h3><div class="table-scroll"><table class="ops-table"><tr><th>${tr('activity.when')}</th><th>${tr('activity.from')}</th><th>${tr('activity.to')}</th></tr>${histRows}</table></div>`;
+}
+async function openActivity(id){
+  const l=S.listing(id);
+  const m=modal(`<h2>${tr('activity.title')}</h2>${l?`<p>${title(l)}</p>`:''}<p>${tr('activity.loading')}</p>`);
+  const panel=m.querySelector('.drawer-panel');
+  try{
+    const j=await S.loadActivity(id);
+    panel.innerHTML=`<button type="button" class="close nav-pill" style="float:right">✕</button>${l?`<p>${title(l)}</p>`:''}${activityHtml(j)}`;
+  }catch(err){
+    panel.innerHTML=`<button type="button" class="close nav-pill" style="float:right">✕</button><p>${esc(err.message||tr('ops.unavailable'))}</p>`;
+  }
+}
 function header(){
   const T=[['inventory',tr('navInventory')],['guides',tr('navGuides')],['dashboard',tr('navDashboard')]];
   if(S.canSeeShowingCalendar&&S.canSeeShowingCalendar())T.push(['calendar',tr('navCalendar')]);
@@ -517,9 +677,10 @@ function header(){
   return `<header class="app-header"><div class="brand-wrap" data-tab="inventory"><img src="legacy-logo.png" alt="Legacy" class="main-logo"><div><h1 class="brand-title">Legacy - Owner Finance</h1>
    <div class="brand-sub"><span>Brokerage By: KLC Real Estate, LLC</span><img src="klc-logo.png" alt="KLC">${cloudPill}</div></div></div>
    <nav class="nav-pills">${T.map(([k,v])=>`<button data-tab="${k}" class="nav-pill ${tab===k?'active':''}">${v}</button>`).join('')}
+   ${bellHtml()}
    ${S.user?`<button id="logout" class="nav-pill">${tr('logout')} (${esc(S.user.name)})</button>`:''}
    <button data-lang="en" class="nav-pill lang-btn ${S.lang==='en'?'active':''}">EN</button><button data-lang="es" class="nav-pill lang-btn ${S.lang==='es'?'active':''}">ES</button></nav></header>
-   <div class="guide-banner"><span>${tr('newHere')} <a href="#guides" data-tab="guides">${tr('guideLink')}</a></span></div>`;
+   <div class="guide-banner"><span>${tr('newHere')} <a href="#guides" data-tab="guides">${tr('guideLink')}</a></span></div>${alertSheet()}`;
 }
 
 function guides(){
@@ -728,7 +889,7 @@ function card(l,mt){
     ${tenureHtml(l)}
     <div class="down-box"><div>${tr('down')}<b>${S.money(l.downPayment)}</b></div><div>${tr('beds')}/${tr('baths')}<b>${l.beds??'—'} · ${l.baths??'—'}</b></div><div>${tr('sqft')}<b>${l.sqft?(+l.sqft).toLocaleString():'—'}</b></div></div>
     ${todayApptHtml(l.id)}
-    <div class="card-actions"><button type="button" class="btn-card primary" data-open="${l.id}">${S.lang==='es'?'Ver Detalles':'View Details'}</button></div></div></article>`;
+    <div class="card-actions"><button type="button" class="btn-card primary" data-open="${l.id}">${S.lang==='es'?'Ver Detalles':'View Details'}</button>${S.isAdmin()&&S.caps&&S.caps.ready?`<button type="button" class="btn-card" data-activity="${esc(l.id)}">${tr('activity.button')}</button>`:''}</div></div></article>`;
 }
 
 function drawMap(){if(!window.L||!$('#inventory-map'))return;if(map){map.remove();map=null;}MARK={};
@@ -790,7 +951,7 @@ function dashboard(){if(!S.user)return auth();const u=S.user,ap=S.agentProfile(u
   const offers=D.offers.filter(o=>o.userId===u.id),docs=D.documents.filter(d=>d.userId===u.id),msgs=S.myMessages().slice().reverse();
   const contacts=ap?S.clientsOf(u):(ag?[ag]:[]),nm=id=>(D.users.find(x=>x.id===id)||{}).name||'—';
   const li=l=>`<li><a href="#" data-open="${l.id}">${title(l)}</a> ${badge(l.status)}</li>`;
-  return `${S.isPendingApproval(u)?`<div style="margin:18px 18px 0;padding:12px;border-radius:10px;background:#fef3c7;border:1px solid #d97706">⏳ ${S.lang==='es'?(u.approvalStatus==='REJECTED'?'Tu cuenta no fue aprobada. Contáctanos para más información.':'Tu cuenta está pendiente de aprobación. Mientras tanto puedes ver casas; podrás hacer ofertas y pedir citas cuando sea aprobada.'):(u.approvalStatus==='REJECTED'?'Your account was not approved. Contact us for more information.':'Your account is pending approval. You can browse homes meanwhile; offers and showings unlock once approved.')}</div>`:''}<section style="display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:16px;padding:18px">
+  return `${S.isPendingApproval(u)?`<div style="margin:18px 18px 0;padding:12px;border-radius:10px;background:#fef3c7;border:1px solid #d97706">⏳ ${S.lang==='es'?(u.approvalStatus==='REJECTED'?'Tu cuenta no fue aprobada. Contáctanos para más información.':'Tu cuenta está pendiente de aprobación. Mientras tanto puedes ver casas; podrás hacer ofertas y pedir citas cuando sea aprobada.'):(u.approvalStatus==='REJECTED'?'Your account was not approved. Contact us for more information.':'Your account is pending approval. You can browse homes meanwhile; offers and showings unlock once approved.')}</div>`:''}<section style="display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:16px;padding:18px">${alertsDash()}${showingsDash()}
   <div class="card" style="padding:16px"><h2>${tr('myProfile')}</h2><img src="${esc(u.avatarUrl||'listing-placeholder.svg')}" style="width:90px;height:90px;border-radius:50%;object-fit:cover"><input type="file" id="avatar" accept="image/*">
    <form id="profF"><input name="name" value="${esc(u.name)}"><input name="phone" value="${esc(u.phone)}">${ap?`<label>${tr('orecLicense')}<input name="licenseNumber" value="${esc(ap.licenseNumber)}"></label><label>${tr('brokerage')}<input name="brokerage" value="${esc(ap.brokerage)}"></label><p>${tr('yourInviteCode')} <b>${esc(ap.inviteCode)}</b></p>`:''}<button>${tr('save')}</button></form>
    ${ag?`<p>${tr('yourAgent')} <b>${esc(ag.name)}</b></p>`:''}<h3>${tr('changePw')}</h3><form id="pwF"><input name="cur" type="password" placeholder="${tr('currentPw')}" required><input name="pw" type="password" placeholder="${tr('newPw')}" minlength="8" required><button>${tr('updatePw')}</button></form></div>
@@ -890,7 +1051,7 @@ function admin(){if(!S.isAdmin())return `<p style="padding:18px">${tr('adminsOnl
   </table></div>
   <div class="card" style="padding:16px"><h2>${tr('listings')}</h2><div class="table-scroll"><table><tr><th>${tr('colAddress')}</th><th>${tr('colStatus')}</th><th>${tr('price')} $</th><th>${tr('down')} $</th><th>${tr('monthly')} $</th><th></th></tr>${D.listings.map(l=>`<tr data-row="${l.id}"><td>${esc(l.address)}, ${esc(l.city)}</td>
    <td><select data-status="${l.id}">${S.STATUSES.map(s=>`<option value="${s}" ${l.status===s?'selected':''}>${S.statusText(s)}</option>`).join('')}</select></td>
-   <td><input data-f="askingPrice" type="number" value="${l.askingPrice/100}" style="width:90px"></td><td><input data-f="downPayment" type="number" value="${l.downPayment/100}" style="width:80px"></td><td><input data-f="monthlyPayment" type="number" value="${l.monthlyPayment/100}" style="width:80px"></td><td class="listing-actions"><button type="button" data-save="${esc(l.id)}">${tr('save')}</button><button type="button" class="copy-link-btn" data-copylink="${esc(l.id)}">${tr('share.copyLink')}</button></td></tr>`).join('')}</table></div></div></section>`;}
+   <td><input data-f="askingPrice" type="number" value="${l.askingPrice/100}" style="width:90px"></td><td><input data-f="downPayment" type="number" value="${l.downPayment/100}" style="width:80px"></td><td><input data-f="monthlyPayment" type="number" value="${l.monthlyPayment/100}" style="width:80px"></td><td class="listing-actions"><button type="button" data-save="${esc(l.id)}">${tr('save')}</button><button type="button" class="copy-link-btn" data-copylink="${esc(l.id)}">${tr('share.copyLink')}</button>${S.caps&&S.caps.ready?`<button type="button" class="copy-link-btn" data-activity="${esc(l.id)}">${tr('activity.button')}</button>`:''}</td></tr>`).join('')}</table></div></div></section>`;}
 
 function maybeOpenSharedDetail(){
   if(!S.user||!S.data||resetQueryActive()||!shareDetailAllowed())return;
@@ -916,7 +1077,7 @@ function bind(){const r=$('#app-root');
        modal(`<h2>⚖️ ${S.lang==='es'?'Comparación de Casas':'Side-by-Side Comparison'}</h2><div style="display:grid;grid-template-columns:repeat(${it.length},1fr);gap:12px">${it.map(l=>`<div class="card" style="padding:10px"><img src="${esc(l.photoUrl||'listing-placeholder.svg')}" referrerpolicy="no-referrer" onerror="window.imgFallback&&window.imgFallback(this)" style="width:100%;height:120px;object-fit:cover;border-radius:8px"><h4 style="margin:8px 0">${title(l)}</h4>
        <div style="font-size:13px;line-height:1.8">${tr('price')}: <b>${S.money(l.askingPrice)}</b><br>${tr('down')}: <b>${S.money(l.downPayment)}</b><br>${tr('monthly')}: <b>${S.money(l.monthlyPayment)}</b><br>${l.beds??'—'} ${tr('bdShort')} · ${l.baths??'—'} ${tr('baShort')}<br>${l.sqft?(+l.sqft).toLocaleString()+' '+tr('sqftUnit'):''}${l.sqft&&l.askingPrice?'<br>$'+Math.round(l.askingPrice/100/l.sqft)+tr('perSqft'):''}</div></div>`).join('')}</div>`);return;}
    }
-   const t=e.target.closest('[data-tab],[data-lang],[data-open],[data-fav],[data-acc],[data-rej],[data-ctr],[data-reset],[data-save],[data-client],[data-register],[data-login],[data-shareclear],[data-copylink],[data-calmode],[data-calnav],[data-showacc],[data-showden],[data-approve],[data-decline],[data-inspsched],[data-inspcancel],#logout,#forgot');
+   const t=e.target.closest('[data-tab],[data-lang],[data-open],[data-fav],[data-acc],[data-rej],[data-ctr],[data-reset],[data-save],[data-client],[data-register],[data-login],[data-shareclear],[data-copylink],[data-calmode],[data-calnav],[data-showacc],[data-showden],[data-approve],[data-decline],[data-inspsched],[data-inspcancel],[data-bell],[data-alertclose],[data-feedback],[data-checkin],[data-checkout],[data-activity],#logout,#forgot');
    if(!t)return;
    e.preventDefault();
    try{
@@ -940,6 +1101,11 @@ function bind(){const r=$('#app-root');
        else if(CAL.mode==='week')dt.setDate(dt.getDate()+7*delta);
        else dt.setMonth(dt.getMonth()+delta);
        CAL.anchor=fmt(dt);return render();}
+     if(d.bell){alertOpen=!alertOpen;render();if(alertOpen)S.markAlertsRead();return;}
+     if(d.alertclose){alertOpen=false;return render();}
+     if(d.feedback){const sh=(S.myShowings||[]).find(s=>s.id===d.feedback);if(sh)openFeedback(sh);return;}
+     if(d.checkin||d.checkout){const id=d.checkin||d.checkout;const geo=await readGeo();await S.showingVisit(id,d.checkin?'in':'out',geo);alert(tr('showings.visitSaved'));return render();}
+     if(d.activity){await openActivity(d.activity);return;}
      if(d.showacc){S.respondShowing(d.showacc,'APPROVED');return render();}
      if(d.showden){if(confirm(S.lang==='es'?'¿Rechazar esta visita?':'Deny this showing?')){S.respondShowing(d.showden,'DENIED');render();}return;}
      if(d.approve){S.setApproval(d.approve,'APPROVED');return render();}if(d.decline){if(confirm(S.lang==='es'?'¿Rechazar esta cuenta?':'Decline this account?')){S.setApproval(d.decline,'REJECTED');render();}return;}if(d.inspsched){const v=($('#insp-'+d.inspsched)||{}).value;if(!v)return alert(S.lang==='es'?'Selecciona fecha y hora':'Pick a date and time');S.setInspection(d.inspsched,v);return render();}if(d.inspcancel){if(confirm(S.lang==='es'?'¿Cancelar la inspección?':'Cancel the inspection?')){S.setInspection(d.inspcancel,null);render();}return;}if(d.acc)return S.respondOffer(d.acc,'ACCEPTED');if(d.rej)return S.respondOffer(d.rej,'REJECTED');

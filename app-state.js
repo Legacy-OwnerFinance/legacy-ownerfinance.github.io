@@ -35,6 +35,9 @@ const S=window.AppState={
   SUPABASE_URL:SUPABASE_URL,
   todayApprovedShowings:[],
   approvedShowingsCalendar:[],
+  caps:{v13:false,ready:false},
+  alerts:[],
+  myShowings:[],
   listeners:[]
 };
 const uid=()=>'id'+Date.now().toString(36)+Math.random().toString(36).slice(2,8);
@@ -409,6 +412,82 @@ function applyRelationalListings(stateData,listRows,opts){
   return tenureChanged;
 }
 
+let portalTick=0;
+function sameJson(a,b){try{return JSON.stringify(a)===JSON.stringify(b);}catch(e){return false;}}
+async function refreshPortal(opts){
+  const fromPoll=!!(opts&&opts.fromPoll);
+  portalTick++;
+  if(fromPoll&&!(S.caps&&S.caps.ready)&&portalTick%4!==0)return false;
+  try{
+    let ready=!!(S.caps&&S.caps.ready);
+    let version13=!!(S.caps&&S.caps.v13);
+    if(!ready){
+      const caps=await api('portal_caps');
+      version13=!!(caps&&caps.version>=13);
+      ready=version13&&!!caps.ready;
+    }
+    if(!ready||!S.user){
+      const changed=!!(S.caps&&S.caps.ready)||(S.alerts||[]).length>0||(S.myShowings||[]).length>0;
+      S.caps={v13:version13,ready:false};
+      S.alerts=[];S.myShowings=[];
+      return changed;
+    }
+    const home=await api('portal_home');
+    if(!home||home.unavailable){
+      const changed=!!(S.caps&&S.caps.ready);
+      S.caps={v13:true,ready:false};
+      S.alerts=[];S.myShowings=[];
+      return changed;
+    }
+    const nextA=Array.isArray(home.alerts)?home.alerts:[];
+    const nextS=Array.isArray(home.showings)?home.showings:[];
+    const changed=!(S.caps&&S.caps.ready)||!sameJson(S.alerts,nextA)||!sameJson(S.myShowings,nextS);
+    S.caps={v13:true,ready:true};
+    S.alerts=nextA;
+    S.myShowings=nextS;
+    return changed;
+  }catch(e){
+    if(e&&(e.code==='bad_action'||e.status===404)){
+      const changed=!!(S.caps&&(S.caps.ready||S.caps.v13));
+      S.caps={v13:false,ready:false};
+      S.alerts=[];S.myShowings=[];
+      return changed;
+    }
+    return false;
+  }
+}
+S.refreshPortal=refreshPortal;
+S.markAlertsRead=async()=>{
+  if(!S.caps||!S.caps.ready||!S.user)return;
+  if(!(S.alerts||[]).some(a=>!a.readAt))return;
+  try{
+    const j=await api('alerts_read',{all:true});
+    if(j&&Array.isArray(j.alerts))S.alerts=j.alerts;
+    notify();
+  }catch(e){}
+};
+S.saveFeedback=async(showingId,fields)=>{
+  const j=await api('showing_feedback_save',Object.assign({showingId},fields||{}));
+  if(j&&j.unavailable)throw new Error(S.t('ops.unavailable'));
+  await refreshPortal();
+  notify();
+  return j;
+};
+S.showingVisit=async(showingId,event,geo)=>{
+  const body={showingId,event};
+  if(geo&&geo.lat!=null&&geo.lng!=null){body.lat=geo.lat;body.lng=geo.lng;body.accuracy=geo.accuracy;}
+  const j=await api('showing_visit',body);
+  if(j&&j.unavailable)throw new Error(S.t('ops.unavailable'));
+  await refreshPortal();
+  notify();
+  return j;
+};
+S.loadActivity=async listingId=>{
+  const j=await api('property_activity',{listingId});
+  if(j&&j.unavailable)throw new Error(S.t('ops.unavailable'));
+  return j;
+};
+
 S.load=async()=>{
   let base={};
   try{base=await fetch('app-data.json',{cache:'no-store'}).then(r=>r.json());}catch(e){console.warn(e);}
@@ -437,6 +516,7 @@ S.load=async()=>{
   S.data.users=(S.data.users||[]).map(u=>{const c=Object.assign({},u);delete c.passwordHash;delete c.resetCode;delete c.resetExpires;return c;});
   S.user=S._me?(S.data.users.find(u=>u.id===S._me.id)||S._me):null;
   if(S.user&&!S.data.users.some(u=>u.id===S.user.id))S.data.users.push(S.user);
+  try{await refreshPortal();}catch(e){}
   startRealtimePolling();
 };
 
@@ -474,6 +554,7 @@ async function pollSupabase(){
     const calChanged=JSON.stringify(nextCal)!==JSON.stringify(S.approvedShowingsCalendar||[]);
     if(todayChanged){S.todayApprovedShowings=nextToday;changed=true;}
     if(calChanged){S.approvedShowingsCalendar=nextCal;changed=true;}
+    try{if(await refreshPortal({fromPoll:true}))changed=true;}catch(e){}
     if(changed){
       if(S.user){S.user=S.data.users.find(u=>u.id===S.user.id)||S.user;}
       persistLocalState(S.data);
@@ -518,6 +599,7 @@ async function adoptSession(j){
   let u=S.data.users.find(x=>x.id===S._me.id);
   if(!u){u=S._me;S.data.users.push(u);}else Object.assign(u,S._me);
   setUser(u);
+  try{await refreshPortal();}catch(e){}
   return u;
 }
 S.login=async(email,pw)=>{
