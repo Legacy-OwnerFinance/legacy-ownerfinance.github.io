@@ -106,6 +106,49 @@ const L10N={
     registerTitle:'Create Account',
     roleBuyer:'Buyer (General Public)',
     roleAgent:'Licensed Agent',
+    roleInvestor:'Investor',
+    businessName:'Business name',
+    contactMethod:'Preferred method of contact',
+    contactValue:'Phone, email, or WhatsApp',
+    contactPhone:'Phone',
+    contactEmail:'Email',
+    contactWhatsApp:'WhatsApp',
+    contactText:'Text',
+    representativeName:'Name of the representative',
+    investorThanksTitle:'Thank you!',
+    investorThanks:'Thank you! Your account is being reviewed. One of our representatives will contact you via your preferred method of contact.',
+    investorNotReady:'Investor tools are not active on the server yet.',
+    navInvestorHome:'My homes',
+    navTransactions:'Transactions',
+    openMap:'Inventory map',
+    mapMine:'Only my inventory',
+    mapAll:'Everything',
+    viewOnly:'View only',
+    editHome:'Edit home',
+    inspectionDate:'Inspection date',
+    totalViews:'Total views',
+    totalFavorites:'Total favorites',
+    closedYtd:'Deals closed this year',
+    underContract:'Currently under contract',
+    viewedBy:'Viewed by',
+    favoritedBy:'Favorited by',
+    notifications:'Latest notifications',
+    feedShowing:'Showing',
+    feedOffer:'Offer received',
+    feedContract:'Under contract',
+    feedClosed:'Closed',
+    cancelShowing:'Cancel',
+    messageAgent:'Message agent',
+    messageAgentPrompt:'Message to the agent',
+    closedDeals:'Closed deals',
+    inspectionsWeek:'Inspections this week',
+    approvedShowings:'Approved showings',
+    offersReceived:'Offers received',
+    sheetsLabel:'Seller spreadsheets — one Google Sheet URL or id per line',
+    assignHome:'Assign a home',
+    unassign:'Remove',
+    investorsTitle:'Investors',
+    sheetNote:'If a home is synced from a linked spreadsheet, the next sync sets the owner from that sheet.',
     fullName:'Full name',
     phone:'Phone',
     passwordMin:'Password (8+ characters)',
@@ -180,6 +223,7 @@ const L10N={
     roleAgentShort:'Agent',
     roleClientShort:'Client',
     roleAdminShort:'Admin',
+    roleInvestorShort:'Investor',
     showingApproved:'APPROVED',
     showingDenied:'DENIED',
     showingRequested:'REQUESTED',
@@ -267,6 +311,49 @@ const L10N={
     registerTitle:'Crear Cuenta',
     roleBuyer:'Comprador (Público General)',
     roleAgent:'Agente con Licencia',
+    roleInvestor:'Inversionista',
+    businessName:'Nombre del negocio',
+    contactMethod:'Método de contacto preferido',
+    contactValue:'Teléfono, correo o WhatsApp',
+    contactPhone:'Teléfono',
+    contactEmail:'Correo',
+    contactWhatsApp:'WhatsApp',
+    contactText:'Mensaje de texto',
+    representativeName:'Nombre del representante',
+    investorThanksTitle:'¡Gracias!',
+    investorThanks:'¡Gracias! Tu cuenta está en revisión. Uno de nuestros representantes te contactará por tu método de contacto preferido.',
+    investorNotReady:'Las herramientas de inversionista aún no están activas en el servidor.',
+    navInvestorHome:'Mis casas',
+    navTransactions:'Transacciones',
+    openMap:'Mapa de inventario',
+    mapMine:'Solo mi inventario',
+    mapAll:'Todo',
+    viewOnly:'Solo lectura',
+    editHome:'Editar casa',
+    inspectionDate:'Fecha de inspección',
+    totalViews:'Vistas totales',
+    totalFavorites:'Favoritos totales',
+    closedYtd:'Tratos cerrados en el año',
+    underContract:'Actualmente bajo contrato',
+    viewedBy:'Visto por',
+    favoritedBy:'Marcado como favorito por',
+    notifications:'Avisos recientes',
+    feedShowing:'Visita',
+    feedOffer:'Oferta recibida',
+    feedContract:'Bajo contrato',
+    feedClosed:'Cerrado',
+    cancelShowing:'Cancelar',
+    messageAgent:'Enviar mensaje al agente',
+    messageAgentPrompt:'Mensaje para el agente',
+    closedDeals:'Tratos cerrados',
+    inspectionsWeek:'Inspecciones esta semana',
+    approvedShowings:'Visitas aprobadas',
+    offersReceived:'Ofertas recibidas',
+    sheetsLabel:'Hojas del vendedor — un enlace o id de Google Sheet por línea',
+    assignHome:'Asignar una casa',
+    unassign:'Quitar',
+    investorsTitle:'Inversionistas',
+    sheetNote:'Si una casa se sincroniza desde una hoja vinculada, la próxima sincronización pone al dueño según esa hoja.',
     fullName:'Nombre completo',
     phone:'Teléfono',
     passwordMin:'Contraseña (mín. 8 caracteres)',
@@ -341,6 +428,7 @@ const L10N={
     roleAgentShort:'Agente',
     roleClientShort:'Cliente',
     roleAdminShort:'Admin',
+    roleInvestorShort:'Inversionista',
     showingApproved:'APROBADA',
     showingDenied:'RECHAZADA',
     showingRequested:'SOLICITADA',
@@ -371,7 +459,21 @@ const kindLabel=k=>{
   if(u==='SHARE_HOUSE')return tr('shareHouse');
   return k||'';
 };
-const roleLabel=r=>r==='AGENT'?tr('roleAgentShort'):r==='ADMIN'?tr('roleAdminShort'):r==='BUYER'?tr('roleClientShort'):(r||'');
+const roleLabel=r=>r==='AGENT'?tr('roleAgentShort'):r==='ADMIN'?tr('roleAdminShort'):r==='INVESTOR'?tr('roleInvestorShort'):r==='BUYER'?tr('roleClientShort'):(r||'');
+function limited(){return !S.user||(S.isInvestor()&&S.isPendingApproval(S.user));}
+function toLocalInput(value){
+  if(!value)return '';
+  const s=String(value);
+  if(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(s))return s;
+  const d=new Date(s);
+  if(isNaN(d.getTime()))return '';
+  try{
+    const parts=new Intl.DateTimeFormat('en-CA',{timeZone:'America/Chicago',year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',hourCycle:'h23'}).formatToParts(d);
+    const g={};parts.forEach(p=>{if(p.type!=='literal')g[p.type]=p.value;});
+    const hour=g.hour==='24'?'00':g.hour;
+    return `${g.year}-${g.month}-${g.day}T${hour}:${g.minute}`;
+  }catch(e){return '';}
+}
 function docTypeLabel(t){
   if(t==='INSPECTION_REPORT')return tr('docInspection');
   const d=(S.TX_DOCS||[]).find(x=>x.type===t);
@@ -449,7 +551,7 @@ function shareDetailAllowed(){
   const h=(location.hash||'').replace(/^#/,'');
   return !h||h==='inventory';
 }
-const title=l=>S.user?`${esc(l.address)}, ${esc(l.city)}, ${esc(l.state||'OK')} ${esc(l.zip||'')}`:partialAddr(l);
+const title=l=>limited()?partialAddr(l):`${esc(l.address)}, ${esc(l.city)}, ${esc(l.state||'OK')} ${esc(l.zip||'')}`;
 
 function modal(html){const m=document.createElement('div');m.className='modal-backdrop';m.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.55);display:flex;align-items:center;justify-content:center;z-index:9999';
   m.style.justifyContent='flex-end';m.innerHTML=`<div class="drawer-panel"><button class="close nav-pill" style="float:right">✕</button>${html}</div>`;
@@ -669,14 +771,16 @@ async function openActivity(id){
   }
 }
 function header(){
-  const T=[['inventory',tr('navInventory')],['guides',tr('navGuides')],['dashboard',tr('navDashboard')]];
-  if(S.canSeeShowingCalendar&&S.canSeeShowingCalendar())T.push(['calendar',tr('navCalendar')]);
+  const investorHome=S.isInvestor()&&S.caps&&S.caps.investor&&!S.isPendingApproval(S.user);
+  const T=investorHome?[['dashboard',tr('navInvestorHome')],['investor-tx',tr('navTransactions')],['inventory',tr('navInventory')],['guides',tr('navGuides')]]:[['inventory',tr('navInventory')],['guides',tr('navGuides')],['dashboard',tr('navDashboard')]];
+  if(!investorHome&&S.canSeeShowingCalendar&&S.canSeeShowingCalendar())T.push(['calendar',tr('navCalendar')]);
   if(S.isAdmin())T.push(['admin',tr('navAdmin')]);
   if(!S.user)T.push(['auth',tr('navAuth')]);
   const cloudPill=`<span style="background:${S.cloudConnected?'#dcfce7':'#fef3c7'};color:${S.cloudConnected?'#166534':'#92400e'};padding:2px 8px;border-radius:999px;font-weight:700;font-size:11px">${S.cloudConnected?tr('cloudLive'):tr('cloudOffline')}</span>`;
   return `<header class="app-header"><div class="brand-wrap" data-tab="inventory"><img src="legacy-logo.png" alt="Legacy" class="main-logo"><div><h1 class="brand-title">Legacy - Owner Finance</h1>
    <div class="brand-sub"><span>Brokerage By: KLC Real Estate, LLC</span><img src="klc-logo.png" alt="KLC">${cloudPill}</div></div></div>
    <nav class="nav-pills">${T.map(([k,v])=>`<button data-tab="${k}" class="nav-pill ${tab===k?'active':''}">${v}</button>`).join('')}
+   ${investorHome?`<button type="button" class="nav-pill" data-openmap="1">${tr('openMap')}</button>`:''}
    ${bellHtml()}
    ${S.user?`<button id="logout" class="nav-pill">${tr('logout')} (${esc(S.user.name)})</button>`:''}
    <button data-lang="en" class="nav-pill lang-btn ${S.lang==='en'?'active':''}">EN</button><button data-lang="es" class="nav-pill lang-btn ${S.lang==='es'?'active':''}">ES</button></nav></header>
@@ -705,18 +809,18 @@ function guides(){
 }
 
 function filtered(){let L=S.data.listings.filter(l=>{const q=F.q.toLowerCase();
-  const searchable=S.user?(l.address+' '+(l.publicTitle||'')+' '+l.city+' '+l.zip):(partialAddr(l)+' '+l.city);
+  const searchable=!limited()?(l.address+' '+(l.publicTitle||'')+' '+l.city+' '+l.zip):(partialAddr(l)+' '+l.city);
   if(q&&!searchable.toLowerCase().includes(q))return false;
   if(F.area&&!(l.areas||[]).includes(F.area))return false;
   if(CHIP==='AVAILABLE'&&l.status!=='AVAILABLE')return false;if(CHIP==='COMING_SOON'&&l.status!=='COMING_SOON')return false;
-  if(S.user){
+  if(!limited()){
     if(CHIP==='LOW_DOWN'&&(l.downPayment||1e9)>1000000)return false;if(CHIP==='LOW_MONTHLY'&&(l.monthlyPayment||1e9)>150000)return false;if(CHIP==='BEDS_3'&&(l.beds||0)<3)return false;
     if(F.beds&&(l.beds||0)<+F.beds)return false;if(F.baths&&(l.baths||0)<+F.baths)return false;
     if(F.maxDown&&l.downPayment>F.maxDown*100)return false;if(F.maxMonthly&&l.monthlyPayment>F.maxMonthly*100)return false;
     if(F.maxPrice&&l.askingPrice>F.maxPrice*100)return false;if(F.status&&l.status!==F.status)return false;
   }
   return true;});
-  const PRIV=['priceAsc','priceDesc','downAsc','monthlyAsc','bedsDesc'];let so=F.sort||'newest';if(!S.user&&PRIV.includes(so))so='newest';
+  const PRIV=['priceAsc','priceDesc','downAsc','monthlyAsc','bedsDesc'];let so=F.sort||'newest';if(limited()&&PRIV.includes(so))so='newest';
   const ts=l=>{const t=Date.parse(l.createdAt||l.created_at||l.listedAt||l.updatedAt||l.updated_at||'');return isNaN(t)?0:t;};
   const idx=new Map(S.data.listings.map((l,i)=>[l.id,i]));
   if(so==='newest')return L.sort((a,b)=>(ts(b)-ts(a))||(idx.get(b.id)-idx.get(a.id)));
@@ -831,7 +935,7 @@ function inventory(){
   const downs=all.map(l=>l.downPayment).filter(x=>x>0),minDown=downs.length?Math.min(...downs):0;
   const dv=F.maxDown||40000,mv=F.maxMonthly||3000;
   const chips=[['ALL',(es?'Todas':'All Active Homes')+` (${all.length})`],['AVAILABLE',`✅ ${es?'Disponibles':'Available Only'} (${nAv})`]]
-    .concat(S.user?[['LOW_DOWN',`🔥 ${es?'Enganche':'Down'} ≤ $10,000`],['LOW_MONTHLY',`💳 ${es?'Mensualidad':'Monthly'} ≤ $1,500`],['BEDS_3',`🛏️ 3+ ${es?'Recámaras':'Bedrooms'}`]]:[])
+    .concat(!limited()?[['LOW_DOWN',`🔥 ${es?'Enganche':'Down'} ≤ $10,000`],['LOW_MONTHLY',`💳 ${es?'Mensualidad':'Monthly'} ≤ $1,500`],['BEDS_3',`🛏️ 3+ ${es?'Recámaras':'Bedrooms'}`]]:[])
     .concat([['COMING_SOON',`⏳ ${es?'Próximamente':'Coming Soon'} (${nCs})`]]);
   const guestNotice=!S.user?`<div class="card" style="padding:12px 16px;margin-bottom:14px;background:linear-gradient(135deg,#1e293b,#0f172a);color:#fff;display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:10px">
     <div style="max-width:560px"><div style="font-weight:700;color:#f8d57e;margin-bottom:3px">🔒 ${tr('guestBannerTitle')}</div><div style="font-size:12.5px;color:#e2e8f0">${tr('guestBannerBody')}</div></div>
@@ -840,10 +944,10 @@ function inventory(){
     <p>${es?'Casas con financiamiento del dueño en Oklahoma City, Del City, Midwest City, Yukon y alrededores.':'Owner-financed homes across Oklahoma City, Del City, Midwest City, Yukon, and surrounding communities.'}</p></div>
     <div class="hero-stats"><div class="stat-box"><div class="stat-num">${all.length}</div><div class="stat-lbl">${es?'Casas Activas':'Active Homes'}</div></div>
     <div class="stat-box"><div class="stat-num">${nAv}</div><div class="stat-lbl">${es?'Disponibles':'Available Now'}</div></div>
-    ${S.user&&minDown?`<div class="stat-box"><div class="stat-num">$${(minDown/100000).toFixed(1)}k+</div><div class="stat-lbl">${es?'Enganche Mín':'Min Down'}</div></div>`:''}</div></div></section>
+    ${!limited()&&minDown?`<div class="stat-box"><div class="stat-num">$${(minDown/100000).toFixed(1)}k+</div><div class="stat-lbl">${es?'Enganche Mín':'Min Down'}</div></div>`:''}</div></div></section>
   <form id="filters" class="interactive-controls" onsubmit="return false"><div class="filter-row">
-   <div class="search-box"><input name="q" placeholder="${S.user?tr('searchPlaceholder'):tr('searchPlaceholderGuest')}" value="${esc(F.q)}"></div>${(()=>{const o=[['newest',tr('sortNewest')],['cityAz',tr('sortCityAz')]].concat(S.user?[['priceAsc',tr('sortPriceAscL')],['priceDesc',tr('sortPriceDescL')],['downAsc',tr('sortDownAscL')],['monthlyAsc',tr('sortMonthlyAscL')]]:[]);const cur=o.some(x=>x[0]===F.sort)?F.sort:'newest';return `<select name="sort" class="filter-select sort-select" aria-label="${tr('sortBy')}" title="${tr('sortBy')}">${o.map(([v,t])=>`<option value="${v}" ${cur===v?'selected':''}>${esc(tr('sortBy'))}: ${esc(t)}</option>`).join('')}</select>`})()}
-   ${S.user?`<div class="slider-group">${tr('maxDown').replace(' $','')}: <b>${dv>=40000?(es?'Cualquiera':'Any'):'$'+(+dv).toLocaleString()}</b><input type="range" name="maxDownR" min="3000" max="40000" step="500" value="${dv}"></div>
+   <div class="search-box"><input name="q" placeholder="${!limited()?tr('searchPlaceholder'):tr('searchPlaceholderGuest')}" value="${esc(F.q)}"></div>${(()=>{const o=[['newest',tr('sortNewest')],['cityAz',tr('sortCityAz')]].concat(!limited()?[['priceAsc',tr('sortPriceAscL')],['priceDesc',tr('sortPriceDescL')],['downAsc',tr('sortDownAscL')],['monthlyAsc',tr('sortMonthlyAscL')]]:[]);const cur=o.some(x=>x[0]===F.sort)?F.sort:'newest';return `<select name="sort" class="filter-select sort-select" aria-label="${tr('sortBy')}" title="${tr('sortBy')}">${o.map(([v,t])=>`<option value="${v}" ${cur===v?'selected':''}>${esc(tr('sortBy'))}: ${esc(t)}</option>`).join('')}</select>`})()}
+   ${!limited()?`<div class="slider-group">${tr('maxDown').replace(' $','')}: <b>${dv>=40000?(es?'Cualquiera':'Any'):'$'+(+dv).toLocaleString()}</b><input type="range" name="maxDownR" min="3000" max="40000" step="500" value="${dv}"></div>
    <div class="slider-group">${tr('maxMonthly').replace(' $','')}: <b>${mv>=3000?(es?'Cualquiera':'Any'):'$'+(+mv).toLocaleString()}</b><input type="range" name="maxMonthlyR" min="800" max="3000" step="50" value="${mv}"></div>
    ${sel('beds',[1,2,3,4,5].map(n=>[n,n+tr('bedsPlus')]),tr('beds'))}${sel('status',S.STATUSES.map(s=>[s,S.statusText(s)]),tr('status'))}`:''}</div>
    <div class="quick-chips">${chips.map(([k,v])=>`<button type="button" class="chip ${CHIP===k?'active':''}" data-chip="${k}">${v}</button>`).join('')}</div></form>
@@ -875,7 +979,7 @@ function card(l,mt){
   const ph=(l.photoUrls&&l.photoUrls.length)?l.photoUrls:[l.photoUrl||'listing-placeholder.svg'],i=(PIDX[l.id]||0)%ph.length,multi=ph.length>1;
   const media=badgeHtml=>`<div class="card-media">${badgeHtml}<img src="${esc(ph[i])}" data-img="${l.id}" referrerpolicy="no-referrer" loading="lazy" onerror="window.imgFallback&&window.imgFallback(this)" data-open="${l.id}" style="cursor:pointer">
     ${multi?`<button type="button" class="carousel-btn prev" data-prev="${l.id}">‹</button><button type="button" class="carousel-btn next" data-next="${l.id}">›</button>`:''}<span class="photo-counter" data-cnt="${l.id}">📷 ${i+1} / ${ph.length}</span>`;
-  if(!S.user){
+  if(limited()){
     return `<article class="prop-card" data-card="${l.id}">${media(`<span class="badge-top-left" style="background:#0f172a">🔒 ${S.lang==='es'?'Vista Previa':'Guest Preview'}</span>`)}</div>
       <div class="card-body"><p class="addr-line">📍 ${partialAddr(l)}</p><div style="font-size:12px;color:var(--muted);background:var(--surface-2);border:1px dashed var(--border);padding:8px 10px;border-radius:9px">🔒 ${tr('guestCardPrompt')}</div>
       ${todayApptHtml(l.id)}
@@ -894,9 +998,9 @@ function card(l,mt){
 
 function drawMap(){if(!window.L||!$('#inventory-map'))return;if(map){map.remove();map=null;}MARK={};
   map=L.map('inventory-map').setView([35.47,-97.52],10);L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{attribution:'© OpenStreetMap'}).addTo(map);
-  const pts=[];filtered().forEach(l=>{const a=l.approxLocation||{};const lat=S.user?l.latitude:a.lat,lng=S.user?l.longitude:a.lng;if(lat==null||lng==null)return;
+  const pts=[];filtered().forEach(l=>{const a=l.approxLocation||{};const lat=!limited()?l.latitude:a.lat,lng=!limited()?l.longitude:a.lng;if(lat==null||lng==null)return;
    pts.push([lat,lng]);
-   const popupHtml=S.user
+   const popupHtml=!limited()
      ?`<b>${title(l)}</b><br>${S.money(l.askingPrice)} · ${tr('down')} ${S.money(l.downPayment)} · ${S.money(l.monthlyPayment)}${tr('perMo')}<br><a href="#" data-open="${l.id}">${tr('viewDetails')}</a>`
      :`<b>📍 ${partialAddr(l)}</b><br><a href="#" data-open="${l.id}">${tr('viewPhotos')}</a> · <a href="#auth" data-register="1">${tr('loginPromptLink')}</a>`;
    const m=L.marker([lat,lng]).addTo(map).bindPopup(popupHtml);MARK[l.id]=m;
@@ -905,8 +1009,9 @@ function drawMap(){if(!window.L||!$('#inventory-map'))return;if(map){map.remove(
   document.querySelectorAll('[data-card]').forEach(c=>{c.onmouseenter=()=>{const m=MARK[c.dataset.card];if(m)m.openPopup();};});
   setTimeout(()=>map&&map.invalidateSize(),150);}
 
-function openListing(id){const l=S.listing(id);if(!l)return;S.recordView(id);const ph=(l.photoUrls&&l.photoUrls.length?l.photoUrls:[l.photoUrl||'listing-placeholder.svg']);
-  if(!S.user){
+function openListing(id){const l=S.listing(id);if(!l)return;if(!(S.isInvestor()&&S.ownsListing(l)))S.recordView(id);const ph=(l.photoUrls&&l.photoUrls.length?l.photoUrls:[l.photoUrl||'listing-placeholder.svg']);
+  if(S.isInvestor()&&S.caps&&S.caps.investor&&!S.isPendingApproval(S.user))return S.ownsListing(l)?openOwnEditor(l):openInvestorReadonly(l);
+  if(limited()){
     const m=modal(`<h2>📍 ${partialAddr(l)}</h2>
       <div class="gallery" style="display:flex;gap:8px;overflow-x:auto;margin:12px 0;padding-bottom:6px">${ph.map(p=>`<img src="${esc(p)}" referrerpolicy="no-referrer" loading="lazy" onerror="window.imgFallback&&window.imgFallback(this)" style="height:220px;border-radius:8px;object-fit:cover">`).join('')}</div>
       <div style="background:#f8fafc;border:2px solid #d4af37;border-radius:12px;padding:16px;margin-top:12px;text-align:center">
@@ -940,12 +1045,141 @@ function openListing(id){const l=S.listing(id);if(!l)return;S.recordView(id);con
 function auth(){return `<section style="display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:18px;padding:18px">
  <form id="loginF" class="card" style="padding:16px"><h2>${tr('loginTitle')}</h2><input name="email" type="email" placeholder="${tr('email')}" required><input name="password" type="password" placeholder="${tr('password')}" required><button>${tr('loginTitle')}</button>
  <p style="margin-top:10px"><a href="#" id="forgot" style="font-weight:600">${tr('forgotPw')}</a></p></form>
- <form id="regF" class="card" style="padding:16px"><h2>${tr('registerTitle')}</h2><select name="role" id="roleSel"><option value="BUYER">${tr('roleBuyer')}</option><option value="AGENT">${tr('roleAgent')}</option></select>
+ <form id="regF" class="card" style="padding:16px"><h2>${tr('registerTitle')}</h2><select name="role" id="roleSel"><option value="BUYER">${tr('roleBuyer')}</option><option value="AGENT">${tr('roleAgent')}</option>${S.caps&&S.caps.investor?`<option value="INVESTOR">${tr('roleInvestor')}</option>`:''}</select>
  <input name="name" placeholder="${tr('fullName')}" required><input name="email" type="email" placeholder="${tr('email')}" required><input name="phone" placeholder="${tr('phone')}"><input name="password" type="password" placeholder="${tr('passwordMin')}" minlength="8" required>
  <div id="buyerFields"><input name="inviteCode" id="inv" placeholder="${tr('inviteCode')}"><label><input type="checkbox" id="noAgent"> ${tr('noAgentYet')}</label></div>
- <div id="agentFields" style="display:none"><input name="licenseNumber" placeholder="${tr('orecLicense')}"><input name="brokerage" placeholder="${tr('brokerage')}"></div><button>${tr('createAccount')}</button></form></section>`;}
+ <div id="agentFields" style="display:none"><input name="licenseNumber" placeholder="${tr('orecLicense')}"><input name="brokerage" placeholder="${tr('brokerage')}"></div>
+ <div id="investorFields" style="display:none"><input name="businessName" placeholder="${tr('businessName')}"><select name="contactMethod"><option value="">${tr('contactMethod')}</option><option value="PHONE">${tr('contactPhone')}</option><option value="EMAIL">${tr('contactEmail')}</option><option value="WHATSAPP">${tr('contactWhatsApp')}</option><option value="TEXT">${tr('contactText')}</option></select><input name="contactValue" placeholder="${tr('contactValue')}"><input name="representativeName" placeholder="${tr('representativeName')}"></div>
+ <button>${tr('createAccount')}</button></form></section>`;}
 
-function dashboard(){if(!S.user)return auth();const u=S.user,ap=S.agentProfile(u),ag=S.agentFor(u),D=S.data;
+function investorThanks(){const p=S.user&&S.user.investorProfile||{};return `<section class="inv-banner" id="investor-thanks"><h2>${tr('investorThanksTitle')}</h2><p>${tr('investorThanks')}</p>${p.contactMethod?`<p class="ops-meta">${esc(p.businessName||'')} · ${esc(p.representativeName||'')} · ${esc(p.contactMethod)}: ${esc(p.contactValue||'')}</p>`:''}</section>`;}
+function investorGate(){
+  if(!S.user)return auth();
+  if(!S.isInvestor())return `<p style="padding:18px">${tr('adminsOnly')}</p>`;
+  if(!(S.caps&&S.caps.investor))return `<section class="inv-banner"><h2>${tr('roleInvestor')}</h2><p>${tr('investorNotReady')}</p></section>`;
+  if(S.isPendingApproval(S.user))return investorThanks();
+  return '';
+}
+function investorDash(){return investorGate()||investorHomeHtml();}
+function feedKind(k){return tr({SHOWING:'feedShowing',OFFER:'feedOffer',CONTRACT:'feedContract',CLOSED:'feedClosed'}[k]||'notifications');}
+function investorHomeHtml(){
+  const home=S.investorHome||{homes:[],totals:{},feed:[]};
+  const t=home.totals||{};
+  const tile=(key,n,label)=>`<button type="button" class="inv-tile" data-metric="${key}"><b>${n||0}</b><span>${label}</span></button>`;
+  const rows=(home.homes||[]).map(h=>`<tr><td><button type="button" class="btn-card" data-editown="${esc(h.id)}">${esc(h.address)}, ${esc(h.city)}</button></td><td>${esc(S.statusText?S.statusText(h.status):h.status)}</td><td><button type="button" class="btn-card" data-views="${esc(h.id)}">${h.views||0}</button></td><td><button type="button" class="btn-card" data-favs="${esc(h.id)}">${h.favorites||0}</button></td></tr>`).join('');
+  const feed=(home.feed||[]).map(it=>{const detail=it.kind==='SHOWING'&&it.detail&&S.formatShowingWhen?S.formatShowingWhen(it.detail):(it.detail&&it.detail!==it.status?it.detail:'');return `<article class="ops-showing"><div class="ops-showing-head"><b>${esc(feedKind(it.kind))}</b><span>${esc(formatInstant(it.at)||'')}</span></div><div>${esc(it.address||'')}${it.city?', '+esc(it.city):''}</div><p class="ops-meta">${esc(it.status||'')} ${esc(detail||'')}</p></article>`;}).join('');
+  const prof=S.user.investorProfile||{};
+  return `<section id="investor-home" style="padding:18px;display:grid;gap:16px">
+    <div class="card" style="padding:16px"><h2>${tr('navInvestorHome')}</h2><p class="ops-meta">${esc(prof.businessName||S.user.name||'')} · ${esc(prof.representativeName||'')}</p>
+    <div class="inv-tiles">${tile('views',t.views,tr('totalViews'))}${tile('favorites',t.favorites,tr('totalFavorites'))}${tile('closed',t.closedYtd,tr('closedYtd'))}${tile('contract',t.underContract,tr('underContract'))}</div>
+    <div class="table-scroll"><table><tr><th>${tr('colAddress')}</th><th>${tr('colStatus')}</th><th>${tr('totalViews')}</th><th>${tr('totalFavorites')}</th></tr>${rows||`<tr><td colspan="4">${tr('noneYet')}</td></tr>`}</table></div></div>
+    <div class="card ops-card"><h2>${tr('notifications')}</h2>${feed||`<p>${tr('noneYet')}</p>`}</div>
+    <div class="card" style="padding:16px"><h3>${tr('changePw')}</h3><form id="pwF"><input name="cur" type="password" placeholder="${tr('currentPw')}" required><input name="pw" type="password" placeholder="${tr('newPw')}" minlength="8" required><button>${tr('updatePw')}</button></form></div>
+  </section>`;
+}
+function openMetric(kind){
+  const home=S.investorHome||{};
+  const rows=kind==='views'?(home.homes||[]).filter(h=>h.views>0):kind==='favorites'?(home.homes||[]).filter(h=>h.favorites>0):kind==='closed'?(home.closedYtd||[]):(home.underContract||[]);
+  const label=tr(kind==='views'?'totalViews':kind==='favorites'?'totalFavorites':kind==='closed'?'closedYtd':'underContract');
+  const m=modal(`<h2>${label}</h2><ul class="ops-list">${rows.map(r=>`<li><button type="button" class="btn-card" data-jump="${esc(r.id)}">${esc(r.address)}, ${esc(r.city)}</button>${r.views!=null?`<span>${r.views}</span>`:''}</li>`).join('')||`<li>${tr('noneYet')}</li>`}</ul>`);
+  m.querySelectorAll('[data-jump]').forEach(b=>b.onclick=()=>{m.remove();openListing(b.dataset.jump);});
+}
+function openPeople(id,kind){
+  const h=((S.investorHome&&S.investorHome.homes)||[]).find(x=>x.id===id);if(!h)return;
+  const list=kind==='favs'?h.favoriters||[]:h.viewers||[];
+  modal(`<h2>${esc(h.address)}</h2><p>${kind==='favs'?tr('favoritedBy'):tr('viewedBy')}</p><ul class="ops-list">${list.map(v=>`<li><b>${esc(v.name||'—')}</b><span>${esc(v.role||'')} ${v.count!=null?'· '+v.count:''}</span></li>`).join('')||`<li>${tr('noneYet')}</li>`}</ul>`);
+}
+function txShowingActs(sh){
+  const st=String(sh.status||'REQUESTED').toUpperCase();
+  if(st==='REQUESTED')return `<button type="button" data-showacc="${esc(sh.id)}" style="background:#16a34a;color:#fff">${S.lang==='es'?'Aprobar':'Approve'}</button> <button type="button" data-showden="${esc(sh.id)}" style="background:#dc2626;color:#fff">${S.lang==='es'?'Rechazar':'Deny'}</button>`;
+  if(st==='APPROVED')return `<button type="button" data-showcan="${esc(sh.id)}">${tr('cancelShowing')}</button> <button type="button" data-showmsg="${esc(sh.id)}">${tr('messageAgent')}</button>`;
+  return '—';
+}
+function investorTxHtml(){
+  const tx=S.investorTx||{offers:[],approvedShowings:[],underContract:[],inspectionsThisWeek:[],closed:[]};
+  const line=(r,extra)=>`<tr><td>${esc(r.address||'')}${r.city?', '+esc(r.city):''}</td><td>${extra}</td></tr>`;
+  const offers=(tx.offers||[]).map(o=>line(o,`${esc(o.buyerName||'—')} · ${S.money(o.offerPrice)} ${offerBadge(o.status)}`)).join('');
+  const shows=(tx.approvedShowings||[]).map(sh=>`<tr><td>${esc(sh.address||'')}${sh.city?', '+esc(sh.city):''}</td><td>${esc(S.formatShowingWhen?S.formatShowingWhen(sh.preferredAt):sh.preferredAt)}</td><td>${esc(sh.requester||'—')}</td><td>${txShowingActs(sh)}</td></tr>`).join('');
+  const req=(tx.showings||[]).filter(sh=>sh.status==='REQUESTED').map(sh=>`<tr><td>${esc(sh.address||'')}</td><td>${esc(S.formatShowingWhen?S.formatShowingWhen(sh.preferredAt):sh.preferredAt)}</td><td>${esc(sh.requester||'—')}</td><td>${txShowingActs(sh)}</td></tr>`).join('');
+  const under=(tx.underContract||[]).map(r=>line(r,esc(S.statusText(r.status)))).join('');
+  const insp=(tx.inspectionsThisWeek||[]).map(r=>line(r,esc(formatInstant(r.inspectionAt)||r.inspectionAt||''))).join('');
+  return `<section id="investor-tx" style="padding:18px;display:grid;gap:16px">
+    <div class="card" style="padding:16px"><h2>${tr('offersReceived')}</h2><table><tr><th>${tr('colProperty')}</th><th>${tr('colOffer')}</th></tr>${offers||`<tr><td colspan="2">${tr('noneYet')}</td></tr>`}</table></div>
+    <div class="card" style="padding:16px"><h2>${S.lang==='es'?'Solicitudes de visita':'Showing requests'}</h2><table><tr><th>${tr('colProperty')}</th><th>${S.lang==='es'?'Fecha/hora':'Date/time'}</th><th>${S.lang==='es'?'Agente':'Agent'}</th><th>${tr('colActions')}</th></tr>${req||`<tr><td colspan="4">${tr('noneYet')}</td></tr>`}</table></div>
+    <div class="card" style="padding:16px"><h2>${tr('approvedShowings')}</h2><table><tr><th>${tr('colProperty')}</th><th>${S.lang==='es'?'Fecha/hora':'Date/time'}</th><th>${S.lang==='es'?'Agente':'Agent'}</th><th>${tr('colActions')}</th></tr>${shows||`<tr><td colspan="4">${tr('noneYet')}</td></tr>`}</table></div>
+    <div class="card" style="padding:16px"><h2>${tr('underContract')}</h2><table>${under||`<tr><td>${tr('noneYet')}</td></tr>`}</table></div>
+    <div class="card" style="padding:16px"><h2>${tr('inspectionsWeek')}</h2><table>${insp||`<tr><td>${tr('noneYet')}</td></tr>`}</table><p><button type="button" class="btn-card primary" data-closed="1">${tr('closedDeals')}</button></p></div>
+  </section>`;
+}
+function openClosedDeals(){
+  const closed=(S.investorTx&&S.investorTx.closed)||[];
+  const body=closed.map(c=>`<article class="ops-showing"><b>${esc(c.address)}, ${esc(c.city)}</b><p class="ops-meta">${esc(S.statusText(c.status))} ${c.soldAt?esc(formatInstant(c.soldAt)):''}</p><ul>${(c.documents||[]).map(d=>`<li><a href="${esc(d.dataUrl)}" target="_blank" rel="noopener">${esc(d.name||tr('documents'))}</a> <i>${esc(d.docType||'')}</i></li>`).join('')||`<li>${tr('noDocs')}</li>`}</ul></article>`).join('');
+  modal(`<h2>${tr('closedDeals')}</h2>${body||`<p>${tr('noneYet')}</p>`}`);
+}
+function investorTx(){return investorGate()||investorTxHtml();}
+let MAPSCOPE='mine';
+function investorMap(){
+  const blocked=investorGate();if(blocked)return blocked;
+  return `<section class="inv-map-page" id="investor-map-page"><div class="inv-tiles" style="grid-template-columns:auto auto 1fr"><button type="button" class="btn-card ${MAPSCOPE==='mine'?'primary':''}" data-mapscope="mine">${tr('mapMine')}</button><button type="button" class="btn-card ${MAPSCOPE==='all'?'primary':''}" data-mapscope="all">${tr('mapAll')}</button><span class="ops-meta">${tr('viewOnly')}</span></div><div id="investor-map"></div></section>`;
+}
+function drawInvestorMap(){
+  const el=$('#investor-map');if(!window.L||!el)return;if(map){try{map.remove();}catch(e){}map=null;}
+  map=L.map(el).setView([35.47,-97.52],10);L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{attribution:'© OpenStreetMap'}).addTo(map);
+  const rows=(S.data.listings||[]).filter(l=>MAPSCOPE==='all'||S.ownsListing(l));
+  const pts=[];
+  rows.forEach(l=>{const a=l.approxLocation||{};const lat=l.latitude!=null?+l.latitude:(a.lat!=null?+a.lat:null),lng=l.longitude!=null?+l.longitude:(a.lng!=null?+a.lng:null);if(lat==null||lng==null)return;pts.push([lat,lng]);
+    const own=S.ownsListing(l);
+    const popup=own?`<b>${esc(l.address)}</b><br><a href="#" data-editown="${esc(l.id)}">${tr('editHome')}</a>`:`<b>${esc(l.address)}</b><br>${tr('viewOnly')}<br><a href="#" data-open="${esc(l.id)}">${tr('viewDetails')}</a>`;
+    L.circleMarker([lat,lng],{radius:8,color:own?'#c9a227':'#0b1f3a',fillColor:own?'#f8d57e':'#334155',fillOpacity:.95,weight:2}).addTo(map).bindPopup(popup);
+  });
+  if(pts.length)map.fitBounds(pts,{padding:[30,30],animate:false});
+  setTimeout(()=>map&&map.invalidateSize(),180);
+}
+function openOwnEditor(l){
+  const dollars=v=>v==null||v===''?'':String(Math.round(Number(v)/100));
+  const m=modal(`<h2>${tr('editHome')}</h2><p>${esc(l.address||'')}</p><form id="invEdit" class="feedback-form">
+    <label>${tr('colAddress')}<input name="address" value="${esc(l.address||'')}" required></label>
+    <label>${tr('city')}<input name="city" value="${esc(l.city||'')}"></label>
+    <label>${tr('status')}<select name="status">${S.STATUSES.map(s=>`<option value="${s}" ${l.status===s?'selected':''}>${esc(S.statusText(s))}</option>`).join('')}</select></label>
+    <label>${tr('price')} $<input name="askingPrice" type="number" min="0" step="1" value="${dollars(l.askingPrice)}"></label>
+    <label>${tr('down')} $<input name="downPayment" type="number" min="0" step="1" value="${dollars(l.downPayment)}"></label>
+    <label>${tr('monthly')} $<input name="monthlyPayment" type="number" min="0" step="1" value="${dollars(l.monthlyPayment)}"></label>
+    <label>${tr('beds')}<input name="beds" type="number" min="0" step="1" value="${l.beds??''}"></label>
+    <label>${tr('baths')}<input name="baths" type="number" min="0" step="0.5" value="${l.baths??''}"></label>
+    <label>${tr('sqft')}<input name="sqft" type="number" min="0" step="1" value="${l.sqft??''}"></label>
+    <label>${tr('notes')}<textarea name="description">${esc(l.description||'')}</textarea></label>
+    <label>${tr('inspectionDate')}<input name="inspectionAt" type="datetime-local" value="${esc(toLocalInput(l.inspectionAt))}"></label>
+    <button class="btn-card primary">${tr('save')}</button></form>`);
+  const form=m.querySelector('#invEdit');
+  form.onsubmit=wrap(async()=>{
+    const v=fd(form);
+    await S.saveOwnListing(l.id,{address:v.address,city:v.city,status:v.status,description:v.description,askingPrice:Math.round(Number(v.askingPrice||0)*100),downPayment:Math.round(Number(v.downPayment||0)*100),monthlyPayment:Math.round(Number(v.monthlyPayment||0)*100),beds:v.beds===''?null:Number(v.beds),baths:v.baths===''?null:Number(v.baths),sqft:v.sqft===''?null:Number(v.sqft),inspectionAt:v.inspectionAt||''});
+    alert(tr('savedAlert'));m.remove();render();
+  });
+}
+function openInvestorReadonly(l){
+  modal(`<h2>${title(l)}</h2><p class="ops-meta">${tr('viewOnly')}</p>${badge(l.status)}${tenureHtml(l)}
+   <p>${tr('price')} <b>${S.money(l.askingPrice)}</b> · ${tr('down')} <b>${S.money(l.downPayment)}</b> · ${tr('monthly')} <b>${S.money(l.monthlyPayment)}</b></p>
+   <p>${l.beds??'—'} ${tr('bdShort')} · ${l.baths??'—'} ${tr('baShort')} · ${l.sqft?l.sqft+' '+tr('sqftUnit'):''}</p>
+   <p>${esc(l.description||'')}</p>`);
+}
+function investorAdminCard(){
+  if(!(S.caps&&S.caps.investor))return '';
+  const pack=S.investorAdmin||{investors:[],catalog:[]};
+  if(!S.investorAdmin)return `<div class="card" style="padding:16px"><h2>${tr('investorsTitle')}</h2><p>${tr('activity.loading')}</p></div>`;
+  const blocks=(pack.investors||[]).map(inv=>{
+    const sheets=(inv.sheets||[]).map(s=>s.url||s.spreadsheetId).join('\n');
+    const owned=(inv.listings||[]).map(l=>`<li>${esc(l.address)}, ${esc(l.city)} <button type="button" data-unassign="${esc(inv.userId)}|${esc(l.id)}">${tr('unassign')}</button></li>`).join('');
+    const options=(pack.catalog||[]).filter(l=>l.investorId!==inv.userId).map(l=>`<option value="${esc(l.id)}">${esc(l.address)}, ${esc(l.city)}</option>`).join('');
+    return `<article class="ops-showing"><b>${esc(inv.businessName||inv.name)}</b> · ${esc(inv.approvalStatus||'')} · ${esc(inv.email||'')}<p class="ops-meta">${esc(inv.representativeName||'')} · ${esc(inv.contactMethod||'')}: ${esc(inv.contactValue||'')}</p>
+      <form data-sheets="${esc(inv.userId)}"><label>${tr('sheetsLabel')}<textarea name="sheets" rows="3">${esc(sheets)}</textarea></label><button class="btn-card primary">${tr('save')}</button></form>
+      <p class="ops-meta">${tr('sheetNote')}</p>
+      <form data-assign="${esc(inv.userId)}"><label>${tr('assignHome')}<select name="listingId"><option value="">—</option>${options}</select></label><button class="btn-card">${tr('assignHome')}</button></form>
+      <ul>${owned||`<li>${tr('noneYet')}</li>`}</ul></article>`;
+  }).join('');
+  return `<div class="card" id="investor-admin" style="padding:16px"><h2>${tr('investorsTitle')}</h2>${blocks||`<p>${tr('noneYet')}</p>`}</div>`;
+}
+function dashboard(){if(!S.user)return auth();if(S.isInvestor())return investorDash();const u=S.user,ap=S.agentProfile(u),ag=S.agentFor(u),D=S.data;
   const favs=D.favorites.filter(f=>f.userId===u.id).map(f=>S.listing(f.listingId)).filter(Boolean);
   const views=D.propertyViews.filter(v=>v.userId===u.id).slice(-10).reverse().map(v=>S.listing(v.listingId)).filter(Boolean);
   const offers=D.offers.filter(o=>o.userId===u.id),docs=D.documents.filter(d=>d.userId===u.id),msgs=S.myMessages().slice().reverse();
@@ -1032,8 +1266,8 @@ function calendarView(){
 }
 
 function admin(){if(!S.isAdmin())return `<p style="padding:18px">${tr('adminsOnly')}</p>`;const D=S.data;
-  return `<section style="padding:18px;display:grid;gap:16px">
-  ${(()=>{const pend=D.users.filter(u=>u.approvalStatus==='PENDING');return `<div class="card" style="padding:16px;border:2px solid #d97706"><h2>⏳ ${S.lang==='es'?'Cuentas Pendientes de Aprobación':'Accounts Pending Approval'} (${pend.length})</h2><table><tr><th>${tr('colName')}</th><th>${tr('email')}</th><th>${tr('colRole')}</th><th>${S.lang==='es'?'Licencia / Correduría':'License / Brokerage'}</th><th>${S.lang==='es'?'Registro':'Signed up'}</th><th>${tr('colActions')}</th></tr>${pend.map(u=>{const ap=S.agentProfile(u);return `<tr><td>${esc(u.name)}</td><td>${esc(u.email)}</td><td>${u.role==='AGENT'?tr('roleAgentShort'):tr('roleClientShort')}</td><td>${esc(ap?(ap.licenseNumber||'')+' / '+(ap.brokerage||''):'—')}</td><td>${esc(new Date(u.createdAt).toLocaleDateString())}</td><td><button data-approve="${u.id}" style="background:#16a34a;color:#fff">${S.lang==='es'?'Aprobar':'Approve'}</button> <button data-decline="${u.id}" style="background:#dc2626;color:#fff">${S.lang==='es'?'Rechazar':'Decline'}</button></td></tr>`;}).join('')||`<tr><td colspan=6>${S.lang==='es'?'No hay cuentas pendientes':'No accounts pending'}</td></tr>`}</table></div>`;})()}
+  return `<section style="padding:18px;display:grid;gap:16px">${investorAdminCard()}
+  ${(()=>{const pend=D.users.filter(u=>u.approvalStatus==='PENDING');return `<div class="card" style="padding:16px;border:2px solid #d97706"><h2>⏳ ${S.lang==='es'?'Cuentas Pendientes de Aprobación':'Accounts Pending Approval'} (${pend.length})</h2><table><tr><th>${tr('colName')}</th><th>${tr('email')}</th><th>${tr('colRole')}</th><th>${S.lang==='es'?'Licencia / Correduría':'License / Brokerage'}</th><th>${S.lang==='es'?'Registro':'Signed up'}</th><th>${tr('colActions')}</th></tr>${pend.map(u=>{const ap=S.agentProfile(u);return `<tr><td>${esc(u.name)}</td><td>${esc(u.email)}</td><td>${esc(roleLabel(u.role))}</td><td>${esc(ap?(ap.licenseNumber||'')+' / '+(ap.brokerage||''):(u.investorProfile?(u.investorProfile.businessName||'')+' / '+(u.investorProfile.representativeName||'')+' / '+(u.investorProfile.contactMethod||'')+': '+(u.investorProfile.contactValue||''):'—'))}</td><td>${esc(new Date(u.createdAt).toLocaleDateString())}</td><td><button data-approve="${u.id}" style="background:#16a34a;color:#fff">${S.lang==='es'?'Aprobar':'Approve'}</button> <button data-decline="${u.id}" style="background:#dc2626;color:#fff">${S.lang==='es'?'Rechazar':'Decline'}</button></td></tr>`;}).join('')||`<tr><td colspan=6>${S.lang==='es'?'No hay cuentas pendientes':'No accounts pending'}</td></tr>`}</table></div>`;})()}
 <div class="card" style="padding:16px"><h2>${tr('recentOffers')}</h2><table><tr><th>${tr('colProperty')}</th><th>${tr('colBuyer')}</th><th>${tr('colOffer')}</th><th>${tr('colStatus')}</th><th>${tr('colActions')}</th></tr>
   ${D.offers.slice().reverse().map(o=>`<tr><td>${esc((S.listing(o.listingId)||{}).address)}</td><td>${esc((D.users.find(u=>u.id===o.userId)||{}).name)}</td><td>${S.money(o.offerPrice)} / ${S.money(o.downPayment)} / ${S.money(o.monthlyPayment)}</td><td>${offerBadge(o.status)}</td>
    <td><button data-acc="${o.id}" style="background:#16a34a;color:#fff">${tr('accept')}</button> <button data-ctr="${o.id}" style="background:#d97706;color:#fff">${tr('counterOffer')}</button> <button data-rej="${o.id}" style="background:#dc2626;color:#fff">${tr('reject')}</button></td></tr>`).join('')||`<tr><td colspan=5>${tr('noOffers')}</td></tr>`}</table></div>
@@ -1045,13 +1279,13 @@ function admin(){if(!S.isAdmin())return `<p style="padding:18px">${tr('adminsOnl
     const u=(D.users.find(x=>x.id===sh.userId)||{});
     const st=String(sh.status||'REQUESTED').toUpperCase();
     const badge=st==='APPROVED'?'✅ '+tr('showingApproved'):st==='DENIED'?'❌ '+tr('showingDenied'):'⏳ '+tr('showingRequested');
-    const acts=st==='REQUESTED'?`<button data-showacc="${sh.id}" style="background:#16a34a;color:#fff">${S.lang==='es'?'Aprobar':'Approve'}</button> <button data-showden="${sh.id}" style="background:#dc2626;color:#fff">${S.lang==='es'?'Rechazar':'Deny'}</button>`:'—';
+    const acts=st==='REQUESTED'?`<button data-showacc="${sh.id}" style="background:#16a34a;color:#fff">${S.lang==='es'?'Aprobar':'Approve'}</button> <button data-showden="${sh.id}" style="background:#dc2626;color:#fff">${S.lang==='es'?'Rechazar':'Deny'}</button>`:(st==='APPROVED'&&S.caps&&S.caps.investor?`<button type="button" data-showcan="${sh.id}">${tr('cancelShowing')}</button> <button type="button" data-showmsg="${sh.id}">${tr('messageAgent')}</button>`:'—');
     return `<tr><td>${esc(l.address||sh.listingId)}${l.city?', '+esc(l.city):''}</td><td>${esc(u.name||'—')}</td><td>${esc(S.formatShowingWhen?S.formatShowingWhen(sh.preferredAt):sh.preferredAt)}</td><td>${badge}</td><td>${acts}</td></tr>`;
   }).join('')||`<tr><td colspan=5>${S.lang==='es'?'Aún no hay solicitudes de visita':'No showing requests yet'}</td></tr>`}
   </table></div>
   <div class="card" style="padding:16px"><h2>${tr('listings')}</h2><div class="table-scroll"><table><tr><th>${tr('colAddress')}</th><th>${tr('colStatus')}</th><th>${tr('price')} $</th><th>${tr('down')} $</th><th>${tr('monthly')} $</th><th></th></tr>${D.listings.map(l=>`<tr data-row="${l.id}"><td>${esc(l.address)}, ${esc(l.city)}</td>
    <td><select data-status="${l.id}">${S.STATUSES.map(s=>`<option value="${s}" ${l.status===s?'selected':''}>${S.statusText(s)}</option>`).join('')}</select></td>
-   <td><input data-f="askingPrice" type="number" value="${l.askingPrice/100}" style="width:90px"></td><td><input data-f="downPayment" type="number" value="${l.downPayment/100}" style="width:80px"></td><td><input data-f="monthlyPayment" type="number" value="${l.monthlyPayment/100}" style="width:80px"></td><td class="listing-actions"><button type="button" data-save="${esc(l.id)}">${tr('save')}</button><button type="button" class="copy-link-btn" data-copylink="${esc(l.id)}">${tr('share.copyLink')}</button>${S.caps&&S.caps.ready?`<button type="button" class="copy-link-btn" data-activity="${esc(l.id)}">${tr('activity.button')}</button>`:''}</td></tr>`).join('')}</table></div></div></section>`;}
+   <td><input data-f="askingPrice" type="number" value="${l.askingPrice/100}" style="width:90px"></td><td><input data-f="downPayment" type="number" value="${l.downPayment/100}" style="width:80px"></td><td><input data-f="monthlyPayment" type="number" value="${l.monthlyPayment/100}" style="width:80px"></td><td class="listing-actions"><button type="button" data-save="${esc(l.id)}">${tr('save')}</button><button type="button" class="copy-link-btn" data-copylink="${esc(l.id)}">${tr('share.copyLink')}</button>${S.caps&&S.caps.ready?`<button type="button" class="copy-link-btn" data-activity="${esc(l.id)}">${tr('activity.button')}</button>`:''}${S.caps&&S.caps.investor?`<label style="display:block;font-size:11px;margin-top:6px">${tr('inspectionDate')}<input data-insp="${esc(l.id)}" type="datetime-local" value="${esc(toLocalInput(l.inspectionAt))}"></label>`:''}</td></tr>`).join('')}</table></div></div></section>`;}
 
 function maybeOpenSharedDetail(){
   if(!S.user||!S.data||resetQueryActive()||!shareDetailAllowed())return;
@@ -1061,7 +1295,7 @@ function maybeOpenSharedDetail(){
   openListing(id);
 }
 function render(){document.documentElement.lang=S.lang;const root=$('#app-root');if(!S.data)return;if(map){try{map.stop();map.off();map.remove();}catch(e){}map=null;}
-  const body={inventory,guides,dashboard,admin,auth,calendar:calendarView}[tab]||inventory;root.innerHTML=header()+`<main>${body()}</main><footer style="padding:18px;font-size:12px;text-align:center">© Legacy - Owner Finance · Brokerage By: KLC Real Estate, LLC</footer>`;bind();if(tab==='inventory')drawMap();maybeOpenSharedDetail();}
+  const body={inventory,guides,dashboard,admin,auth,calendar:calendarView,'investor-tx':investorTx,'investor-map':investorMap}[tab]||inventory;root.innerHTML=header()+`<main>${body()}</main><footer style="padding:18px;font-size:12px;text-align:center">© Legacy - Owner Finance · Brokerage By: KLC Real Estate, LLC</footer>`;bind();if(tab==='inventory')drawMap();if(tab==='investor-map')drawInvestorMap();maybeOpenSharedDetail();}
 function bind(){const r=$('#app-root');
   r.onclick=async e=>{
    const c=e.target.closest('[data-view],[data-editsearch],[data-prev],[data-next],[data-compare],[data-chip],[data-cmpopen],[data-cmpclear]');
@@ -1077,7 +1311,7 @@ function bind(){const r=$('#app-root');
        modal(`<h2>⚖️ ${S.lang==='es'?'Comparación de Casas':'Side-by-Side Comparison'}</h2><div style="display:grid;grid-template-columns:repeat(${it.length},1fr);gap:12px">${it.map(l=>`<div class="card" style="padding:10px"><img src="${esc(l.photoUrl||'listing-placeholder.svg')}" referrerpolicy="no-referrer" onerror="window.imgFallback&&window.imgFallback(this)" style="width:100%;height:120px;object-fit:cover;border-radius:8px"><h4 style="margin:8px 0">${title(l)}</h4>
        <div style="font-size:13px;line-height:1.8">${tr('price')}: <b>${S.money(l.askingPrice)}</b><br>${tr('down')}: <b>${S.money(l.downPayment)}</b><br>${tr('monthly')}: <b>${S.money(l.monthlyPayment)}</b><br>${l.beds??'—'} ${tr('bdShort')} · ${l.baths??'—'} ${tr('baShort')}<br>${l.sqft?(+l.sqft).toLocaleString()+' '+tr('sqftUnit'):''}${l.sqft&&l.askingPrice?'<br>$'+Math.round(l.askingPrice/100/l.sqft)+tr('perSqft'):''}</div></div>`).join('')}</div>`);return;}
    }
-   const t=e.target.closest('[data-tab],[data-lang],[data-open],[data-fav],[data-acc],[data-rej],[data-ctr],[data-reset],[data-save],[data-client],[data-register],[data-login],[data-shareclear],[data-copylink],[data-calmode],[data-calnav],[data-showacc],[data-showden],[data-approve],[data-decline],[data-inspsched],[data-inspcancel],[data-bell],[data-alertclose],[data-feedback],[data-checkin],[data-checkout],[data-activity],#logout,#forgot');
+   const t=e.target.closest('[data-tab],[data-lang],[data-open],[data-fav],[data-acc],[data-rej],[data-ctr],[data-reset],[data-save],[data-client],[data-register],[data-login],[data-shareclear],[data-copylink],[data-calmode],[data-calnav],[data-showacc],[data-showden],[data-showcan],[data-showmsg],[data-approve],[data-decline],[data-inspsched],[data-inspcancel],[data-bell],[data-alertclose],[data-feedback],[data-checkin],[data-checkout],[data-activity],[data-metric],[data-views],[data-favs],[data-openmap],[data-mapscope],[data-closed],[data-editown],[data-unassign],#logout,#forgot');
    if(!t)return;
    e.preventDefault();
    try{
@@ -1106,12 +1340,22 @@ function bind(){const r=$('#app-root');
      if(d.feedback){const sh=(S.myShowings||[]).find(s=>s.id===d.feedback);if(sh)openFeedback(sh);return;}
      if(d.checkin||d.checkout){const id=d.checkin||d.checkout;const geo=await readGeo();await S.showingVisit(id,d.checkin?'in':'out',geo);alert(tr('showings.visitSaved'));return render();}
      if(d.activity){await openActivity(d.activity);return;}
-     if(d.showacc){S.respondShowing(d.showacc,'APPROVED');return render();}
-     if(d.showden){if(confirm(S.lang==='es'?'¿Rechazar esta visita?':'Deny this showing?')){S.respondShowing(d.showden,'DENIED');render();}return;}
-     if(d.approve){S.setApproval(d.approve,'APPROVED');return render();}if(d.decline){if(confirm(S.lang==='es'?'¿Rechazar esta cuenta?':'Decline this account?')){S.setApproval(d.decline,'REJECTED');render();}return;}if(d.inspsched){const v=($('#insp-'+d.inspsched)||{}).value;if(!v)return alert(S.lang==='es'?'Selecciona fecha y hora':'Pick a date and time');S.setInspection(d.inspsched,v);return render();}if(d.inspcancel){if(confirm(S.lang==='es'?'¿Cancelar la inspección?':'Cancel the inspection?')){S.setInspection(d.inspcancel,null);render();}return;}if(d.acc)return S.respondOffer(d.acc,'ACCEPTED');if(d.rej)return S.respondOffer(d.rej,'REJECTED');
+     if(d.showacc){if(S.caps&&S.caps.investor)await S.decideShowing(d.showacc,'APPROVED');else S.respondShowing(d.showacc,'APPROVED');return render();}
+     if(d.showden){if(confirm(S.lang==='es'?'¿Rechazar esta visita?':'Deny this showing?')){if(S.caps&&S.caps.investor)await S.decideShowing(d.showden,'DENIED');else S.respondShowing(d.showden,'DENIED');render();}return;}
+     if(d.showcan){if(confirm(S.lang==='es'?'¿Cancelar esta visita aprobada?':'Cancel this approved showing?')){await S.decideShowing(d.showcan,'CANCELLED');render();}return;}
+     if(d.showmsg){const body=prompt(tr('messageAgentPrompt'));if(body&&String(body).trim()){await S.messageShowingAgent(d.showmsg,String(body).trim());alert(tr('sentAlert'));}return;}
+     if(d.metric){openMetric(d.metric);return;}
+     if(d.views){openPeople(d.views,'views');return;}
+     if(d.favs){openPeople(d.favs,'favs');return;}
+     if(d.closed){openClosedDeals();return;}
+     if(d.openmap){const u=new URL(location.href);u.hash='investor-map';window.open(u.toString(),'legacyInvestorMap');return;}
+     if(d.mapscope){MAPSCOPE=d.mapscope==='all'?'all':'mine';return render();}
+     if(d.editown){const home=S.listing(d.editown);if(home)openOwnEditor(home);return;}
+     if(d.unassign){const parts=String(d.unassign).split('|');if(parts[0]&&parts[1]){await S.assignInvestorListings(parts[0],[],[parts[1]]);render();}return;}
+     if(d.approve){await S.setApproval(d.approve,'APPROVED');return render();}if(d.decline){if(confirm(S.lang==='es'?'¿Rechazar esta cuenta?':'Decline this account?')){await S.setApproval(d.decline,'REJECTED');render();}return;}if(d.inspsched){const v=($('#insp-'+d.inspsched)||{}).value;if(!v)return alert(S.lang==='es'?'Selecciona fecha y hora':'Pick a date and time');S.setInspection(d.inspsched,v);return render();}if(d.inspcancel){if(confirm(S.lang==='es'?'¿Cancelar la inspección?':'Cancel the inspection?')){S.setInspection(d.inspcancel,null);render();}return;}if(d.acc)return S.respondOffer(d.acc,'ACCEPTED');if(d.rej)return S.respondOffer(d.rej,'REJECTED');
      if(d.ctr){const p=prompt(tr('promptCounterPrice')),dn=prompt(tr('promptCounterDown')),mo=prompt(tr('promptCounterMonthly')),n=prompt(tr('promptAdminNotes'))||'';if(p)S.respondOffer(d.ctr,'COUNTERED',{counterPrice:p,counterDown:dn,counterMonthly:mo,adminNotes:n});return;}
      if(d.reset)return openAdminResetModal(d.reset);
-     if(d.save){const row=r.querySelector(`[data-row="${d.save}"]`),p={};row.querySelectorAll('[data-f]').forEach(i=>p[i.dataset.f]=Math.round(+i.value*100));S.updateListing(d.save,p);return alert(tr('savedAlert'));}
+     if(d.save){const row=r.querySelector(`[data-row="${d.save}"]`),p={};row.querySelectorAll('[data-f]').forEach(i=>p[i.dataset.f]=Math.round(+i.value*100));S.updateListing(d.save,p);const insp=row.querySelector('[data-insp]');if(insp&&S.caps&&S.caps.investor)await S.saveInspection(d.save,insp.value);return alert(tr('savedAlert'));}
      if(d.client){const c=S.data.users.find(u=>u.id===d.client);const of=S.data.offers.filter(o=>o.userId===c.id);modal(`<h2>${esc(c.name)}</h2><p>${esc(c.email)} · ${esc(c.phone)}</p><h3>🏡 ${st('clientCrit')}</h3>${critSummary(critOf(c))}<h3>${tr('favorites')}</h3><ul>${S.data.favorites.filter(f=>f.userId===c.id).map(f=>`<li>${esc((S.listing(f.listingId)||{}).address)}</li>`).join('')}</ul><h3>${tr('myOffers')}</h3><ul>${of.map(o=>`<li>${esc((S.listing(o.listingId)||{}).address)} ${S.money(o.offerPrice)} ${offerBadge(o.status)}</li>`).join('')}</ul>`);}
    }catch(err){alert(err.message);}
   };
@@ -1124,13 +1368,15 @@ function bind(){const r=$('#app-root');
      const t=e.target;if(t.dataset.status)return S.setListingStatus(t.dataset.status,t.value);
      if(t.id==='avatar'&&t.files&&t.files[0])return await S.uploadAvatar(t.files[0]);if(t.id==='docUp'&&t.files&&t.files[0])return await S.uploadDocument(t.files[0]);
      if(t.dataset.txdoc&&t.files&&t.files[0])return await S.uploadDocument(t.files[0],{docType:t.dataset.txdoc,offerId:t.dataset.offer,listingId:t.dataset.listing});
-     if(t.id==='roleSel'){$('#agentFields').style.display=t.value==='AGENT'?'':'none';$('#buyerFields').style.display=t.value==='AGENT'?'none':'';}
+     if(t.id==='roleSel'){const inv=t.value==='INVESTOR',agent=t.value==='AGENT';$('#agentFields').style.display=agent?'':'none';$('#buyerFields').style.display=(!agent&&!inv)?'':'none';const box=$('#investorFields');if(box)box.style.display=inv?'':'none';const name=$('#regF [name="name"]');if(name)name.required=!inv;['businessName','contactMethod','contactValue','representativeName'].forEach(n=>{const el=$('#regF [name="'+n+'"]');if(el)el.required=inv;});}
      if(t.id==='noAgent'){$('#inv').disabled=t.checked;if(t.checked)$('#inv').value='';}
    }catch(err){alert(err.message);}
   };
   const sub=(id,fn)=>{const el=$(id);if(el)el.onsubmit=wrap(()=>fn(fd(el)));};
   sub('#loginF',async v=>{const u=await S.login(v.email,v.password);if(u&&u.needsVerify)return openVerifyEmail(u.email,false);go(u&&u.role==='ADMIN'?'admin':'dashboard');maybePromptCriteria();});
-  sub('#regF',async v=>{const u=await S.register(v);if(u&&u.needsVerify)return openVerifyEmail(u.email,true);go('dashboard');maybePromptCriteria();});
+  sub('#regF',async v=>{if(v.role==='INVESTOR'&&!(v.businessName&&v.contactMethod&&v.contactValue&&v.representativeName))throw new Error(S.lang==='es'?'Ingresa el nombre del negocio, el método de contacto y el nombre del representante.':'Enter the business name, preferred contact method, and the representative\'s name.');const u=await S.register(v);if(u&&u.needsVerify)return openVerifyEmail(u.email,true);go(u&&u.role==='ADMIN'?'admin':'dashboard');maybePromptCriteria();});
+  r.querySelectorAll('form[data-sheets]').forEach(f=>{f.onsubmit=wrap(async()=>{const lines=String(new FormData(f).get('sheets')||'').split(/\n+/).map(s=>s.trim()).filter(Boolean);await S.saveInvestorSheets(f.dataset.sheets,lines.map(url=>({url})));alert(tr('savedAlert'));render();});});
+  r.querySelectorAll('form[data-assign]').forEach(f=>{f.onsubmit=wrap(async()=>{const id=String(new FormData(f).get('listingId')||'');if(!id)return;await S.assignInvestorListings(f.dataset.assign,[id],[]);render();});});
   sub('#profF',v=>{S.updateProfile(v);alert(tr('savedAlert'));});
   sub('#pwF',async v=>{await S.changePassword(v.cur,v.pw);alert(tr('pwUpdatedAlert'));});
   sub('#msgF',v=>{S.sendMessage(v);});}
