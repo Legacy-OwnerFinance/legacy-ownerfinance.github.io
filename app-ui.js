@@ -455,11 +455,11 @@ const tr=k=>{
 };
 // ---- v16: closing tools on accepted offers (Admin and the offer's agent; owners see the date only) ----
 const CLX={
-  en:{title:'Closing',closingDate:'Closing date',saveDate:'Save date',waive:'Opt out of inspections (waived)',waived:'Inspections waived',contract:'Final contract',contractUp:'Upload the final contract',commission:'Commission earned $',saveComm:'Save commission',commissionL:'Commission',closeDeal:'Close deal',fell:'Fell through',
+  en:{uploadFinal:'Upload final contract',buyerClosing:'Closing date',title:'Closing',closingDate:'Closing date',saveDate:'Save date',waive:'Opt out of inspections (waived)',waived:'Inspections waived',contract:'Final contract',contractUp:'Upload the final contract',commission:'Commission earned $',saveComm:'Save commission',commissionL:'Commission',closeDeal:'Close deal',fell:'Fell through',
     pickDate:'Pick the closing date first.',confirmClose:'Close this deal? The home will be marked Sold and the 3-day Sold countdown starts.',confirmFell:'Mark this deal as fell through? The home goes back to Available right away.',reasonL:'Reason (optional)',confirm:'Confirm',cancel:'Cancel',
     closedOn:'Closed',fellNote:'This deal fell through. The home went back to Available.',closedNote:'Closed. The home is Sold (3-day countdown).',saved:'Saved',contractAdded:'Final contract uploaded',noContract:'No contract yet',
     dateSet:'Closing date',notice:'Closing update',statusClosed:'Closed',statusFell:'Fell through',onlyPeople:'Only Admin and this offer\'s agent can see the commission.',clientOffer:'Client'},
-  es:{title:'Cierre',closingDate:'Fecha de cierre',saveDate:'Guardar fecha',waive:'Optar por no hacer inspecciones (renunciar)',waived:'Inspecciones omitidas',contract:'Contrato final',contractUp:'Subir el contrato final',commission:'Comisión obtenida $',saveComm:'Guardar comisión',commissionL:'Comisión',closeDeal:'Cerrar trato',fell:'Se cayó el trato',
+  es:{uploadFinal:'Subir contrato final',buyerClosing:'Fecha de cierre',title:'Cierre',closingDate:'Fecha de cierre',saveDate:'Guardar fecha',waive:'Optar por no hacer inspecciones (renunciar)',waived:'Inspecciones omitidas',contract:'Contrato final',contractUp:'Subir el contrato final',commission:'Comisión obtenida $',saveComm:'Guardar comisión',commissionL:'Comisión',closeDeal:'Cerrar trato',fell:'Se cayó el trato',
     pickDate:'Primero elige la fecha de cierre.',confirmClose:'¿Cerrar este trato? La casa se marcará como Vendida y empieza el conteo de 3 días.',confirmFell:'¿Marcar este trato como caído? La casa vuelve a Disponible de inmediato.',reasonL:'Motivo (opcional)',confirm:'Confirmar',cancel:'Cancelar',
     closedOn:'Cerrado',fellNote:'Este trato se cayó. La casa volvió a Disponible.',closedNote:'Cerrado. La casa está Vendida (conteo de 3 días).',saved:'Guardado',contractAdded:'Contrato final subido',noContract:'Aún no hay contrato',
     dateSet:'Fecha de cierre',notice:'Actualización de cierre',statusClosed:'Cerrado',statusFell:'Se cayó',onlyPeople:'Solo el administrador y el agente de esta oferta ven la comisión.',clientOffer:'Cliente'}
@@ -468,7 +468,12 @@ const cx=k=>(CLX[S.lang]||CLX.en)[k]||k;
 const fmtYmd=y=>{if(!y)return '';const d=new Date(String(y).slice(0,10)+'T12:00:00');return isNaN(d.getTime())?String(y):d.toLocaleDateString(S.lang==='es'?'es-US':'en-US',{year:'numeric',month:'long',day:'numeric'});};
 const closingCan=()=>!!(S.caps&&S.caps.closing&&S.user&&(S.isAdmin()||S.user.role==='AGENT'));
 function closingPanel(o){
-  if(!closingCan()||!['ACCEPTED','CLOSED','FELL_THROUGH'].includes(o.status))return '';
+  if(!closingCan()){
+    const bc=S.user&&o.userId===S.user.id&&S.closings&&S.closings[o.id];
+    if(!bc||!bc.closingDate||bc.outcome==='FELL_THROUGH'||!['ACCEPTED','CLOSED'].includes(o.status))return '';
+    return `<div class="closing-box" style="border:2px solid #0f766e;padding:8px;border-radius:8px;margin:6px 0">🏁 ${cx('buyerClosing')}: <b>${esc(fmtYmd(bc.closingDate))}</b></div>`;
+  }
+  if(!['ACCEPTED','CLOSED','FELL_THROUGH'].includes(o.status))return '';
   const c=S.closings[o.id]||{},id=esc(o.id);
   const box=(inner,color)=>`<div class="closing-box" data-closing-for="${id}" style="border:2px solid ${color};padding:8px;border-radius:8px;margin:6px 0"><b>🏁 ${cx('title')}</b>${inner}</div>`;
   if(o.status==='FELL_THROUGH'||c.outcome==='FELL_THROUGH')return box(`<p style="margin:4px 0;color:#b91c1c">${cx('fellNote')}${c.fellThroughReason?` <i>${esc(c.fellThroughReason)}</i>`:''}</p>`,'#b91c1c');
@@ -1298,6 +1303,10 @@ function txShowingActs(sh){
   if(st==='APPROVED')return `<button type="button" data-showcan="${esc(sh.id)}">${tr('cancelShowing')}</button> <button type="button" data-showmsg="${esc(sh.id)}">${tr('messageAgent')}</button>`;
   return '—';
 }
+function invDocsHtml(r){
+  const docs=(r.documents||[]).map(d=>`<li><a href="${esc(d.dataUrl)}" target="_blank" rel="noopener">${esc(d.name||tr('documents'))}</a> <i>${esc(d.docType||'')}</i></li>`).join('')||`<li>${tr('noDocs')}</li>`;
+  return `<ul style="margin:4px 0">${docs}</ul><label>${cx('uploadFinal')} <input type="file" data-invcontract="${esc(r.id)}"></label>`;
+}
 function investorTxHtml(){
   const tx=S.investorTx||{offers:[],approvedShowings:[],underContract:[],inspectionsThisWeek:[],closed:[]};
   const line=(r,extra)=>`<tr><td>${esc(r.address||'')}${r.city?', '+esc(r.city):''}</td><td>${extra}</td></tr>`;
@@ -1305,7 +1314,7 @@ function investorTxHtml(){
   const shows=(tx.approvedShowings||[]).map(sh=>`<tr><td>${esc(sh.address||'')}${sh.city?', '+esc(sh.city):''}</td><td>${esc(S.formatShowingWhen?S.formatShowingWhen(sh.preferredAt):sh.preferredAt)}</td><td>${esc(sh.requester||'—')}</td><td>${txShowingActs(sh)}</td></tr>`).join('');
   const req=(tx.showings||[]).filter(sh=>sh.status==='REQUESTED').map(sh=>`<tr><td>${esc(sh.address||'')}</td><td>${esc(S.formatShowingWhen?S.formatShowingWhen(sh.preferredAt):sh.preferredAt)}</td><td>${esc(sh.requester||'—')}</td><td>${txShowingActs(sh)}</td></tr>`).join('');
   const closingOfHome=id=>Object.values(S.closings||{}).find(c=>c.listingId===id&&c.outcome==='PENDING'&&c.closingDate);
-  const under=(tx.underContract||[]).map(r=>{const c=closingOfHome(r.id);return line(r,esc(S.statusText(r.status))+(c?` · 🏁 ${cx('closingDate')}: <b>${esc(fmtYmd(c.closingDate))}</b>${c.inspectionsWaived?' · '+cx('waived'):''}`:''));}).join('');
+  const under=(tx.underContract||[]).map(r=>{const c=closingOfHome(r.id);return line(r,esc(S.statusText(r.status))+(c?` · 🏁 ${cx('closingDate')}: <b>${esc(fmtYmd(c.closingDate))}</b>${c.inspectionsWaived?' · '+cx('waived'):''}`:''))+`<tr><td colspan="2">${invDocsHtml(r)}</td></tr>`;}).join('');
   const insp=(tx.inspectionsThisWeek||[]).map(r=>line(r,esc(formatInstant(r.inspectionAt)||r.inspectionAt||''))).join('');
   return `<section id="investor-tx" style="padding:18px;display:grid;gap:16px">
     <div class="card" style="padding:16px"><h2>${tr('offersReceived')}</h2><table><tr><th>${tr('colProperty')}</th><th>${tr('colOffer')}</th></tr>${offers||`<tr><td colspan="2">${tr('noneYet')}</td></tr>`}</table></div>
@@ -1315,10 +1324,17 @@ function investorTxHtml(){
     <div class="card" style="padding:16px"><h2>${tr('inspectionsWeek')}</h2><table>${insp||`<tr><td>${tr('noneYet')}</td></tr>`}</table><p><button type="button" class="btn-card primary" data-closed="1">${tr('closedDeals')}</button></p></div>
   </section>`;
 }
+async function investorContractUpload(t,m){
+  await S.uploadDocument(t.files[0],{docType:'FINAL_CONTRACT',listingId:t.dataset.invcontract,wait:true});
+  await S.refreshInvestor();alert(cx('contractAdded'));
+  if(m){m.remove();render();return openClosedDeals();}
+  return render();
+}
 function openClosedDeals(){
   const closed=(S.investorTx&&S.investorTx.closed)||[];
-  const body=closed.map(c=>`<article class="ops-showing"><b>${esc(c.address)}, ${esc(c.city)}</b><p class="ops-meta">${esc(S.statusText(c.status))} ${c.soldAt?esc(formatInstant(c.soldAt)):''}${(()=>{const cl=Object.values(S.closings||{}).find(x=>x.listingId===c.id&&x.outcome==='CLOSED');return cl&&cl.closingDate?' · 🏁 '+cx('closingDate')+': '+esc(fmtYmd(cl.closingDate)):'';})()}</p><ul>${(c.documents||[]).map(d=>`<li><a href="${esc(d.dataUrl)}" target="_blank" rel="noopener">${esc(d.name||tr('documents'))}</a> <i>${esc(d.docType||'')}</i></li>`).join('')||`<li>${tr('noDocs')}</li>`}</ul></article>`).join('');
-  modal(`<h2>${tr('closedDeals')}</h2>${body||`<p>${tr('noneYet')}</p>`}`);
+  const body=closed.map(c=>`<article class="ops-showing"><b>${esc(c.address)}, ${esc(c.city)}</b><p class="ops-meta">${esc(S.statusText(c.status))} ${c.soldAt?esc(formatInstant(c.soldAt)):''}${(()=>{const cl=Object.values(S.closings||{}).find(x=>x.listingId===c.id&&x.outcome==='CLOSED');return cl&&cl.closingDate?' · 🏁 '+cx('closingDate')+': '+esc(fmtYmd(cl.closingDate)):'';})()}</p><ul>${(c.documents||[]).map(d=>`<li><a href="${esc(d.dataUrl)}" target="_blank" rel="noopener">${esc(d.name||tr('documents'))}</a> <i>${esc(d.docType||'')}</i></li>`).join('')||`<li>${tr('noDocs')}</li>`}</ul><label>${cx('uploadFinal')} <input type="file" data-invcontract="${esc(c.id)}"></label></article>`).join('');
+  const m=modal(`<h2>${tr('closedDeals')}</h2>${body||`<p>${tr('noneYet')}</p>`}`);
+  m.onchange=async e=>{const t=e.target;try{if(t.dataset&&t.dataset.invcontract&&t.files&&t.files[0])await investorContractUpload(t,m);}catch(err){alert(err.message);}};
 }
 function investorTx(){return investorGate()||investorTxHtml();}
 let MAPSCOPE='mine';
@@ -1579,6 +1595,7 @@ function bind(){const r=$('#app-root');
    try{
      const t=e.target;if(t.dataset.status)return S.setListingStatus(t.dataset.status,t.value);
      if(t.id==='avatar'&&t.files&&t.files[0])return await S.uploadAvatar(t.files[0]);if(t.id==='docUp'&&t.files&&t.files[0])return await S.uploadDocument(t.files[0]);
+     if(t.dataset.invcontract&&t.files&&t.files[0])return await investorContractUpload(t,null);
      if(t.dataset.clwaive){await S.saveClosing(t.dataset.clwaive,{inspectionsWaived:t.checked});return render();}
      if(t.dataset.clcontract&&t.files&&t.files[0]){const oid=t.dataset.clcontract;const doc=await S.uploadDocument(t.files[0],{docType:'FINAL_CONTRACT',offerId:oid,listingId:t.dataset.listing});await S.saveClosing(oid,{contractDocumentId:doc&&doc.id});alert(cx('contractAdded'));return render();}
      if(t.dataset.txdoc&&t.files&&t.files[0])return await S.uploadDocument(t.files[0],{docType:t.dataset.txdoc,offerId:t.dataset.offer,listingId:t.dataset.listing});

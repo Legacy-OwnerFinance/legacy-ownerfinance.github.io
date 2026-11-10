@@ -1117,7 +1117,7 @@ S.respondShowing=(sid,status)=>{
   // Refresh public today/calendar payload soon
   setTimeout(()=>{try{api('state').then(st=>{S.todayApprovedShowings=Array.isArray(st.todayApprovedShowings)?st.todayApprovedShowings:S.todayApprovedShowings;S.approvedShowingsCalendar=Array.isArray(st.approvedShowingsCalendar)?st.approvedShowingsCalendar:S.approvedShowingsCalendar;notify();});}catch(e){}},400);
 };
-S.uploadDocument=async(file,{listingId,docType,offerId}={})=>{if(!S.user)throw new Error(S.lang==='es'?'Inicia sesión primero':'Please log in');
+S.uploadDocument=async(file,{listingId,docType,offerId,wait}={})=>{if(!S.user)throw new Error(S.lang==='es'?'Inicia sesión primero':'Please log in');
   const cloudUrl=await sbUploadFile(file,S.user.folderSlug||'documents');
   let dataUrl=cloudUrl;
   if(!dataUrl){
@@ -1127,7 +1127,7 @@ S.uploadDocument=async(file,{listingId,docType,offerId}={})=>{if(!S.user)throw n
   const d={id:uid(),userId:S.user.id,listingId:listingId||null,offerId:offerId||null,docType:docType||'GENERAL',name:file.name,size:file.size,dataUrl,folderSlug:S.user.folderSlug,createdAt:now()};
   S.data.documents.push(d);
   S.save();
-  sbUpsert('documents',{
+  const wrote=sbUpsert('documents',{
     id:d.id,
     user_id:d.userId,
     listing_id:d.listingId,
@@ -1138,6 +1138,7 @@ S.uploadDocument=async(file,{listingId,docType,offerId}={})=>{if(!S.user)throw n
     data_url:d.dataUrl,
     created_at:d.createdAt
   },'id');
+  if(wait){const ok=await wrote;if(!ok){S.data.documents=S.data.documents.filter(x=>x.id!==d.id);S.save();throw new Error(S.lang==='es'?'No se pudo subir el documento. Solo puedes subir el contrato final de tus casas bajo contrato o vendidas.':'The document could not be uploaded. You can only upload the final contract for your own homes that are under contract or sold.');}}
   return d;
 };
 S.STATUSES=['AVAILABLE','COMING_SOON','PENDING','PENDING_NO_EM','PENDING_EM','SOLD'];
