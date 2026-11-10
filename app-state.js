@@ -125,8 +125,7 @@ async function sbUploadFile(file,folderSlug){
       headers:{
         'apikey':SUPABASE_ANON_KEY,
         'Authorization':'Bearer '+SUPABASE_ANON_KEY,
-        'Content-Type':file.type||'application/octet-stream',
-        'x-upsert':'true'
+        'Content-Type':file.type||'application/octet-stream'
       },
       body:file
     });
