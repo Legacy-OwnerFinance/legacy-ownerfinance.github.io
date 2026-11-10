@@ -35,12 +35,14 @@ const S=window.AppState={
   SUPABASE_URL:SUPABASE_URL,
   todayApprovedShowings:[],
   approvedShowingsCalendar:[],
-  caps:{v13:false,ready:false,investor:false,version:0},
+  caps:{v13:false,ready:false,investor:false,messages:false,version:0},
   investorHome:null,
   investorTx:null,
   investorAdmin:null,
   alerts:[],
   myShowings:[],
+  msgUnread:0,
+  msgThreads:[],
   listeners:[]
 };
 const uid=()=>'id'+Date.now().toString(36)+Math.random().toString(36).slice(2,8);
@@ -437,7 +439,13 @@ function sameJson(a,b){try{return JSON.stringify(a)===JSON.stringify(b);}catch(e
 function capsFrom(raw){
   const version=Number(raw&&raw.version)||0;
   const v13=version>=13;
-  return {v13,ready:v13&&!!(raw&&raw.ready),investor:version>=14&&!!(raw&&raw.investor),version};
+  return {v13,ready:v13&&!!(raw&&raw.ready),investor:version>=14&&!!(raw&&raw.investor),messages:version>=15&&!!(raw&&raw.messages_badge),version};
+}
+function clearMsgUnread(){
+  const changed=!!S.msgUnread||(S.msgThreads&&S.msgThreads.length>0);
+  S.msgUnread=0;
+  S.msgThreads=[];
+  return changed;
 }
 async function refreshPortal(opts){
   const fromPoll=!!(opts&&opts.fromPoll);
@@ -452,35 +460,104 @@ async function refreshPortal(opts){
     const ready=!!parsed.ready;
     const investor=!!parsed.investor;
     if(!ready||!S.user){
-      const changed=!!(S.caps&&S.caps.ready)||(S.alerts||[]).length>0||(S.myShowings||[]).length>0||!!(S.caps&&S.caps.investor)!==investor;
-      S.caps={v13:version13,ready:false,investor,version:parsed.version||0};
+      const msgCleared=clearMsgUnread();
+      const changed=!!(S.caps&&S.caps.ready)||(S.alerts||[]).length>0||(S.myShowings||[]).length>0||!!(S.caps&&S.caps.investor)!==investor||!!(S.caps&&S.caps.messages)||msgCleared;
+      S.caps={v13:version13,ready:false,investor,messages:false,version:parsed.version||0};
       S.alerts=[];S.myShowings=[];
       return changed;
     }
     const home=await api('portal_home');
     if(!home||home.unavailable){
-      const changed=!!(S.caps&&S.caps.ready);
-      S.caps={v13:version13,ready:false,investor:false,version:parsed.version||0};
+      const msgCleared=clearMsgUnread();
+      const changed=!!(S.caps&&S.caps.ready)||msgCleared;
+      S.caps={v13:version13,ready:false,investor:false,messages:false,version:parsed.version||0};
       S.alerts=[];S.myShowings=[];
       return changed;
     }
     const nextA=Array.isArray(home.alerts)?home.alerts:[];
     const nextS=Array.isArray(home.showings)?home.showings:[];
-    const changed=!(S.caps&&S.caps.ready)||!!(S.caps&&S.caps.investor)!==investor||!sameJson(S.alerts,nextA)||!sameJson(S.myShowings,nextS);
-    S.caps={v13:true,ready:true,investor,version:parsed.version||(investor?14:13)};
+    const messages=!!parsed.messages;
+    let msgChanged=false;
+    if(!messages)msgChanged=clearMsgUnread();
+    else if(typeof home.messagesUnread==='number'&&(home.messagesUnread|0)!==(S.msgUnread|0)){
+      S.msgUnread=home.messagesUnread|0;
+      msgChanged=true;
+    }
+    const changed=!(S.caps&&S.caps.ready)||!!(S.caps&&S.caps.investor)!==investor||!!(S.caps&&S.caps.messages)!==messages||!sameJson(S.alerts,nextA)||!sameJson(S.myShowings,nextS)||msgChanged;
+    S.caps={v13:true,ready:true,investor,messages,version:parsed.version||(investor?14:13)};
     S.alerts=nextA;
     S.myShowings=nextS;
     return changed;
   }catch(e){
     if(e&&(e.code==='bad_action'||e.status===404)){
-      const changed=!!(S.caps&&(S.caps.ready||S.caps.v13||S.caps.investor));
-      S.caps={v13:false,ready:false,investor:false,version:0};
+      const msgCleared=clearMsgUnread();
+      const changed=!!(S.caps&&(S.caps.ready||S.caps.v13||S.caps.investor||S.caps.messages))||msgCleared;
+      S.caps={v13:false,ready:false,investor:false,messages:false,version:0};
       S.alerts=[];S.myShowings=[];
       return changed;
     }
     return false;
   }
 }
+let lastMsgPoll=0;
+function msgEnabled(){return !!(S.user&&S.caps&&S.caps.ready&&S.caps.messages);}
+async function refreshMsgUnread(){
+  if(!msgEnabled())return clearMsgUnread();
+  try{
+    const r=await api('messages_unread_count');
+    if(!r||r.error)return false;
+    if(r.unavailable)return clearMsgUnread();
+    const threads=Array.isArray(r.threads)?r.threads:[];
+    const changed=(r.count|0)!==(S.msgUnread|0)||!sameJson(threads,S.msgThreads);
+    S.msgUnread=r.count|0;
+    S.msgThreads=threads;
+    return changed;
+  }catch(e){
+    if(e&&e.code==='no_session')return clearMsgUnread();
+    return false;
+  }
+}
+async function refreshMsgUnreadPolled(force){
+  if(!msgEnabled())return refreshMsgUnread();
+  const t=Date.now();
+  if(!force&&t-lastMsgPoll<30000)return false;
+  lastMsgPoll=t;
+  return refreshMsgUnread();
+}
+async function markVisibleThreadRead(){
+  let peerId='';
+  try{
+    const el=document.querySelector('.msg-chat[data-peer]');
+    peerId=el?(el.getAttribute('data-peer')||''):'';
+  }catch(e){peerId='';}
+  if(!peerId||!msgEnabled())return false;
+  const unread=(S.msgThreads||[]).some(t=>t&&t.peerId===peerId&&(t.unread|0)>0);
+  if(!unread)return false;
+  await markThreadRead(peerId);
+  return true;
+}
+function paintMsgBadgeSoon(){
+  try{if(window.__paintMsgBadge)window.__paintMsgBadge();}catch(e){}
+}
+function notifyMsgChange(){
+  const active=document.activeElement;
+  const isTyping=active&&(active.tagName==='INPUT'||active.tagName==='TEXTAREA'||active.tagName==='SELECT')&&active.name!=='q';
+  if(!isTyping&&!document.querySelector('.modal-backdrop'))notify();
+  else paintMsgBadgeSoon();
+}
+async function markThreadRead(peerId){
+  if(!peerId)return;
+  S.msgThreads=(S.msgThreads||[]).filter(t=>t&&t.peerId!==peerId);
+  S.msgUnread=S.msgThreads.reduce((n,t)=>n+(t.unread|0),0);
+  if(!msgEnabled())return;
+  try{
+    const r=await api('messages_mark_read',{peerId});
+    if(r&&r.ok){S.msgUnread=r.count|0;S.msgThreads=Array.isArray(r.threads)?r.threads:[];}
+  }catch(e){}
+}
+S.msgEnabled=msgEnabled;
+S.refreshMsgUnread=refreshMsgUnread;
+S.markThreadRead=markThreadRead;
 async function refreshInvestor(){
   if(!(S.caps&&S.caps.investor)||!S.user){
     const had=!!(S.investorHome||S.investorTx||S.investorAdmin);
@@ -579,16 +656,17 @@ S.load=async()=>{
   try{await refreshPortal();}catch(e){}
   try{if(S.user&&S._me){if(S._me.role)S.user.role=S._me.role;if(S._me.approvalStatus)S.user.approvalStatus=S._me.approvalStatus;if(S._me.investorProfile)S.user.investorProfile=S._me.investorProfile;}}catch(e){}
   try{await refreshInvestor();}catch(e){}
+  try{lastMsgPoll=Date.now();await refreshMsgUnread();}catch(e){}
   startRealtimePolling();
 };
 
-async function pollSupabase(){
+async function pollSupabase(opts){
   try{
     const tk=getToken();
     const st=await api('state');
     S.cloudConnected=true;
     if(tk!==getToken())return;
-    if(S.user&&!st.me){if(tk){S.user=null;notify();}return;}
+    if(S.user&&!st.me){if(tk){S.user=null;clearMsgUnread();notify();}return;}
     const rows=st.kv?[{value:st.kv,updated_at:st.updatedAt}]:[];
     const userRows=st.userRows||[];
     let changed=false;
@@ -617,6 +695,8 @@ async function pollSupabase(){
     if(todayChanged){S.todayApprovedShowings=nextToday;changed=true;}
     if(calChanged){S.approvedShowingsCalendar=nextCal;changed=true;}
     try{if(await refreshPortal({fromPoll:true}))changed=true;}catch(e){}
+    try{if(await refreshMsgUnreadPolled(!!(opts&&opts.forceMsg)))changed=true;}catch(e){}
+    try{if(await markVisibleThreadRead())changed=true;}catch(e){}
     try{if(await refreshInvestor())changed=true;}catch(e){}
     if(changed){
       if(S.user){S.user=S.data.users.find(u=>u.id===S.user.id)||S.user;}
@@ -624,15 +704,22 @@ async function pollSupabase(){
       const active=document.activeElement;
       const isTyping=active&&(active.tagName==='INPUT'||active.tagName==='TEXTAREA'||active.tagName==='SELECT')&&active.name!=='q';
       if(!isTyping&&!document.querySelector('.modal-backdrop'))notify();
+      else paintMsgBadgeSoon();
     }
   }catch(e){S.cloudConnected=false;}
 }
 
 let pollTimer=null;
+let pollWatchers=false;
 function startRealtimePolling(){
   if(pollTimer)clearInterval(pollTimer);
-  pollTimer=setInterval(pollSupabase,8000);
-  window.addEventListener('focus',pollSupabase);
+  pollTimer=setInterval(()=>pollSupabase(),8000);
+  if(pollWatchers)return;
+  pollWatchers=true;
+  window.addEventListener('focus',()=>pollSupabase({forceMsg:true}));
+  document.addEventListener('visibilitychange',()=>{
+    if(document.visibilityState==='visible')pollSupabase({forceMsg:true});
+  });
 }
 
 const byEmail=e=>{
@@ -666,6 +753,7 @@ async function adoptSession(j){
   setUser(u);
   try{await refreshPortal();}catch(e){}
   try{await refreshInvestor();}catch(e){}
+  try{lastMsgPoll=Date.now();await refreshMsgUnread();}catch(e){}
   return u;
 }
 S.login=async(email,pw)=>{
@@ -673,7 +761,7 @@ S.login=async(email,pw)=>{
   if(j.needsVerify)return {needsVerify:true,email:j.email};
   return adoptSession(j);
 };
-S.logout=()=>{try{localStorage.removeItem(TOKEN_KEY);localStorage.removeItem(KEY);}catch(e){}S.user=null;S._me=null;location.hash='inventory';location.reload();};
+S.logout=()=>{try{localStorage.removeItem(TOKEN_KEY);localStorage.removeItem(KEY);}catch(e){}S.user=null;S._me=null;S.msgUnread=0;S.msgThreads=[];location.hash='inventory';location.reload();};
 S.isPendingApproval=u=>Boolean(u&&(u.approvalStatus==='PENDING'||u.approvalStatus==='REJECTED'));
 const needApproved=()=>{if(S.user&&!S.isAdmin()&&S.isPendingApproval(S.user))throw new Error(S.lang==='es'?'Tu cuenta está pendiente de aprobación. Te avisaremos cuando esté aprobada.':'Your account is pending approval. We will let you know once it is approved.');};
 S.setApproval=async(userId,status)=>{const u=S.data.users.find(x=>x.id===userId);if(!u)return;if(S.caps&&S.caps.investor&&u.role==='INVESTOR'){const j=await api('investor_review',{userId,status});if(j&&j.unavailable)throw new Error(S.lang==='es'?'Las herramientas de inversionista aún no están activas.':'Investor tools are not active yet.');}u.approvalStatus=status;u.approvedAt=now();u.updatedAt=now();if(u.investorProfile)u.investorProfile=Object.assign({},u.investorProfile,{approvalStatus:status});if(S.user&&S.user.id===u.id)S.user.approvalStatus=status;S.save();};
@@ -801,6 +889,8 @@ S.sendMessage=({toUserId,listingId,kind,body})=>{if(!S.user)throw new Error(S.la
     body:m.body,
     created_at:m.createdAt
   },'id');
+  lastMsgPoll=Date.now();
+  refreshMsgUnread().then(ch=>{if(ch)notifyMsgChange();}).catch(()=>{});
   return m;
 };
 S.myMessages=()=>S.user?S.data.messages.filter(m=>m.fromUserId===S.user.id||m.toUserId===S.user.id):[];

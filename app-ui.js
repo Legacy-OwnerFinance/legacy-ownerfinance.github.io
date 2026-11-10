@@ -28,6 +28,7 @@ const initTab=()=>{
 };
 let PIDX={},CMP=new Set(),CHIP='ALL',MARK={};
 let tab=initTab(),F={q:'',area:'',beds:'',baths:'',maxDown:'',maxMonthly:'',maxPrice:'',status:'',sort:(()=>{try{return localStorage.getItem('lof.sort')||'newest'}catch(e){return 'newest'}})()},map=null,CAL={mode:'week',anchor:null},sharedDetailFor='',alertOpen=false;
+let msgOpen=false,msgPeer=null,msgNew=false,msgStickBottom=false,msgScroll=null;
 
 const L10N={
   en:{
@@ -673,6 +674,158 @@ function alertSheet(){
     ${items.length?items.map(a=>`<article class="alert-item ${a.readAt?'':'is-unread'}"><div class="alert-place">${alertPlace(a)}</div><div class="alert-meta">${esc(S.statusText(a.newStatus))} · ${esc(formatInstant(a.changedAt))}</div></article>`).join(''):`<p class="alert-empty">${tr('alerts.empty')}</p>`}
   </section>`;
 }
+const MSG_SKIP_KIND={OFFER_CONFIRMATION:1,SHOWING_CONFIRMATION:1};
+function msgCountLabel(n){
+  n=n|0;
+  if(n<=0)return '';
+  return n>9?'9+':String(n);
+}
+function msgHtml(text){return esc(text).replace(/\r\n|\r|\n/g,'<br>');}
+function msgWhen(iso){
+  const d=new Date(iso);
+  if(!iso||isNaN(d.getTime()))return '';
+  try{return new Intl.DateTimeFormat(S.lang==='es'?'es-US':'en-US',{timeZone:'America/Chicago',month:'short',day:'numeric',hour:'numeric',minute:'2-digit'}).format(d);}catch(e){return '';}
+}
+function msgPeerName(peerId){
+  const u=(S.data&&S.data.users||[]).find(x=>x&&x.id===peerId);
+  if(u&&u.name)return String(u.name);
+  const t=(S.msgThreads||[]).find(x=>x&&x.peerId===peerId);
+  if(t&&t.peerName)return String(t.peerName);
+  return '…';
+}
+function msgUnreadOf(peerId){
+  const t=(S.msgThreads||[]).find(x=>x&&x.peerId===peerId);
+  return t?(t.unread|0):0;
+}
+function msgConversations(){
+  const mine=S.user?S.user.id:'';
+  const rows=(S.myMessages?S.myMessages():[]).filter(m=>{
+    if(!m)return false;
+    const from=String(m.fromUserId||'');
+    const to=String(m.toUserId||'');
+    if(from==='legacy-system'||to==='legacy-system')return false;
+    if(MSG_SKIP_KIND[String(m.kind||'').toUpperCase()])return false;
+    return true;
+  });
+  const map=new Map();
+  rows.forEach(m=>{
+    const peerId=m.fromUserId===mine?m.toUserId:m.fromUserId;
+    if(!peerId||peerId===mine||String(peerId)==='legacy-system')return;
+    let g=map.get(peerId);
+    if(!g){g={peerId,messages:[]};map.set(peerId,g);}
+    g.messages.push(m);
+  });
+  const list=[...map.values()];
+  list.forEach(g=>{
+    g.messages.sort((a,b)=>String(a.createdAt||'').localeCompare(String(b.createdAt||'')));
+    g.last=g.messages[g.messages.length-1];
+    g.lastAt=g.last?g.last.createdAt:'';
+  });
+  list.sort((a,b)=>String(b.lastAt||'').localeCompare(String(a.lastAt||'')));
+  return list;
+}
+function messageContacts(){
+  const u=S.user;
+  if(!u||!S.data)return [];
+  const seen=new Set();
+  const out=[];
+  const add=c=>{
+    if(!c||!c.id||c.id===u.id||String(c.id)==='legacy-system')return;
+    if(seen.has(c.id))return;
+    seen.add(c.id);
+    out.push(c);
+  };
+  if(S.isAdmin()){(S.data.users||[]).forEach(add);return out;}
+  if(S.isInvestor()){
+    const mine=new Set((S.data.listings||[]).filter(l=>l&&l.investorId===u.id).map(l=>l.id));
+    const ids=new Set();
+    (S.data.showings||[]).forEach(sh=>{
+      if(!sh||!mine.has(sh.listingId))return;
+      if(sh.userId)ids.add(sh.userId);
+      if(sh.agentId)ids.add(sh.agentId);
+    });
+    (S.data.users||[]).forEach(c=>{if(c&&ids.has(c.id)&&(c.role==='AGENT'||c.role==='ADMIN'))add(c);});
+    return out;
+  }
+  const ap=S.agentProfile(u);
+  if(ap){S.clientsOf(u).forEach(add);return out;}
+  const ag=S.agentFor(u);
+  if(ag)add(ag);
+  return out;
+}
+function syncMsgTitle(){
+  const n=S.msgUnread|0;
+  const base='Legacy - Owner Finance';
+  document.title=n>0?`(${n}) ${base}`:base;
+}
+function paintMsgBadge(){
+  const n=msgCountLabel(S.msgUnread||0);
+  const btn=document.querySelector('[data-msgbubble]');
+  if(btn){
+    let badge=btn.querySelector('.msg-count');
+    if(!n){if(badge)badge.remove();}
+    else{
+      if(!badge){badge=document.createElement('span');badge.className='msg-count';btn.appendChild(badge);}
+      badge.textContent=n;
+    }
+  }
+  syncMsgTitle();
+}
+window.__paintMsgBadge=paintMsgBadge;
+function captureMsgScroll(){
+  if(msgStickBottom)return;
+  const sc=document.querySelector('.msg-log');
+  msgScroll=sc?sc.scrollTop:null;
+}
+function applyMsgScroll(){
+  const sc=document.querySelector('.msg-log');
+  if(!sc)return;
+  if(msgStickBottom){sc.scrollTop=sc.scrollHeight;msgStickBottom=false;return;}
+  if(msgScroll!=null)sc.scrollTop=msgScroll;
+}
+function submitMsgComposer(){
+  if(!msgPeer||!S.user)return;
+  const box=document.querySelector('[data-msginput]');
+  const body=String(box&&box.value||'').trim();
+  if(!body)return;
+  msgStickBottom=true;
+  S.sendMessage({toUserId:msgPeer,kind:'MESSAGE',body});
+}
+function msgBubble(){
+  if(!(S.msgEnabled&&S.msgEnabled()))return '';
+  const n=msgCountLabel(S.msgUnread);
+  return `<button type="button" class="msg-bubble" data-msgbubble="1" aria-expanded="${msgOpen?'true':'false'}" aria-label="${esc(tr('msg.bubble'))}">💬${n?`<span class="msg-count">${esc(n)}</span>`:''}</button>`;
+}
+function msgThreadList(){
+  const rows=msgConversations();
+  const body=rows.length?rows.map(g=>{
+    const n=msgUnreadOf(g.peerId);
+    const mine=g.last&&S.user&&g.last.fromUserId===S.user.id;
+    const preview=((mine?tr('msg.you')+': ':'')+String(g.last&&g.last.body||'')).replace(/\s+/g,' ').trim();
+    const short=preview.length>90?preview.slice(0,89)+'…':preview;
+    return `<button type="button" class="msg-row${n?' is-unread':''}" data-msgpeer="${esc(g.peerId)}"><span class="msg-row-top"><span class="msg-name">${n?'<i class="msg-dot" aria-hidden="true"></i>':''}${esc(msgPeerName(g.peerId))}</span><span class="msg-when">${esc(msgWhen(g.lastAt))}</span></span><span class="msg-row-bot"><span class="msg-preview">${esc(short)}</span>${n?`<span class="msg-chip">${esc(msgCountLabel(n))}</span>`:''}</span></button>`;
+  }).join(''):`<p class="msg-empty">${esc(tr('msg.empty'))}</p>`;
+  return `<div class="msg-head"><b>${esc(tr('msg.title'))}</b><span class="msg-head-actions"><button type="button" class="btn-card" data-msgnew="1">${esc(tr('msg.new'))}</button><button type="button" class="nav-pill" data-msgclose="1" aria-label="✕">✕</button></span></div><div class="msg-list">${body}</div>`;
+}
+function msgNewList(){
+  const contacts=messageContacts();
+  const body=contacts.length?contacts.map(c=>`<button type="button" class="msg-row" data-msgpeer="${esc(c.id)}"><span class="msg-name">${esc(c.name||'…')}</span></button>`).join(''):`<p class="msg-empty">${esc(tr('noAgentLinked'))}</p>`;
+  return `<div class="msg-head"><button type="button" class="nav-pill" data-msgback="1">${esc('← '+tr('msg.back'))}</button><b>${esc(tr('msg.new'))}</b><button type="button" class="nav-pill" data-msgclose="1" aria-label="✕">✕</button></div><div class="msg-list">${body}</div>`;
+}
+function msgChat(){
+  const g=msgConversations().find(x=>x.peerId===msgPeer);
+  const msgs=g?g.messages:[];
+  const bubbles=msgs.map(m=>{
+    const mine=S.user&&m.fromUserId===S.user.id;
+    return `<div class="msg-line ${mine?'mine':'theirs'}"><div class="msg-text">${msgHtml(m.body)}</div><time class="msg-time">${esc(msgWhen(m.createdAt))}</time></div>`;
+  }).join('')||`<p class="msg-empty">${esc(tr('msg.empty'))}</p>`;
+  return `<div class="msg-head"><button type="button" class="nav-pill" data-msgback="1">${esc('← '+tr('msg.back'))}</button><b>${esc(msgPeerName(msgPeer))}</b><button type="button" class="nav-pill" data-msgclose="1" aria-label="✕">✕</button></div><div class="msg-chat" data-peer="${esc(msgPeer)}"><div class="msg-log">${bubbles}</div><form class="msg-compose"><textarea data-msginput="1" rows="2" maxlength="4000" placeholder="${esc(tr('msg.placeholder'))}" aria-label="${esc(tr('msg.placeholder'))}"></textarea><button type="button" class="btn-card primary" data-msgsend="1">${esc(tr('msg.send'))}</button></form></div>`;
+}
+function msgPanel(){
+  if(!(S.msgEnabled&&S.msgEnabled())||!msgOpen)return '';
+  const body=msgPeer?msgChat():msgNew?msgNewList():msgThreadList();
+  return `<div class="msg-backdrop" data-msgclose="1"></div><section class="msg-panel" role="dialog" aria-label="${esc(tr('msg.title'))}">${body}</section>`;
+}
 function alertsDash(){
   if(!portalReady())return '';
   const items=(S.alerts||[]).slice(0,8);
@@ -784,7 +937,7 @@ function header(){
    ${bellHtml()}
    ${S.user?`<button id="logout" class="nav-pill">${tr('logout')} (${esc(S.user.name)})</button>`:''}
    <button data-lang="en" class="nav-pill lang-btn ${S.lang==='en'?'active':''}">EN</button><button data-lang="es" class="nav-pill lang-btn ${S.lang==='es'?'active':''}">ES</button></nav></header>
-   <div class="guide-banner"><span>${tr('newHere')} <a href="#guides" data-tab="guides">${tr('guideLink')}</a></span></div>${alertSheet()}`;
+   <div class="guide-banner"><span>${tr('newHere')} <a href="#guides" data-tab="guides">${tr('guideLink')}</a></span></div>${alertSheet()}${msgBubble()}${msgPanel()}`;
 }
 
 function guides(){
@@ -1294,8 +1447,8 @@ function maybeOpenSharedDetail(){
   sharedDetailFor=id;
   openListing(id);
 }
-function render(){document.documentElement.lang=S.lang;const root=$('#app-root');if(!S.data)return;if(map){try{map.stop();map.off();map.remove();}catch(e){}map=null;}
-  const body={inventory,guides,dashboard,admin,auth,calendar:calendarView,'investor-tx':investorTx,'investor-map':investorMap}[tab]||inventory;root.innerHTML=header()+`<main>${body()}</main><footer style="padding:18px;font-size:12px;text-align:center">© Legacy - Owner Finance · Brokerage By: KLC Real Estate, LLC</footer>`;bind();if(tab==='inventory')drawMap();if(tab==='investor-map')drawInvestorMap();maybeOpenSharedDetail();}
+function render(){captureMsgScroll();document.documentElement.lang=S.lang;syncMsgTitle();const root=$('#app-root');if(!S.data)return;if(map){try{map.stop();map.off();map.remove();}catch(e){}map=null;}
+  const body={inventory,guides,dashboard,admin,auth,calendar:calendarView,'investor-tx':investorTx,'investor-map':investorMap}[tab]||inventory;root.innerHTML=header()+`<main>${body()}</main><footer style="padding:18px;font-size:12px;text-align:center">© Legacy - Owner Finance · Brokerage By: KLC Real Estate, LLC</footer>`;bind();applyMsgScroll();if(tab==='inventory')drawMap();if(tab==='investor-map')drawInvestorMap();maybeOpenSharedDetail();}
 function bind(){const r=$('#app-root');
   r.onclick=async e=>{
    const c=e.target.closest('[data-view],[data-editsearch],[data-prev],[data-next],[data-compare],[data-chip],[data-cmpopen],[data-cmpclear]');
@@ -1311,7 +1464,7 @@ function bind(){const r=$('#app-root');
        modal(`<h2>⚖️ ${S.lang==='es'?'Comparación de Casas':'Side-by-Side Comparison'}</h2><div style="display:grid;grid-template-columns:repeat(${it.length},1fr);gap:12px">${it.map(l=>`<div class="card" style="padding:10px"><img src="${esc(l.photoUrl||'listing-placeholder.svg')}" referrerpolicy="no-referrer" onerror="window.imgFallback&&window.imgFallback(this)" style="width:100%;height:120px;object-fit:cover;border-radius:8px"><h4 style="margin:8px 0">${title(l)}</h4>
        <div style="font-size:13px;line-height:1.8">${tr('price')}: <b>${S.money(l.askingPrice)}</b><br>${tr('down')}: <b>${S.money(l.downPayment)}</b><br>${tr('monthly')}: <b>${S.money(l.monthlyPayment)}</b><br>${l.beds??'—'} ${tr('bdShort')} · ${l.baths??'—'} ${tr('baShort')}<br>${l.sqft?(+l.sqft).toLocaleString()+' '+tr('sqftUnit'):''}${l.sqft&&l.askingPrice?'<br>$'+Math.round(l.askingPrice/100/l.sqft)+tr('perSqft'):''}</div></div>`).join('')}</div>`);return;}
    }
-   const t=e.target.closest('[data-tab],[data-lang],[data-open],[data-fav],[data-acc],[data-rej],[data-ctr],[data-reset],[data-save],[data-client],[data-register],[data-login],[data-shareclear],[data-copylink],[data-calmode],[data-calnav],[data-showacc],[data-showden],[data-showcan],[data-showmsg],[data-approve],[data-decline],[data-inspsched],[data-inspcancel],[data-bell],[data-alertclose],[data-feedback],[data-checkin],[data-checkout],[data-activity],[data-metric],[data-views],[data-favs],[data-openmap],[data-mapscope],[data-closed],[data-editown],[data-unassign],#logout,#forgot');
+   const t=e.target.closest('[data-tab],[data-lang],[data-open],[data-fav],[data-acc],[data-rej],[data-ctr],[data-reset],[data-save],[data-client],[data-register],[data-login],[data-shareclear],[data-copylink],[data-calmode],[data-calnav],[data-showacc],[data-showden],[data-showcan],[data-showmsg],[data-approve],[data-decline],[data-inspsched],[data-inspcancel],[data-bell],[data-alertclose],[data-msgbubble],[data-msgclose],[data-msgpeer],[data-msgback],[data-msgsend],[data-msgnew],[data-feedback],[data-checkin],[data-checkout],[data-activity],[data-metric],[data-views],[data-favs],[data-openmap],[data-mapscope],[data-closed],[data-editown],[data-unassign],#logout,#forgot');
    if(!t)return;
    e.preventDefault();
    try{
@@ -1335,8 +1488,14 @@ function bind(){const r=$('#app-root');
        else if(CAL.mode==='week')dt.setDate(dt.getDate()+7*delta);
        else dt.setMonth(dt.getMonth()+delta);
        CAL.anchor=fmt(dt);return render();}
-     if(d.bell){alertOpen=!alertOpen;render();if(alertOpen)S.markAlertsRead();return;}
+     if(d.bell){alertOpen=!alertOpen;if(alertOpen)msgOpen=false;render();if(alertOpen)S.markAlertsRead();return;}
      if(d.alertclose){alertOpen=false;return render();}
+     if(d.msgbubble){msgOpen=!msgOpen;if(msgOpen){alertOpen=false;msgNew=false;if(msgPeer)S.markThreadRead(msgPeer);}return render();}
+     if(d.msgclose){msgOpen=false;return render();}
+     if(d.msgback){msgPeer=null;msgNew=false;return render();}
+     if(d.msgnew){msgNew=true;msgPeer=null;return render();}
+     if(d.msgpeer){const peer=d.msgpeer;msgPeer=peer;msgNew=false;msgStickBottom=true;S.markThreadRead(peer).then(()=>{if(!msgOpen||msgPeer!==peer)return;const active=document.activeElement;if(active&&active.tagName==='TEXTAREA'){paintMsgBadge();return;}const sc=document.querySelector('.msg-log');if(sc)msgScroll=sc.scrollTop;msgStickBottom=false;render();});return render();}
+     if(d.msgsend){submitMsgComposer();return;}
      if(d.feedback){const sh=(S.myShowings||[]).find(s=>s.id===d.feedback);if(sh)openFeedback(sh);return;}
      if(d.checkin||d.checkout){const id=d.checkin||d.checkout;const geo=await readGeo();await S.showingVisit(id,d.checkin?'in':'out',geo);alert(tr('showings.visitSaved'));return render();}
      if(d.activity){await openActivity(d.activity);return;}
@@ -1379,7 +1538,11 @@ function bind(){const r=$('#app-root');
   r.querySelectorAll('form[data-assign]').forEach(f=>{f.onsubmit=wrap(async()=>{const id=String(new FormData(f).get('listingId')||'');if(!id)return;await S.assignInvestorListings(f.dataset.assign,[id],[]);render();});});
   sub('#profF',v=>{S.updateProfile(v);alert(tr('savedAlert'));});
   sub('#pwF',async v=>{await S.changePassword(v.cur,v.pw);alert(tr('pwUpdatedAlert'));});
-  sub('#msgF',v=>{S.sendMessage(v);});}
+  sub('#msgF',v=>{S.sendMessage(v);});
+  const box=r.querySelector('[data-msginput]');
+  if(box)box.onkeydown=e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();submitMsgComposer();}};
+  const compose=r.querySelector('.msg-compose');
+  if(compose)compose.onsubmit=e=>{e.preventDefault();submitMsgComposer();};}
 
 function openVerifyEmail(email,justSent){
   const m=modal(`<form id="evF" class="card" style="padding:20px;max-width:420px;width:92%"><h2>✉️ ${tr('evTitle')}</h2>
@@ -1413,6 +1576,7 @@ function checkResetUrlParams(){
   }catch(e){}
 }
 
+document.addEventListener('keydown',e=>{if(e.key!=='Escape'||!msgOpen)return;msgOpen=false;render();});
 S.on(render);window.addEventListener('hashchange',()=>{tab=location.hash.slice(1)||'inventory';render();});
 S.load().then(()=>{render();checkResetUrlParams();maybePromptCriteria();}).catch(e=>{document.documentElement.lang=S.lang;$('#app-root').innerHTML='<p style="padding:20px">'+esc(tr('loadFail'))+': '+esc(e.message)+'</p>';});
 })();
