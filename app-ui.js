@@ -1213,6 +1213,15 @@ function investorGate(){
   if(S.isPendingApproval(S.user))return investorThanks();
   return '';
 }
+function footerLinks(){
+  const P=window.LegacyPwa;if(!P)return '';
+  const canDelete=S.user&&S.user.role!=='ADMIN';
+  return `<div class="pwa-foot" style="margin-top:6px"><a href="/privacy.html" target="_blank" rel="noopener">${esc(P.t('privacyLink'))}</a> · <button type="button" data-install-app>${esc(P.t('installLink'))}</button>${canDelete?` · <button type="button" data-delete-account>${esc(P.t('deleteLink'))}</button>`:''}</div>`;
+}
+function accountDeleteCard(){
+  const P=window.LegacyPwa;if(!P||!S.user||S.user.role==='ADMIN')return '';
+  return `<div style="margin-top:16px"><button type="button" class="btn-card" data-delete-account style="color:#b91c1c;border-color:#b91c1c">${esc(P.t('deleteLink'))}</button></div>`;
+}
 function investorDash(){return investorGate()||investorHomeHtml();}
 function feedKind(k){return tr({SHOWING:'feedShowing',OFFER:'feedOffer',CONTRACT:'feedContract',CLOSED:'feedClosed'}[k]||'notifications');}
 function investorHomeHtml(){
@@ -1341,7 +1350,7 @@ function dashboard(){if(!S.user)return auth();if(S.isInvestor())return investorD
   return `${S.isPendingApproval(u)?`<div style="margin:18px 18px 0;padding:12px;border-radius:10px;background:#fef3c7;border:1px solid #d97706">⏳ ${S.lang==='es'?(u.approvalStatus==='REJECTED'?'Tu cuenta no fue aprobada. Contáctanos para más información.':'Tu cuenta está pendiente de aprobación. Mientras tanto puedes ver casas; podrás hacer ofertas y pedir citas cuando sea aprobada.'):(u.approvalStatus==='REJECTED'?'Your account was not approved. Contact us for more information.':'Your account is pending approval. You can browse homes meanwhile; offers and showings unlock once approved.')}</div>`:''}<section style="display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:16px;padding:18px">${alertsDash()}${showingsDash()}
   <div class="card" style="padding:16px"><h2>${tr('myProfile')}</h2><img src="${esc(u.avatarUrl||'listing-placeholder.svg')}" style="width:90px;height:90px;border-radius:50%;object-fit:cover"><input type="file" id="avatar" accept="image/*">
    <form id="profF"><input name="name" value="${esc(u.name)}"><input name="phone" value="${esc(u.phone)}">${ap?`<label>${tr('orecLicense')}<input name="licenseNumber" value="${esc(ap.licenseNumber)}"></label><label>${tr('brokerage')}<input name="brokerage" value="${esc(ap.brokerage)}"></label><p>${tr('yourInviteCode')} <b>${esc(ap.inviteCode)}</b></p>`:''}<button>${tr('save')}</button></form>
-   ${ag?`<p>${tr('yourAgent')} <b>${esc(ag.name)}</b></p>`:''}<h3>${tr('changePw')}</h3><form id="pwF"><input name="cur" type="password" placeholder="${tr('currentPw')}" required><input name="pw" type="password" placeholder="${tr('newPw')}" minlength="8" required><button>${tr('updatePw')}</button></form></div>
+   ${ag?`<p>${tr('yourAgent')} <b>${esc(ag.name)}</b></p>`:''}<h3>${tr('changePw')}</h3><form id="pwF"><input name="cur" type="password" placeholder="${tr('currentPw')}" required><input name="pw" type="password" placeholder="${tr('newPw')}" minlength="8" required><button>${tr('updatePw')}</button></form>${accountDeleteCard()}</div>
   ${isClient()?`<div class="card" style="padding:16px"><h2>🏡 ${st('mySearch')}</h2>${critSummary(critOf(u))}<button type="button" class="btn-card primary" data-editsearch="1">✏️ ${st('edit')}</button></div>`:''}
   <div class="card" style="padding:16px"><h2>${tr('favorites')}</h2><ul>${favs.map(li).join('')||`<li>${tr('noneYet')}</li>`}</ul><h2>${tr('viewedHomes')}</h2><ul>${views.map(li).join('')||`<li>${tr('noneYet')}</li>`}</ul></div>
   <div class="card" style="padding:16px"><h2>${tr('messages')}</h2>${contacts.length?`<form id="msgF"><select name="toUserId">${contacts.map(c=>`<option value="${c.id}">${esc(c.name)}</option>`).join('')}</select>
@@ -1448,7 +1457,7 @@ function maybeOpenSharedDetail(){
   openListing(id);
 }
 function render(){captureMsgScroll();document.documentElement.lang=S.lang;syncMsgTitle();const root=$('#app-root');if(!S.data)return;if(map){try{map.stop();map.off();map.remove();}catch(e){}map=null;}
-  const body={inventory,guides,dashboard,admin,auth,calendar:calendarView,'investor-tx':investorTx,'investor-map':investorMap}[tab]||inventory;root.innerHTML=header()+`<main>${body()}</main><footer style="padding:18px;font-size:12px;text-align:center">© Legacy - Owner Finance · Brokerage By: KLC Real Estate, LLC</footer>`;bind();applyMsgScroll();if(tab==='inventory')drawMap();if(tab==='investor-map')drawInvestorMap();maybeOpenSharedDetail();}
+  const body={inventory,guides,dashboard,admin,auth,calendar:calendarView,'investor-tx':investorTx,'investor-map':investorMap}[tab]||inventory;root.innerHTML=header()+`<main>${body()}</main><footer style="padding:18px;font-size:12px;text-align:center">© Legacy - Owner Finance · Brokerage By: KLC Real Estate, LLC${footerLinks()}</footer>`;bind();applyMsgScroll();if(tab==='inventory')drawMap();if(tab==='investor-map')drawInvestorMap();maybeOpenSharedDetail();}
 function bind(){const r=$('#app-root');
   r.onclick=async e=>{
    const c=e.target.closest('[data-view],[data-editsearch],[data-prev],[data-next],[data-compare],[data-chip],[data-cmpopen],[data-cmpclear]');
