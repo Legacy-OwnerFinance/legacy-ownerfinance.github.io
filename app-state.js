@@ -439,7 +439,7 @@ function sameJson(a,b){try{return JSON.stringify(a)===JSON.stringify(b);}catch(e
 function capsFrom(raw){
   const version=Number(raw&&raw.version)||0;
   const v13=version>=13;
-  return {v13,ready:v13&&!!(raw&&raw.ready),investor:version>=14&&!!(raw&&raw.investor),messages:version>=15&&!!(raw&&raw.messages_badge),version};
+  return {v13,ready:v13&&!!(raw&&raw.ready),investor:version>=14&&!!(raw&&raw.investor),messages:version>=15&&!!(raw&&raw.messages_badge),closing:version>=16&&!!(raw&&raw.offer_closing),version};
 }
 function clearMsgUnread(){
   const changed=!!S.msgUnread||(S.msgThreads&&S.msgThreads.length>0);
@@ -462,7 +462,7 @@ async function refreshPortal(opts){
     if(!ready||!S.user){
       const msgCleared=clearMsgUnread();
       const changed=!!(S.caps&&S.caps.ready)||(S.alerts||[]).length>0||(S.myShowings||[]).length>0||!!(S.caps&&S.caps.investor)!==investor||!!(S.caps&&S.caps.messages)||msgCleared;
-      S.caps={v13:version13,ready:false,investor,messages:false,version:parsed.version||0};
+      S.caps={v13:version13,ready:false,investor,messages:false,closing:false,version:parsed.version||0};
       S.alerts=[];S.myShowings=[];
       return changed;
     }
@@ -470,7 +470,7 @@ async function refreshPortal(opts){
     if(!home||home.unavailable){
       const msgCleared=clearMsgUnread();
       const changed=!!(S.caps&&S.caps.ready)||msgCleared;
-      S.caps={v13:version13,ready:false,investor:false,messages:false,version:parsed.version||0};
+      S.caps={v13:version13,ready:false,investor:false,messages:false,closing:false,version:parsed.version||0};
       S.alerts=[];S.myShowings=[];
       return changed;
     }
@@ -483,8 +483,8 @@ async function refreshPortal(opts){
       S.msgUnread=home.messagesUnread|0;
       msgChanged=true;
     }
-    const changed=!(S.caps&&S.caps.ready)||!!(S.caps&&S.caps.investor)!==investor||!!(S.caps&&S.caps.messages)!==messages||!sameJson(S.alerts,nextA)||!sameJson(S.myShowings,nextS)||msgChanged;
-    S.caps={v13:true,ready:true,investor,messages,version:parsed.version||(investor?14:13)};
+    const changed=!(S.caps&&S.caps.ready)||!!(S.caps&&S.caps.investor)!==investor||!!(S.caps&&S.caps.messages)!==messages||!!(S.caps&&S.caps.closing)!==!!parsed.closing||!sameJson(S.alerts,nextA)||!sameJson(S.myShowings,nextS)||msgChanged;
+    S.caps={v13:true,ready:true,investor,messages,closing:!!parsed.closing,version:parsed.version||(investor?14:13)};
     S.alerts=nextA;
     S.myShowings=nextS;
     return changed;
@@ -492,7 +492,7 @@ async function refreshPortal(opts){
     if(e&&(e.code==='bad_action'||e.status===404)){
       const msgCleared=clearMsgUnread();
       const changed=!!(S.caps&&(S.caps.ready||S.caps.v13||S.caps.investor||S.caps.messages))||msgCleared;
-      S.caps={v13:false,ready:false,investor:false,messages:false,version:0};
+      S.caps={v13:false,ready:false,investor:false,messages:false,closing:false,version:0};
       S.alerts=[];S.myShowings=[];
       return changed;
     }
@@ -592,6 +592,40 @@ async function refreshInvestor(){
     return changed;
   }catch(e){return false;}
 }
+// v16: closing tools on accepted offers. Held in memory only (never saved to local storage or the shared state): commission is Admin/agent-only.
+S.closings={};
+let lastClosingPoll=0;
+function closingEnabled(){return !!(S.user&&S.caps&&S.caps.ready&&S.caps.closing);}
+async function refreshClosings(force){
+  if(!closingEnabled()){if(Object.keys(S.closings).length){S.closings={};return true;}return false;}
+  if(!force&&Date.now()-lastClosingPoll<30000)return false;
+  lastClosingPoll=Date.now();
+  try{
+    const r=await api('offer_closing_list');
+    if(!r||r.error||r.unavailable)return false;
+    const m={};(r.closings||[]).forEach(c=>{m[c.offerId]=c;});
+    const changed=!sameJson(m,S.closings);
+    S.closings=m;
+    return changed;
+  }catch(e){return false;}
+}
+S.refreshClosings=refreshClosings;
+S.closingFor=offerId=>S.closings[offerId]||null;
+async function closingCall(action,body){
+  const j=await api(action,body);
+  if(!j||j.unavailable)throw new Error(S.lang==='es'?'Las herramientas de cierre todavía no están disponibles.':'Closing tools are not available yet.');
+  if(j.closing)S.closings[j.closing.offerId]=j.closing;
+  return j;
+}
+function applyClosingResult(j){
+  if(j&&j.offer){const o=(S.data.offers||[]).find(x=>x.id===j.offer.id);if(o){o.status=j.offer.status;o.updatedAt=now();}}
+  if(j&&j.listing){const l=S.listing(j.listing.id);if(l){l.status=j.listing.status;l.soldAt=j.listing.soldAt||null;}}
+  notify();
+  pollSupabase({forceMsg:true});
+}
+S.saveClosing=async(offerId,fields)=>{const j=await closingCall('offer_closing_save',Object.assign({offerId},fields||{}));notify();return j;};
+S.closeOffer=async(offerId,fields)=>{const j=await closingCall('offer_close',Object.assign({offerId},fields||{}));applyClosingResult(j);return j;};
+S.offerFellThrough=async(offerId,reason)=>{const j=await closingCall('offer_fell_through',{offerId,reason:reason||''});applyClosingResult(j);return j;};
 S.refreshInvestor=refreshInvestor;
 S.refreshPortal=refreshPortal;
 S.markAlertsRead=async()=>{
@@ -656,6 +690,7 @@ S.load=async()=>{
   try{await refreshPortal();}catch(e){}
   try{if(S.user&&S._me){if(S._me.role)S.user.role=S._me.role;if(S._me.approvalStatus)S.user.approvalStatus=S._me.approvalStatus;if(S._me.investorProfile)S.user.investorProfile=S._me.investorProfile;}}catch(e){}
   try{await refreshInvestor();}catch(e){}
+  try{await refreshClosings(true);}catch(e){}
   try{lastMsgPoll=Date.now();await refreshMsgUnread();}catch(e){}
   startRealtimePolling();
 };
@@ -698,6 +733,7 @@ async function pollSupabase(opts){
     try{if(await refreshMsgUnreadPolled(!!(opts&&opts.forceMsg)))changed=true;}catch(e){}
     try{if(await markVisibleThreadRead())changed=true;}catch(e){}
     try{if(await refreshInvestor())changed=true;}catch(e){}
+    try{if(await refreshClosings(!!(opts&&opts.forceMsg)))changed=true;}catch(e){}
     if(changed){
       if(S.user){S.user=S.data.users.find(u=>u.id===S.user.id)||S.user;}
       persistLocalState(S.data);
@@ -753,6 +789,7 @@ async function adoptSession(j){
   setUser(u);
   try{await refreshPortal();}catch(e){}
   try{await refreshInvestor();}catch(e){}
+  try{await refreshClosings(true);}catch(e){}
   try{lastMsgPoll=Date.now();await refreshMsgUnread();}catch(e){}
   return u;
 }
@@ -761,7 +798,7 @@ S.login=async(email,pw)=>{
   if(j.needsVerify)return {needsVerify:true,email:j.email};
   return adoptSession(j);
 };
-S.logout=()=>{try{localStorage.removeItem(TOKEN_KEY);localStorage.removeItem(KEY);}catch(e){}S.user=null;S._me=null;S.msgUnread=0;S.msgThreads=[];location.hash='inventory';location.reload();};
+S.logout=()=>{try{localStorage.removeItem(TOKEN_KEY);localStorage.removeItem(KEY);}catch(e){}S.user=null;S._me=null;S.msgUnread=0;S.msgThreads=[];S.closings={};location.hash='inventory';location.reload();};
 S.isPendingApproval=u=>Boolean(u&&(u.approvalStatus==='PENDING'||u.approvalStatus==='REJECTED'));
 const needApproved=()=>{if(S.user&&!S.isAdmin()&&S.isPendingApproval(S.user))throw new Error(S.lang==='es'?'Tu cuenta está pendiente de aprobación. Te avisaremos cuando esté aprobada.':'Your account is pending approval. We will let you know once it is approved.');};
 S.setApproval=async(userId,status)=>{const u=S.data.users.find(x=>x.id===userId);if(!u)return;if(S.caps&&S.caps.investor&&u.role==='INVESTOR'){const j=await api('investor_review',{userId,status});if(j&&j.unavailable)throw new Error(S.lang==='es'?'Las herramientas de inversionista aún no están activas.':'Investor tools are not active yet.');}u.approvalStatus=status;u.approvedAt=now();u.updatedAt=now();if(u.investorProfile)u.investorProfile=Object.assign({},u.investorProfile,{approvalStatus:status});if(S.user&&S.user.id===u.id)S.user.approvalStatus=status;S.save();};
@@ -1108,7 +1145,7 @@ S.STATUS_LABEL={AVAILABLE:'Available',COMING_SOON:'Coming Soon',PENDING:'Pending
 S.STATUS_LABEL_ES={AVAILABLE:'Disponible',COMING_SOON:'Próximamente',PENDING:'Pendiente',PENDING_NO_EM:'Pendiente/Sin EM',PENDING_EM:'Pendiente/Con EM',SOLD:'Vendida (3 días)',CLOSED:'Vendida (3 días)'};
 S.statusText=st=>S.lang==='es'?(S.STATUS_LABEL_ES[st]||st):(S.STATUS_LABEL[st]||st);
 S.setInspection=(offerId,at)=>{const o=S.data.offers.find(x=>x.id===offerId);if(!o)return;if(at){o.inspectionAt=at;o.inspectionStatus='SCHEDULED';}else{o.inspectionStatus='CANCELLED';o.inspectionAt=null;}o.updatedAt=now();S.save();};
-S.OFFER_COLOR={ACCEPTED:'#16a34a',REJECTED:'#dc2626',COUNTERED:'#d97706',SUBMITTED:'#64748b'};
+S.OFFER_COLOR={ACCEPTED:'#16a34a',REJECTED:'#dc2626',COUNTERED:'#d97706',SUBMITTED:'#64748b',CLOSED:'#0f766e',FELL_THROUGH:'#b91c1c'};
 S.setListingStatus=(lid,st)=>{
   if(!S.isAdmin())throw new Error('Admins only');
   const l=S.listing(lid);
