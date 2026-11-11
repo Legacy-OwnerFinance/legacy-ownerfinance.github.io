@@ -125,7 +125,7 @@ async function sbUploadFile(file,folderSlug){
       headers:{
         'apikey':SUPABASE_ANON_KEY,
         'Authorization':'Bearer '+SUPABASE_ANON_KEY,
-        'Content-Type':file.type||'application/octet-stream'
+        'Content-Type':S.uploadMime(file)||file.type||'application/octet-stream'
       },
       body:file
     });
@@ -874,7 +874,8 @@ S.updateProfile=p=>{Object.assign(S.user,p,{updatedAt:now()});const ap=S.agentPr
   S.save();sbUpsert('app_users',userToRow(S.user),'id');};
 const readFile=file=>new Promise((res,rej)=>{const r=new FileReader();r.onload=()=>res(r.result);r.onerror=rej;r.readAsDataURL(file);});
 S.uploadAvatar=async file=>{
-  const cloudUrl=await sbUploadFile(file,S.user.folderSlug||'avatars');
+  const bad=S.uploadProblem(file,true);if(bad)throw new Error(bad);
+  const cloudUrl=await sbUploadFile(file,'avatars/'+(S.user.folderSlug||S.user.id));
   S.user.avatarUrl=cloudUrl||await readFile(file);
   S.user.updatedAt=now();
   S.save();
@@ -1116,29 +1117,42 @@ S.respondShowing=(sid,status)=>{
   // Refresh public today/calendar payload soon
   setTimeout(()=>{try{api('state').then(st=>{S.todayApprovedShowings=Array.isArray(st.todayApprovedShowings)?st.todayApprovedShowings:S.todayApprovedShowings;S.approvedShowingsCalendar=Array.isArray(st.approvedShowingsCalendar)?st.approvedShowingsCalendar:S.approvedShowingsCalendar;notify();});}catch(e){}},400);
 };
-S.uploadDocument=async(file,{listingId,docType,offerId,wait}={})=>{if(!S.user)throw new Error(S.lang==='es'?'Inicia sesión primero':'Please log in');
-  const cloudUrl=await sbUploadFile(file,S.user.folderSlug||'documents');
-  let dataUrl=cloudUrl;
-  if(!dataUrl){
-    if(file.size>4e6)throw new Error('File too large (max 4 MB)');
-    dataUrl=await readFile(file);
-  }
-  const d={id:uid(),userId:S.user.id,listingId:listingId||null,offerId:offerId||null,docType:docType||'GENERAL',name:file.name,size:file.size,dataUrl,folderSlug:S.user.folderSlug,createdAt:now()};
+// Allowed uploads: images (JPG/PNG/WebP/HEIC) and PDF, up to 15 MB. Client documents go to a PRIVATE bucket through the api (signed upload URL);
+// they open only via S.openDocument (permission-checked, short-lived signed link). The browser never holds a public link to them.
+const UPLOAD_MAX=15*1024*1024;
+const UPLOAD_MIME={jpg:'image/jpeg',jpeg:'image/jpeg',png:'image/png',webp:'image/webp',heic:'image/heic',heif:'image/heif',pdf:'application/pdf'};
+S.UPLOAD_ACCEPT='image/jpeg,image/png,image/webp,image/heic,image/heif,application/pdf,.jpg,.jpeg,.png,.webp,.heic,.heif,.pdf';
+S.uploadMime=file=>{const t=String(file&&file.type||'').toLowerCase();if(Object.values(UPLOAD_MIME).includes(t))return t;const ext=String(file&&file.name||'').toLowerCase().split('.').pop();return UPLOAD_MIME[ext]||'';};
+S.uploadProblem=(file,imageOnly)=>{
+  const es=S.lang==='es';
+  const m=S.uploadMime(file);
+  if(!m||(imageOnly&&m==='application/pdf'))return imageOnly?(es?'Solo se permiten imágenes (JPG, PNG, WebP, HEIC).':'Only images (JPG, PNG, WebP, HEIC) are allowed.'):(es?'Solo se permiten imágenes (JPG, PNG, WebP, HEIC) y PDF.':'Only images (JPG, PNG, WebP, HEIC) and PDF files are allowed.');
+  if(!file.size||file.size>UPLOAD_MAX)return es?'El archivo debe pesar menos de 15 MB.':'The file must be smaller than 15 MB.';
+  return '';
+};
+S.uploadDocument=async(file,{listingId,docType,offerId}={})=>{
+  if(!S.user)throw new Error(S.lang==='es'?'Inicia sesión primero':'Please log in');
+  const bad=S.uploadProblem(file,false);if(bad)throw new Error(bad);
+  const meta={name:file.name,size:file.size,type:S.uploadMime(file),docType:docType||'GENERAL',listingId:listingId||null,offerId:offerId||null};
+  const init=await api('document_upload_init',meta);
+  if(!init||!init.ok)throw new Error(S.lang==='es'?'La subida de documentos aún no está disponible.':'Document upload is not available yet.');
+  const put=await fetch(init.signedUrl,{method:'PUT',headers:{'Content-Type':init.mime||meta.type,'x-upsert':'false'},body:file});
+  if(!put.ok)throw new Error(S.lang==='es'?'No se pudo subir el archivo. Inténtalo de nuevo.':'The file could not be uploaded. Please try again.');
+  const done=await api('document_upload_done',Object.assign({path:init.path},meta));
+  const d=done&&done.document;if(!d)throw new Error(S.lang==='es'?'No se pudo guardar el documento.':'The document could not be saved.');
   S.data.documents.push(d);
   S.save();
-  const wrote=sbUpsert('documents',{
-    id:d.id,
-    user_id:d.userId,
-    listing_id:d.listingId,
-    category:d.docType,
-    file_name:d.name,
-    mime_type:file.type||'application/octet-stream',
-    size_bytes:d.size,
-    data_url:d.dataUrl,
-    created_at:d.createdAt
-  },'id');
-  if(wait){const ok=await wrote;if(!ok){S.data.documents=S.data.documents.filter(x=>x.id!==d.id);S.save();throw new Error(S.lang==='es'?'No se pudo subir el documento. Solo puedes subir el contrato final de tus casas bajo contrato o vendidas.':'The document could not be uploaded. You can only upload the final contract for your own homes that are under contract or sold.');}}
+  notify();
   return d;
+};
+S.openDocument=async id=>{
+  const es=S.lang==='es';
+  const w=window.open('','_blank');
+  try{
+    const j=await api('document_url',{id});
+    if(!j||!j.url)throw new Error(es?'El archivo no está disponible.':'The file is not available.');
+    if(w){w.location.href=j.url;}else{window.location.href=j.url;}
+  }catch(e){if(w)w.close();throw e;}
 };
 S.STATUSES=['AVAILABLE','COMING_SOON','PENDING','PENDING_NO_EM','PENDING_EM','SOLD'];
 S.STATUS_LABEL={AVAILABLE:'Available',COMING_SOON:'Coming Soon',PENDING:'Pending',PENDING_NO_EM:'Pending/NoEM',PENDING_EM:'Pending/EM',SOLD:'Sold (3-Day)',CLOSED:'Sold (3-Day)'};
