@@ -736,11 +736,23 @@ function bellHtml(){
   const n=(S.alerts||[]).filter(a=>!a.readAt).length;
   return `<div class="bell-wrap"><button type="button" class="nav-pill bell-btn" data-bell="1" aria-expanded="${alertOpen?'true':'false'}" aria-label="${esc(tr('alerts.bell'))}">🔔${n?`<span class="bell-count">${n>9?'9+':n}</span>`:''}</button></div>`;
 }
+function pushBox(){
+  if(!S.isAgent||!S.isAgent())return '';
+  const p=S.pushInfo||{};
+  let body='';
+  if(!p.eligible&&!p.iosNeedsInstall)return '';
+  if(p.iosNeedsInstall&&!p.supported)body=`<p>${tr('push.iosHint')}</p>`;
+  else if(!p.supported)return '';
+  else if(p.permission==='denied')body=`<p>${tr('push.blocked')}</p>`;
+  else if(p.subscribed)body=`<p>✅ ${tr('push.enabled')}</p><div class="push-actions"><button type="button" class="nav-pill" data-pushtest="1">${tr('push.test')}</button><button type="button" class="nav-pill" data-pushoff="1">${tr('push.off')}</button></div>`;
+  else body=`<p>${tr('push.desc')}</p><div class="push-actions"><button type="button" class="btn" data-pushon="1" ${p.busy?'disabled':''}>🔔 ${tr('push.on')}</button></div>`;
+  return `<div class="push-box"><b>${tr('push.title')}</b>${body}${p.error?`<p class="push-err">${esc(tr('push.err'))}</p>`:''}</div>`;
+}
 function alertSheet(){
   if(!portalReady()||!alertOpen)return '';
   const items=(S.alerts||[]).slice(0,30);
   return `<section class="alert-panel" role="region" aria-label="${esc(tr('alerts.title'))}"><div class="alert-panel-head"><b>${tr('alerts.title')}</b><button type="button" class="nav-pill" data-alertclose="1" aria-label="✕">✕</button></div>
-    ${items.length?items.map(a=>`<article class="alert-item ${a.readAt?'':'is-unread'}"><div class="alert-place">${alertPlace(a)}</div><div class="alert-meta">${esc(S.statusText(a.newStatus))} · ${esc(formatInstant(a.changedAt))}</div></article>`).join(''):`<p class="alert-empty">${tr('alerts.empty')}</p>`}
+    ${pushBox()}${items.length?items.map(a=>`<article class="alert-item ${a.readAt?'':'is-unread'}"><div class="alert-place">${alertPlace(a)}</div><div class="alert-meta">${a.oldStatus&&a.oldStatus!==a.newStatus?esc(S.statusText(a.oldStatus))+' → ':''}${esc(S.statusText(a.newStatus))} · ${esc(formatInstant(a.changedAt))}</div></article>`).join(''):`<p class="alert-empty">${tr('alerts.empty')}</p>`}
   </section>`;
 }
 const MSG_SKIP_KIND={OFFER_CONFIRMATION:1,SHOWING_CONFIRMATION:1};
@@ -898,7 +910,7 @@ function msgPanel(){
 function alertsDash(){
   if(!portalReady())return '';
   const items=(S.alerts||[]).slice(0,8);
-  return `<div class="card ops-card"><h2>🔔 ${tr('alerts.dash')}</h2>${items.length?`<ul class="ops-list">${items.map(a=>`<li><b>${alertPlace(a)}</b><span>${esc(S.statusText(a.newStatus))} · ${esc(formatInstant(a.changedAt))}</span></li>`).join('')}</ul>`:`<p>${tr('alerts.empty')}</p>`}</div>`;
+  return `<div class="card ops-card"><h2>🔔 ${tr('alerts.dash')}</h2>${items.length?`<ul class="ops-list">${items.map(a=>`<li><b>${alertPlace(a)}</b><span>${a.oldStatus&&a.oldStatus!==a.newStatus?esc(S.statusText(a.oldStatus))+' → ':''}${esc(S.statusText(a.newStatus))} · ${esc(formatInstant(a.changedAt))}</span></li>`).join('')}</ul>`:`<p>${tr('alerts.empty')}</p>`}${pushBox()}</div>`;
 }
 function sortedShowings(){
   const list=(S.myShowings||[]).slice();
@@ -1540,6 +1552,7 @@ function maybeOpenSharedDetail(){
   sharedDetailFor=id;
   openListing(id);
 }
+S.rerender=function(){render();};
 function render(){captureMsgScroll();document.documentElement.lang=S.lang;syncMsgTitle();const root=$('#app-root');if(!S.data)return;if(map){try{map.stop();map.off();map.remove();}catch(e){}map=null;}
   const body={inventory,guides,dashboard,admin,auth,calendar:calendarView,'investor-tx':investorTx,'investor-map':investorMap}[tab]||inventory;root.innerHTML=header()+`<main>${body()}</main><footer style="padding:18px;font-size:12px;text-align:center">© Legacy - Owner Finance · Brokerage By: KLC Real Estate, LLC${footerLinks()}</footer>`;bind();applyMsgScroll();if(tab==='inventory')drawMap();if(tab==='investor-map')drawInvestorMap();maybeOpenSharedDetail();}
 function bind(){const r=$('#app-root');
@@ -1557,7 +1570,7 @@ function bind(){const r=$('#app-root');
        modal(`<h2>⚖️ ${S.lang==='es'?'Comparación de Casas':'Side-by-Side Comparison'}</h2><div style="display:grid;grid-template-columns:repeat(${it.length},1fr);gap:12px">${it.map(l=>`<div class="card" style="padding:10px"><img src="${esc(l.photoUrl||'listing-placeholder.svg')}" referrerpolicy="no-referrer" onerror="window.imgFallback&&window.imgFallback(this)" style="width:100%;height:120px;object-fit:cover;border-radius:8px"><h4 style="margin:8px 0">${title(l)}</h4>
        <div style="font-size:13px;line-height:1.8">${tr('price')}: <b>${S.money(l.askingPrice)}</b><br>${tr('down')}: <b>${S.money(l.downPayment)}</b><br>${tr('monthly')}: <b>${S.money(l.monthlyPayment)}</b><br>${l.beds??'—'} ${tr('bdShort')} · ${l.baths??'—'} ${tr('baShort')}<br>${l.sqft?(+l.sqft).toLocaleString()+' '+tr('sqftUnit'):''}${l.sqft&&l.askingPrice?'<br>$'+Math.round(l.askingPrice/100/l.sqft)+tr('perSqft'):''}</div></div>`).join('')}</div>`);return;}
    }
-   const t=e.target.closest('[data-tab],[data-lang],[data-open],[data-fav],[data-acc],[data-rej],[data-ctr],[data-reset],[data-save],[data-client],[data-register],[data-login],[data-shareclear],[data-copylink],[data-calmode],[data-calnav],[data-showacc],[data-showden],[data-showcan],[data-showmsg],[data-approve],[data-decline],[data-inspsched],[data-inspcancel],[data-bell],[data-alertclose],[data-msgbubble],[data-msgclose],[data-msgpeer],[data-msgback],[data-msgsend],[data-msgnew],[data-feedback],[data-checkin],[data-checkout],[data-activity],[data-metric],[data-views],[data-favs],[data-openmap],[data-mapscope],[data-closed],[data-cldate],[data-clcomm],[data-clclose],[data-clfell],[data-editown],[data-unassign],#logout,#forgot');
+   const t=e.target.closest('[data-tab],[data-lang],[data-open],[data-fav],[data-acc],[data-rej],[data-ctr],[data-reset],[data-save],[data-client],[data-register],[data-login],[data-shareclear],[data-copylink],[data-calmode],[data-calnav],[data-showacc],[data-showden],[data-showcan],[data-showmsg],[data-approve],[data-decline],[data-inspsched],[data-inspcancel],[data-bell],[data-alertclose],[data-pushon],[data-pushoff],[data-pushtest],[data-msgbubble],[data-msgclose],[data-msgpeer],[data-msgback],[data-msgsend],[data-msgnew],[data-feedback],[data-checkin],[data-checkout],[data-activity],[data-metric],[data-views],[data-favs],[data-openmap],[data-mapscope],[data-closed],[data-cldate],[data-clcomm],[data-clclose],[data-clfell],[data-editown],[data-unassign],#logout,#forgot');
    if(!t)return;
    e.preventDefault();
    try{
@@ -1581,8 +1594,11 @@ function bind(){const r=$('#app-root');
        else if(CAL.mode==='week')dt.setDate(dt.getDate()+7*delta);
        else dt.setMonth(dt.getMonth()+delta);
        CAL.anchor=fmt(dt);return render();}
-     if(d.bell){alertOpen=!alertOpen;if(alertOpen)msgOpen=false;render();if(alertOpen)S.markAlertsRead();return;}
+     if(d.bell){alertOpen=!alertOpen;if(alertOpen)msgOpen=false;render();if(alertOpen){S.markAlertsRead();if(S.refreshPush)S.refreshPush().then(ch=>{if(ch&&alertOpen)render();});}return;}
      if(d.alertclose){alertOpen=false;return render();}
+     if(d.pushon){await S.pushEnable();return render();}
+     if(d.pushoff){await S.pushDisable();return render();}
+     if(d.pushtest){const ok=await S.pushTest();alert(ok?tr('push.testSent'):tr('push.err'));return render();}
      if(d.msgbubble){msgOpen=!msgOpen;if(msgOpen){alertOpen=false;msgNew=false;if(msgPeer)S.markThreadRead(msgPeer);}return render();}
      if(d.msgclose){msgOpen=false;return render();}
      if(d.msgback){msgPeer=null;msgNew=false;return render();}
