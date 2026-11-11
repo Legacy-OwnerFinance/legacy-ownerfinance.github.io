@@ -438,7 +438,7 @@ function sameJson(a,b){try{return JSON.stringify(a)===JSON.stringify(b);}catch(e
 function capsFrom(raw){
   const version=Number(raw&&raw.version)||0;
   const v13=version>=13;
-  return {v13,ready:v13&&!!(raw&&raw.ready),investor:version>=14&&!!(raw&&raw.investor),messages:version>=15&&!!(raw&&raw.messages_badge),closing:version>=16&&!!(raw&&raw.offer_closing),version};
+  return {v13,ready:v13&&!!(raw&&raw.ready),investor:version>=14&&!!(raw&&raw.investor),messages:version>=15&&!!(raw&&raw.messages_badge),closing:version>=16&&!!(raw&&raw.offer_closing),deal_progress:version>=20&&!!(raw&&raw.deal_progress),version};
 }
 function clearMsgUnread(){
   const changed=!!S.msgUnread||(S.msgThreads&&S.msgThreads.length>0);
@@ -482,8 +482,8 @@ async function refreshPortal(opts){
       S.msgUnread=home.messagesUnread|0;
       msgChanged=true;
     }
-    const changed=!(S.caps&&S.caps.ready)||!!(S.caps&&S.caps.investor)!==investor||!!(S.caps&&S.caps.messages)!==messages||!!(S.caps&&S.caps.closing)!==!!parsed.closing||!sameJson(S.alerts,nextA)||!sameJson(S.myShowings,nextS)||msgChanged;
-    S.caps={v13:true,ready:true,investor,messages,closing:!!parsed.closing,version:parsed.version||(investor?14:13)};
+    const changed=!(S.caps&&S.caps.ready)||!!(S.caps&&S.caps.investor)!==investor||!!(S.caps&&S.caps.messages)!==messages||!!(S.caps&&S.caps.closing)!==!!parsed.closing||!!(S.caps&&S.caps.deal_progress)!==!!parsed.deal_progress||!sameJson(S.alerts,nextA)||!sameJson(S.myShowings,nextS)||msgChanged;
+    S.caps={v13:true,ready:true,investor,messages,closing:!!parsed.closing,deal_progress:!!parsed.deal_progress,version:parsed.version||(investor?14:13)};
     S.alerts=nextA;
     S.myShowings=nextS;
     return changed;
@@ -608,12 +608,32 @@ async function refreshClosings(force){
     return changed;
   }catch(e){return false;}
 }
+// v20: Pending-home progress tracker. Checkmarks only; held in memory. Parties get an offerId, other approved agents only per-home steps.
+S.progress={byOffer:{},byListing:{}};
+let lastProgressPoll=0;
+function progressEnabled(){return !!(S.user&&S.caps&&S.caps.ready&&S.caps.deal_progress);}
+async function refreshProgress(force){
+  if(!progressEnabled()){if(Object.keys(S.progress.byOffer).length||Object.keys(S.progress.byListing).length){S.progress={byOffer:{},byListing:{}};return true;}return false;}
+  if(!force&&Date.now()-lastProgressPoll<30000)return false;
+  lastProgressPoll=Date.now();
+  try{
+    const r=await api('deal_progress');
+    if(!r||r.error||r.unavailable||!r.ok)return false;
+    const next={byOffer:{},byListing:{}};
+    (r.progress||[]).forEach(p=>{next.byListing[p.listingId]=p;if(p.offerId)next.byOffer[p.offerId]=p;});
+    const changed=!sameJson(next,S.progress);
+    S.progress=next;
+    return changed;
+  }catch(e){return false;}
+}
+S.refreshProgress=refreshProgress;
 S.refreshClosings=refreshClosings;
 S.closingFor=offerId=>S.closings[offerId]||null;
 async function closingCall(action,body){
   const j=await api(action,body);
   if(!j||j.unavailable)throw new Error(S.lang==='es'?'Las herramientas de cierre todavía no están disponibles.':'Closing tools are not available yet.');
   if(j.closing)S.closings[j.closing.offerId]=j.closing;
+  try{await refreshProgress(true);}catch(e){}
   return j;
 }
 function applyClosingResult(j){
@@ -690,6 +710,7 @@ S.load=async()=>{
   try{if(S.user&&S._me){if(S._me.role)S.user.role=S._me.role;if(S._me.approvalStatus)S.user.approvalStatus=S._me.approvalStatus;if(S._me.investorProfile)S.user.investorProfile=S._me.investorProfile;}}catch(e){}
   try{await refreshInvestor();}catch(e){}
   try{await refreshClosings(true);}catch(e){}
+  try{await refreshProgress(true);}catch(e){}
   try{lastMsgPoll=Date.now();await refreshMsgUnread();}catch(e){}
   startRealtimePolling();
 };
@@ -733,6 +754,7 @@ async function pollSupabase(opts){
     try{if(await markVisibleThreadRead())changed=true;}catch(e){}
     try{if(await refreshInvestor())changed=true;}catch(e){}
     try{if(await refreshClosings(!!(opts&&opts.forceMsg)))changed=true;}catch(e){}
+    try{if(await refreshProgress(!!(opts&&opts.forceMsg)))changed=true;}catch(e){}
     if(changed){
       if(S.user){S.user=S.data.users.find(u=>u.id===S.user.id)||S.user;}
       persistLocalState(S.data);
@@ -789,6 +811,7 @@ async function adoptSession(j){
   try{await refreshPortal();}catch(e){}
   try{await refreshInvestor();}catch(e){}
   try{await refreshClosings(true);}catch(e){}
+  try{await refreshProgress(true);}catch(e){}
   try{lastMsgPoll=Date.now();await refreshMsgUnread();}catch(e){}
   return u;
 }
@@ -797,7 +820,7 @@ S.login=async(email,pw)=>{
   if(j.needsVerify)return {needsVerify:true,email:j.email};
   return adoptSession(j);
 };
-S.logout=()=>{try{localStorage.removeItem(TOKEN_KEY);localStorage.removeItem(KEY);}catch(e){}S.user=null;S._me=null;S.msgUnread=0;S.msgThreads=[];S.closings={};location.hash='inventory';location.reload();};
+S.logout=()=>{try{localStorage.removeItem(TOKEN_KEY);localStorage.removeItem(KEY);}catch(e){}S.user=null;S._me=null;S.msgUnread=0;S.msgThreads=[];S.closings={};S.progress={byOffer:{},byListing:{}};location.hash='inventory';location.reload();};
 S.isPendingApproval=u=>Boolean(u&&(u.approvalStatus==='PENDING'||u.approvalStatus==='REJECTED'));
 const needApproved=()=>{if(S.user&&!S.isAdmin()&&S.isPendingApproval(S.user))throw new Error(S.lang==='es'?'Tu cuenta está pendiente de aprobación. Te avisaremos cuando esté aprobada.':'Your account is pending approval. We will let you know once it is approved.');};
 S.setApproval=async(userId,status)=>{const u=S.data.users.find(x=>x.id===userId);if(!u)return;if(S.caps&&S.caps.investor&&u.role==='INVESTOR'){const j=await api('investor_review',{userId,status});if(j&&j.unavailable)throw new Error(S.lang==='es'?'Las herramientas de inversionista aún no están activas.':'Investor tools are not active yet.');}u.approvalStatus=status;u.approvedAt=now();u.updatedAt=now();if(u.investorProfile)u.investorProfile=Object.assign({},u.investorProfile,{approvalStatus:status});if(S.user&&S.user.id===u.id)S.user.approvalStatus=status;S.save();};
@@ -1143,6 +1166,7 @@ S.uploadDocument=async(file,{listingId,docType,offerId}={})=>{
   S.data.documents.push(d);
   S.save();
   notify();
+  if(d.docType==='EM_RECEIPT'||d.docType==='INSPECTION_REPORT'){try{await refreshProgress(true);notify();}catch(e){}}
   return d;
 };
 S.openDocument=async id=>{
@@ -1202,7 +1226,8 @@ S.respondOffer=(oid,status,c={})=>{if(!S.isAdmin())throw new Error('Admins only'
 };
 S.TX_DOCS=[
   {type:'CLIENT_ID',label:"1. Client's Form of ID",labelEs:'1. Identificación Oficial del Cliente (ID)'},
-  {type:'PROOF_OF_INCOME',label:'2. Proof of Income',labelEs:'2. Comprobante de Ingresos'}
+  {type:'PROOF_OF_INCOME',label:'2. Proof of Income',labelEs:'2. Comprobante de Ingresos'},
+  {type:'EM_RECEIPT',label:'3. EM Receipt (earnest money)',labelEs:'3. Recibo del EM (depósito de garantía)'}
 ];
 S.money=c=>c==null?'—':'$'+Math.round(c/100).toLocaleString('en-US');
 })();
