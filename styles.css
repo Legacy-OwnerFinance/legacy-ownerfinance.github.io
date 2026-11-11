@@ -1112,3 +1112,6 @@ form.interactive-controls .chip.active{background:var(--accent);color:#fff;borde
 .push-box p { margin: 4px 0; }
 .push-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 6px; }
 .push-err { color: #b91c1c; }
+
+.digest-list { margin: 6px 0 0; padding-left: 18px; font-size: 12px; }
+.digest-card { border-bottom: 1px solid rgba(0,0,0,.08); }
