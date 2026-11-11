@@ -733,11 +733,20 @@ function readGeo(){
 }
 function bellHtml(){
   if(!portalReady())return '';
-  const n=(S.alerts||[]).filter(a=>!a.readAt).length;
+  const n=(S.alerts||[]).filter(a=>!a.readAt).length+(S.digests||[]).filter(d=>!d.readAt).length;
   return `<div class="bell-wrap"><button type="button" class="nav-pill bell-btn" data-bell="1" aria-expanded="${alertOpen?'true':'false'}" aria-label="${esc(tr('alerts.bell'))}">🔔${n?`<span class="bell-count">${n>9?'9+':n}</span>`:''}</button></div>`;
 }
+function digestCards(){
+  const ds=(S.digests||[]).slice(0,2);
+  if(!ds.length)return '';
+  return ds.map(d=>{
+    const items=(d.items||[]).slice(0,20);
+    const when=d.date||'';
+    return `<article class="alert-item digest-card ${d.readAt?'':'is-unread'}"><div class="alert-place">📋 ${tr('digest.title')}${when?' · '+esc(String(when)):''}</div><div class="alert-meta">${(d.count|0)} ${tr((d.count|0)===1?'digest.change':'digest.changes')}</div><ul class="digest-list">${items.map(it=>`<li>${esc(streetCity(it.street,it.city)||tr('alerts.home'))}: ${esc(S.statusText(it.oldStatus))} → ${esc(S.statusText(it.newStatus))}</li>`).join('')}${(d.count|0)>items.length?`<li>… +${(d.count|0)-items.length}</li>`:''}</ul></article>`;
+  }).join('');
+}
 function pushBox(){
-  if(!S.isAgent||!S.isAgent())return '';
+  if(!((S.isAgent&&S.isAgent())||(S.isAdmin&&S.isAdmin())))return '';
   const p=S.pushInfo||{};
   let body='';
   if(!p.eligible&&!p.iosNeedsInstall)return '';
@@ -752,7 +761,7 @@ function alertSheet(){
   if(!portalReady()||!alertOpen)return '';
   const items=(S.alerts||[]).slice(0,30);
   return `<section class="alert-panel" role="region" aria-label="${esc(tr('alerts.title'))}"><div class="alert-panel-head"><b>${tr('alerts.title')}</b><button type="button" class="nav-pill" data-alertclose="1" aria-label="✕">✕</button></div>
-    ${pushBox()}${items.length?items.map(a=>`<article class="alert-item ${a.readAt?'':'is-unread'}"><div class="alert-place">${alertPlace(a)}</div><div class="alert-meta">${a.oldStatus&&a.oldStatus!==a.newStatus?esc(S.statusText(a.oldStatus))+' → ':''}${esc(S.statusText(a.newStatus))} · ${esc(formatInstant(a.changedAt))}</div></article>`).join(''):`<p class="alert-empty">${tr('alerts.empty')}</p>`}
+    ${pushBox()}${digestCards()}${items.length?items.map(a=>`<article class="alert-item ${a.readAt?'':'is-unread'}"><div class="alert-place">${alertPlace(a)}</div><div class="alert-meta">${a.oldStatus&&a.oldStatus!==a.newStatus?esc(S.statusText(a.oldStatus))+' → ':''}${esc(S.statusText(a.newStatus))} · ${esc(formatInstant(a.changedAt))}</div></article>`).join(''):`<p class="alert-empty">${tr('alerts.empty')}</p>`}
   </section>`;
 }
 const MSG_SKIP_KIND={OFFER_CONFIRMATION:1,SHOWING_CONFIRMATION:1};

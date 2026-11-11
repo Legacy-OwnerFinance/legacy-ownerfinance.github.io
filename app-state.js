@@ -462,7 +462,7 @@ async function refreshPortal(opts){
       const msgCleared=clearMsgUnread();
       const changed=!!(S.caps&&S.caps.ready)||(S.alerts||[]).length>0||(S.myShowings||[]).length>0||!!(S.caps&&S.caps.investor)!==investor||!!(S.caps&&S.caps.messages)||msgCleared;
       S.caps={v13:version13,ready:false,investor,messages:false,closing:false,version:parsed.version||0};
-      S.alerts=[];S.myShowings=[];
+      S.alerts=[];S.digests=[];S.myShowings=[];
       return changed;
     }
     const home=await api('portal_home');
@@ -470,10 +470,11 @@ async function refreshPortal(opts){
       const msgCleared=clearMsgUnread();
       const changed=!!(S.caps&&S.caps.ready)||msgCleared;
       S.caps={v13:version13,ready:false,investor:false,messages:false,closing:false,version:parsed.version||0};
-      S.alerts=[];S.myShowings=[];
+      S.alerts=[];S.digests=[];S.myShowings=[];
       return changed;
     }
     const nextA=Array.isArray(home.alerts)?home.alerts:[];
+    const nextD=Array.isArray(home.digests)?home.digests:[];
     const nextS=Array.isArray(home.showings)?home.showings:[];
     const messages=!!parsed.messages;
     let msgChanged=false;
@@ -482,18 +483,19 @@ async function refreshPortal(opts){
       S.msgUnread=home.messagesUnread|0;
       msgChanged=true;
     }
-    const changed=!(S.caps&&S.caps.ready)||!!(S.caps&&S.caps.investor)!==investor||!!(S.caps&&S.caps.messages)!==messages||!!(S.caps&&S.caps.closing)!==!!parsed.closing||!!(S.caps&&S.caps.deal_progress)!==!!parsed.deal_progress||!sameJson(S.alerts,nextA)||!sameJson(S.myShowings,nextS)||msgChanged;
+    const changed=!(S.caps&&S.caps.ready)||!!(S.caps&&S.caps.investor)!==investor||!!(S.caps&&S.caps.messages)!==messages||!!(S.caps&&S.caps.closing)!==!!parsed.closing||!!(S.caps&&S.caps.deal_progress)!==!!parsed.deal_progress||!sameJson(S.alerts,nextA)||!sameJson(S.digests||[],nextD)||!sameJson(S.myShowings,nextS)||msgChanged;
     S.caps={v13:true,ready:true,investor,messages,closing:!!parsed.closing,deal_progress:!!parsed.deal_progress,version:parsed.version||(investor?14:13)};
     S.alerts=nextA;
+    S.digests=nextD;
     S.myShowings=nextS;
-    if(S.isAgent&&S.isAgent()&&S.refreshPush&&!S._pushChecked){S._pushChecked=true;S.refreshPush().then(ch=>{if(ch&&S.rerender)S.rerender();});}
+    if(((S.isAgent&&S.isAgent())||(S.isAdmin&&S.isAdmin()))&&S.refreshPush&&!S._pushChecked){S._pushChecked=true;S.refreshPush().then(ch=>{if(ch&&S.rerender)S.rerender();});}
     return changed;
   }catch(e){
     if(e&&(e.code==='bad_action'||e.status===404)){
       const msgCleared=clearMsgUnread();
       const changed=!!(S.caps&&(S.caps.ready||S.caps.v13||S.caps.investor||S.caps.messages))||msgCleared;
       S.caps={v13:false,ready:false,investor:false,messages:false,closing:false,version:0};
-      S.alerts=[];S.myShowings=[];
+      S.alerts=[];S.digests=[];S.myShowings=[];
       return changed;
     }
     return false;
@@ -661,7 +663,7 @@ S.refreshPortal=refreshPortal;
   S.refreshPush=async()=>{
     const info={supported:supported(),permission:('Notification' in window)?Notification.permission:'default',subscribed:false,eligible:false,iosNeedsInstall:isIOS()&&!standalone()&&!native(),busy:false,error:(S.pushInfo&&S.pushInfo.error)||''};
     try{
-      if(S.isAgent&&S.isAgent()&&getToken()){
+      if(((S.isAgent&&S.isAgent())||(S.isAdmin&&S.isAdmin()))&&getToken()){
         let endpoint='';
         if(info.supported){const reg=await regOf();const sub=reg&&await reg.pushManager.getSubscription();endpoint=sub?sub.endpoint:'';}
         const cfg=await api('push_config',{endpoint});
@@ -701,10 +703,11 @@ S.refreshPortal=refreshPortal;
 })();
 S.markAlertsRead=async()=>{
   if(!S.caps||!S.caps.ready||!S.user)return;
-  if(!(S.alerts||[]).some(a=>!a.readAt))return;
+  if(!(S.alerts||[]).some(a=>!a.readAt)&&!(S.digests||[]).some(d=>!d.readAt))return;
   try{
     const j=await api('alerts_read',{all:true});
     if(j&&Array.isArray(j.alerts))S.alerts=j.alerts;
+    if(j&&Array.isArray(j.digests))S.digests=j.digests;
     notify();
   }catch(e){}
 };
