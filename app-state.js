@@ -418,7 +418,7 @@ function applyRelationalListings(stateData,listRows,opts){
       sourceSheetId:Object.prototype.hasOwnProperty.call(r,'source_sheet_id')?r.source_sheet_id:(cur.sourceSheetId??null),
       inspectionAt:Object.prototype.hasOwnProperty.call(r,'inspection_at')?r.inspection_at:(cur.inspectionAt??null),
       rowCreatedAt:r.created_at??cur.rowCreatedAt??null,
-      listedAt:r.listed_at??r.active_since??r.created_at??cur.listedAt??null,
+      listedAt:r.listed_at??r.first_active_date??r.created_at??cur.listedAt??null,
       firstActiveDate:tenure.firstActiveDate,
       activeSince:tenure.activeSince,
       activeDaysAccum:tenure.activeDaysAccum,

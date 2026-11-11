@@ -1080,15 +1080,15 @@ function filtered(){let L=S.data.listings.filter(l=>{const q=F.q.toLowerCase();
   }
   return true;});
   const PRIV=['priceAsc','priceDesc','downAsc','monthlyAsc','bedsDesc'];let so=F.sort||'newest';if(limited()&&PRIV.includes(so))so='newest';
-  const tms=v=>{const t=Date.parse(v||'');return isNaN(t)?0:t;};const ts=l=>tms(l.listedAt);const ts2=l=>tms(l.firstActiveDate);const ts3=l=>tms(l.rowCreatedAt);
+  const tms=v=>{const t=Date.parse(v||'');return isNaN(t)?0:t;};const ts=l=>tms(l.listedAt);const ts2=l=>tms(l.rowCreatedAt);
   const idx=new Map(S.data.listings.map((l,i)=>[l.id,i]));
-  if(so==='newest')return L.sort((a,b)=>(ts(b)-ts(a))||(ts2(b)-ts2(a))||(ts3(b)-ts3(a))||(idx.get(b.id)-idx.get(a.id)));
+  if(so==='newest')return L.sort((a,b)=>(ts(b)-ts(a))||(ts2(b)-ts2(a))||(idx.get(b.id)-idx.get(a.id)));
   if(so==='cityAz')return L.sort((a,b)=>(a.city||'').localeCompare(b.city||'')||partialAddr(a).localeCompare(partialAddr(b)));
   const k={priceAsc:['askingPrice',1],priceDesc:['askingPrice',-1],downAsc:['downPayment',1],monthlyAsc:['monthlyPayment',1],bedsDesc:['beds',-1]}[so];
   return L.sort((a,b)=>((a[k[0]]||0)-(b[k[0]]||0))*k[1]);}
 
 // ===== Client search criteria ("What are you looking for?") =====
-let VIEW='ALL';
+let VIEW='REC';
 const SC_TXT={
  en:{title:'What are you looking for?',sub:'Answer a few quick questions and we will put the homes that fit you first. You can still see every home.',
   step:'Step',of:'of',next:'Next',back:'Back',skip:'Skip for now',saveBtn:'Show my matches',any:'Any',
