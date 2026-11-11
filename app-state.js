@@ -189,7 +189,7 @@ function listingToRow(l){
   };
 }
 
-const TENURE_PERSIST_KEYS=['firstActiveDate','activeSince','activeDaysAccum','pendingSince','pendingDaysAccum','daysActive','daysPending','first_active_date','active_since','active_days_accum','pending_since','pending_days_accum','days_active','days_pending'];
+const TENURE_PERSIST_KEYS=['listedAt','rowCreatedAt','listed_at','firstActiveDate','activeSince','activeDaysAccum','pendingSince','pendingDaysAccum','daysActive','daysPending','first_active_date','active_since','active_days_accum','pending_since','pending_days_accum','days_active','days_pending'];
 function listingWithoutTenure(l){
   if(!l||typeof l!=='object')return l;
   const out=Object.assign({},l);
@@ -417,6 +417,8 @@ function applyRelationalListings(stateData,listRows,opts){
       investorId:Object.prototype.hasOwnProperty.call(r,'investor_id')?r.investor_id:(cur.investorId??null),
       sourceSheetId:Object.prototype.hasOwnProperty.call(r,'source_sheet_id')?r.source_sheet_id:(cur.sourceSheetId??null),
       inspectionAt:Object.prototype.hasOwnProperty.call(r,'inspection_at')?r.inspection_at:(cur.inspectionAt??null),
+      rowCreatedAt:r.created_at??cur.rowCreatedAt??null,
+      listedAt:r.listed_at??r.active_since??r.created_at??cur.listedAt??null,
       firstActiveDate:tenure.firstActiveDate,
       activeSince:tenure.activeSince,
       activeDaysAccum:tenure.activeDaysAccum,

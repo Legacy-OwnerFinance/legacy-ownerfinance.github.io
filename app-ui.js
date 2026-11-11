@@ -26,8 +26,8 @@ const initTab=()=>{
   if(p.includes('/guides'))return 'guides';
   return 'inventory';
 };
-let PIDX={},CMP=new Set(),CHIP='ALL',MARK={};
-let tab=initTab(),F={q:'',area:'',beds:'',baths:'',maxDown:'',maxMonthly:'',maxPrice:'',status:'',sort:(()=>{try{return localStorage.getItem('lof.sort')||'newest'}catch(e){return 'newest'}})()},map=null,CAL={mode:'week',anchor:null},sharedDetailFor='',alertOpen=false;
+let PIDX={},CMP=new Set(),CHIP='AVAILABLE',MARK={};
+let tab=initTab(),F={q:'',area:'',beds:'',baths:'',maxDown:'',maxMonthly:'',maxPrice:'',status:'',sort:'newest'},map=null,CAL={mode:'week',anchor:null},sharedDetailFor='',alertOpen=false;
 let msgOpen=false,msgPeer=null,msgNew=false,msgStickBottom=false,msgScroll=null;
 
 const L10N={
@@ -1080,15 +1080,15 @@ function filtered(){let L=S.data.listings.filter(l=>{const q=F.q.toLowerCase();
   }
   return true;});
   const PRIV=['priceAsc','priceDesc','downAsc','monthlyAsc','bedsDesc'];let so=F.sort||'newest';if(limited()&&PRIV.includes(so))so='newest';
-  const ts=l=>{const t=Date.parse(l.createdAt||l.created_at||l.listedAt||l.updatedAt||l.updated_at||'');return isNaN(t)?0:t;};
+  const tms=v=>{const t=Date.parse(v||'');return isNaN(t)?0:t;};const ts=l=>tms(l.listedAt);const ts2=l=>tms(l.firstActiveDate);const ts3=l=>tms(l.rowCreatedAt);
   const idx=new Map(S.data.listings.map((l,i)=>[l.id,i]));
-  if(so==='newest')return L.sort((a,b)=>(ts(b)-ts(a))||(idx.get(b.id)-idx.get(a.id)));
+  if(so==='newest')return L.sort((a,b)=>(ts(b)-ts(a))||(ts2(b)-ts2(a))||(ts3(b)-ts3(a))||(idx.get(b.id)-idx.get(a.id)));
   if(so==='cityAz')return L.sort((a,b)=>(a.city||'').localeCompare(b.city||'')||partialAddr(a).localeCompare(partialAddr(b)));
   const k={priceAsc:['askingPrice',1],priceDesc:['askingPrice',-1],downAsc:['downPayment',1],monthlyAsc:['monthlyPayment',1],bedsDesc:['beds',-1]}[so];
   return L.sort((a,b)=>((a[k[0]]||0)-(b[k[0]]||0))*k[1]);}
 
 // ===== Client search criteria ("What are you looking for?") =====
-let VIEW='REC';
+let VIEW='ALL';
 const SC_TXT={
  en:{title:'What are you looking for?',sub:'Answer a few quick questions and we will put the homes that fit you first. You can still see every home.',
   step:'Step',of:'of',next:'Next',back:'Back',skip:'Skip for now',saveBtn:'Show my matches',any:'Any',
@@ -1658,7 +1658,7 @@ function bind(){const r=$('#app-root');
   };
   const f=$('#filters');if(f){f.oninput=f.onchange=e=>{const v=fd(f);if('maxDownR' in v){v.maxDown=+v.maxDownR>=40000?'':v.maxDownR;delete v.maxDownR;}if('maxMonthlyR' in v){v.maxMonthly=+v.maxMonthlyR>=3000?'':v.maxMonthlyR;delete v.maxMonthlyR;}
     if(e.type==='input'&&e.target.type==='range'){const b=e.target.parentNode.querySelector('b');if(b)b.textContent='$'+(+e.target.value).toLocaleString();return;}
-    F=Object.assign(F,v);if('sort' in v){try{localStorage.setItem('lof.sort',v.sort)}catch(_){}}const pos=e.target.name==='q'?e.target.selectionStart:null;render();if(pos!=null){const q=$('#filters [name=q]');q.focus();q.setSelectionRange(pos,pos);}};f.onsubmit=e=>e.preventDefault();}
+    F=Object.assign(F,v);if(e.target.name==='status'&&v.status)CHIP='ALL';const pos=e.target.name==='q'?e.target.selectionStart:null;render();if(pos!=null){const q=$('#filters [name=q]');q.focus();q.setSelectionRange(pos,pos);}};f.onsubmit=e=>e.preventDefault();}
   const cj=$('#calJump');if(cj)cj.onchange=()=>{if(cj.value){CAL.anchor=cj.value;render();}};
   r.onchange=async e=>{
    try{
