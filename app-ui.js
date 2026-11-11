@@ -39,8 +39,6 @@ const L10N={
     navCalendar:'Showings Calendar',
     navAuth:'Login / Register',
     logout:'Logout',
-    cloudLive:'● Cloud Database Connected (24/7 Live)',
-    cloudOffline:'● Offline Fallback Mode',
     newHere:'New here?',
     guideLink:'Step-by-step: create your account & navigate the site →',
     searchPlaceholder:'Search address or city…',
@@ -244,8 +242,6 @@ const L10N={
     navCalendar:'Calendario de Visitas',
     navAuth:'Iniciar Sesión / Registrarse',
     logout:'Cerrar sesión',
-    cloudLive:'● Base de Datos en la Nube Conectada (24/7)',
-    cloudOffline:'● Modo Local de Respaldo',
     newHere:'¿Nuevo aquí?',
     guideLink:'Paso a paso: cómo crear tu cuenta y navegar el sitio →',
     searchPlaceholder:'Buscar dirección o ciudad…',
@@ -1013,20 +1009,40 @@ async function openActivity(id){
     panel.innerHTML=`<button type="button" class="close nav-pill" style="float:right">✕</button><p>${esc(err.message||tr('ops.unavailable'))}</p>`;
   }
 }
+let menuOpen=false,headerCompact=false;
+function setHeaderCompact(v){if(v===headerCompact)return;headerCompact=v;const h=document.querySelector('.app-header');if(h)h.classList.toggle('is-compact',v);}
+/* Collapsing header: compact (logo + name only) once the page scrolls; Esc closes the menu */
+(function(){
+  if(window.__hdrInit)return;window.__hdrInit=true;
+  let ticking=false;
+  function pos(t){return t&&t!==document&&t!==document.documentElement&&t!==document.body?(t.scrollTop||0):(window.scrollY||document.documentElement.scrollTop||0);}
+  function onScroll(e){
+    const t=e&&e.target;
+    if(t&&t!==document&&!(t.classList&&(t.classList.contains('cards-pane')||t.classList.contains('main-scroll'))))return;
+    if(ticking)return;ticking=true;
+    requestAnimationFrame(()=>{ticking=false;const y=pos(t);if(y>80)setHeaderCompact(true);else if(y<10)setHeaderCompact(false);});
+  }
+  document.addEventListener('scroll',onScroll,true);
+  document.addEventListener('keydown',e=>{if(e.key==='Escape'&&menuOpen){menuOpen=false;render();const mb=document.querySelector('.menu-btn');if(mb)mb.focus();}});
+})();
 function header(){
   const investorHome=S.isInvestor()&&S.caps&&S.caps.investor&&!S.isPendingApproval(S.user);
   const T=investorHome?[['dashboard',tr('navInvestorHome')],['investor-tx',tr('navTransactions')],['inventory',tr('navInventory')],['guides',tr('navGuides')]]:[['inventory',tr('navInventory')],['guides',tr('navGuides')],['dashboard',tr('navDashboard')]];
   if(!investorHome&&S.canSeeShowingCalendar&&S.canSeeShowingCalendar())T.push(['calendar',tr('navCalendar')]);
   if(S.isAdmin())T.push(['admin',tr('navAdmin')]);
   if(!S.user)T.push(['auth',tr('navAuth')]);
-  const cloudPill=`<span style="background:${S.cloudConnected?'#dcfce7':'#fef3c7'};color:${S.cloudConnected?'#166534':'#92400e'};padding:2px 8px;border-radius:999px;font-weight:700;font-size:11px">${S.cloudConnected?tr('cloudLive'):tr('cloudOffline')}</span>`;
-  return `<header class="app-header"><div class="brand-wrap" data-tab="inventory"><img src="legacy-logo.png" alt="Legacy" class="main-logo"><div><h1 class="brand-title">Legacy - Owner Finance</h1>
-   <div class="brand-sub"><span>Brokerage By: KLC Real Estate, LLC</span><img src="klc-logo.png" alt="KLC">${cloudPill}</div></div></div>
-   <nav class="nav-pills">${T.map(([k,v])=>`<button data-tab="${k}" class="nav-pill ${tab===k?'active':''}">${v}</button>`).join('')}
-   ${investorHome?`<button type="button" class="nav-pill" data-openmap="1">${tr('openMap')}</button>`:''}
-   ${bellHtml()}
-   ${S.user?`<button id="logout" class="nav-pill">${tr('logout')} (${esc(S.user.name)})</button>`:''}
-   <button data-lang="en" class="nav-pill lang-btn ${S.lang==='en'?'active':''}">EN</button><button data-lang="es" class="nav-pill lang-btn ${S.lang==='es'?'active':''}">ES</button></nav></header>
+  const unread=(S.alerts||[]).filter(a=>!a.readAt).length+(S.digests||[]).filter(d=>!d.readAt).length+(S.msgUnread|0);
+  const menuItems=`${T.map(([k,v])=>`<button data-tab="${k}" class="nav-pill ${tab===k?'active':''}" role="menuitem">${v}</button>`).join('')}
+   ${investorHome?`<button type="button" class="nav-pill" data-openmap="1" role="menuitem">${tr('openMap')}</button>`:''}
+   ${S.user?`<button id="logout" class="nav-pill" role="menuitem">${tr('logout')} (${esc(S.user.name)})</button>`:''}
+   <div class="nav-drawer-lang"><button data-lang="en" class="nav-pill lang-btn ${S.lang==='en'?'active':''}">EN</button><button data-lang="es" class="nav-pill lang-btn ${S.lang==='es'?'active':''}">ES</button></div>`;
+  return `<header class="app-header${headerCompact?' is-compact':''}">
+   <button type="button" class="menu-btn" data-menu="1" aria-haspopup="true" aria-expanded="${menuOpen?'true':'false'}" aria-controls="nav-drawer" aria-label="${esc(tr('menu.label'))}"><span class="menu-bars" aria-hidden="true"></span>${unread?`<span class="menu-badge">${unread>9?'9+':unread}</span>`:''}</button>
+   <div class="brand-wrap" data-tab="inventory"><img src="legacy-logo.png" alt="Legacy" class="main-logo"><div class="brand-text"><h1 class="brand-title">Legacy - Owner Finance</h1>
+   <div class="brand-sub"><span>Brokerage By: KLC Real Estate, LLC</span><img src="klc-logo.png" alt="KLC"></div></div></div>
+   <div class="header-actions">${bellHtml()}</div>
+   ${menuOpen?`<div class="nav-drawer-bg" data-menuclose="1"></div>`:''}
+   <nav id="nav-drawer" class="nav-drawer${menuOpen?' open':''}" role="menu" aria-label="${esc(tr('menu.label'))}" ${menuOpen?'':'aria-hidden="true" inert'}><div class="nav-drawer-head"><b>${tr('menu.label')}</b><button type="button" class="nav-pill" data-menuclose="1" aria-label="${esc(tr('menu.close'))}">✕</button></div>${menuItems}</nav></header>
    <div class="guide-banner"><span>${tr('newHere')} <a href="#guides" data-tab="guides">${tr('guideLink')}</a></span></div>${alertSheet()}${msgBubble()}${msgPanel()}`;
 }
 
@@ -1579,11 +1595,12 @@ function bind(){const r=$('#app-root');
        modal(`<h2>⚖️ ${S.lang==='es'?'Comparación de Casas':'Side-by-Side Comparison'}</h2><div style="display:grid;grid-template-columns:repeat(${it.length},1fr);gap:12px">${it.map(l=>`<div class="card" style="padding:10px"><img src="${esc(l.photoUrl||'listing-placeholder.svg')}" referrerpolicy="no-referrer" onerror="window.imgFallback&&window.imgFallback(this)" style="width:100%;height:120px;object-fit:cover;border-radius:8px"><h4 style="margin:8px 0">${title(l)}</h4>
        <div style="font-size:13px;line-height:1.8">${tr('price')}: <b>${S.money(l.askingPrice)}</b><br>${tr('down')}: <b>${S.money(l.downPayment)}</b><br>${tr('monthly')}: <b>${S.money(l.monthlyPayment)}</b><br>${l.beds??'—'} ${tr('bdShort')} · ${l.baths??'—'} ${tr('baShort')}<br>${l.sqft?(+l.sqft).toLocaleString()+' '+tr('sqftUnit'):''}${l.sqft&&l.askingPrice?'<br>$'+Math.round(l.askingPrice/100/l.sqft)+tr('perSqft'):''}</div></div>`).join('')}</div>`);return;}
    }
-   const t=e.target.closest('[data-tab],[data-lang],[data-open],[data-fav],[data-acc],[data-rej],[data-ctr],[data-reset],[data-save],[data-client],[data-register],[data-login],[data-shareclear],[data-copylink],[data-calmode],[data-calnav],[data-showacc],[data-showden],[data-showcan],[data-showmsg],[data-approve],[data-decline],[data-inspsched],[data-inspcancel],[data-bell],[data-alertclose],[data-pushon],[data-pushoff],[data-pushtest],[data-msgbubble],[data-msgclose],[data-msgpeer],[data-msgback],[data-msgsend],[data-msgnew],[data-feedback],[data-checkin],[data-checkout],[data-activity],[data-metric],[data-views],[data-favs],[data-openmap],[data-mapscope],[data-closed],[data-cldate],[data-clcomm],[data-clclose],[data-clfell],[data-editown],[data-unassign],#logout,#forgot');
+   const t=e.target.closest('[data-tab],[data-lang],[data-open],[data-fav],[data-acc],[data-rej],[data-ctr],[data-reset],[data-save],[data-client],[data-register],[data-login],[data-shareclear],[data-copylink],[data-calmode],[data-calnav],[data-showacc],[data-showden],[data-showcan],[data-showmsg],[data-approve],[data-decline],[data-inspsched],[data-inspcancel],[data-menu],[data-menuclose],[data-bell],[data-alertclose],[data-pushon],[data-pushoff],[data-pushtest],[data-msgbubble],[data-msgclose],[data-msgpeer],[data-msgback],[data-msgsend],[data-msgnew],[data-feedback],[data-checkin],[data-checkout],[data-activity],[data-metric],[data-views],[data-favs],[data-openmap],[data-mapscope],[data-closed],[data-cldate],[data-clcomm],[data-clclose],[data-clfell],[data-editown],[data-unassign],#logout,#forgot');
    if(!t)return;
    e.preventDefault();
    try{
      const d=t.dataset;
+     if(menuOpen&&!t.matches('[data-menu],[data-menuclose]')&&t.closest('#nav-drawer'))menuOpen=false;
      if(d.shareclear){clearShareParam();return render();}
      if(d.copylink){
        const url=propertyShareUrl(d.copylink);
@@ -1603,7 +1620,9 @@ function bind(){const r=$('#app-root');
        else if(CAL.mode==='week')dt.setDate(dt.getDate()+7*delta);
        else dt.setMonth(dt.getMonth()+delta);
        CAL.anchor=fmt(dt);return render();}
-     if(d.bell){alertOpen=!alertOpen;if(alertOpen)msgOpen=false;render();if(alertOpen){S.markAlertsRead();if(S.refreshPush)S.refreshPush().then(ch=>{if(ch&&alertOpen)render();});}return;}
+     if(d.bell){menuOpen=false;alertOpen=!alertOpen;if(alertOpen)msgOpen=false;render();if(alertOpen){S.markAlertsRead();if(S.refreshPush)S.refreshPush().then(ch=>{if(ch&&alertOpen)render();});}return;}
+     if(d.menu){menuOpen=!menuOpen;if(menuOpen){alertOpen=false;msgOpen=false;}render();if(menuOpen){const f=document.querySelector('#nav-drawer .nav-pill');if(f)f.focus();}return;}
+     if(d.menuclose){menuOpen=false;render();const mb=document.querySelector('.menu-btn');if(mb)mb.focus();return;}
      if(d.alertclose){alertOpen=false;return render();}
      if(d.pushon){await S.pushEnable();return render();}
      if(d.pushoff){await S.pushDisable();return render();}
