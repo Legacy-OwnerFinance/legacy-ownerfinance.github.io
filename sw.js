@@ -2,7 +2,7 @@
    Network-first for everything on this origin so users always get the newest app after a deploy;
    the cache is only a fallback when offline. Supabase/API/other origins are never touched. */
 const CACHE = 'legacy-of-shell-v1';
-const PRECACHE = ['/', '/app.html', '/privacy.html', '/styles.css', '/favicon.ico', '/android-chrome-192x192.png', '/legacy-logo.png', '/listing-placeholder.svg'];
+const PRECACHE = ['/', '/app.html', '/privacy.html', '/styles.css', '/favicon.ico', '/android-chrome-192x192.png', '/legacy-logo.png', '/splash-logo.webp', '/listing-placeholder.svg'];
 
 self.addEventListener('install', (e) => {
   e.waitUntil(
