@@ -486,6 +486,7 @@ async function refreshPortal(opts){
     S.caps={v13:true,ready:true,investor,messages,closing:!!parsed.closing,deal_progress:!!parsed.deal_progress,version:parsed.version||(investor?14:13)};
     S.alerts=nextA;
     S.myShowings=nextS;
+    if(S.isAgent&&S.isAgent()&&S.refreshPush&&!S._pushChecked){S._pushChecked=true;S.refreshPush().then(ch=>{if(ch&&S.rerender)S.rerender();});}
     return changed;
   }catch(e){
     if(e&&(e.code==='bad_action'||e.status===404)){
@@ -647,6 +648,57 @@ S.closeOffer=async(offerId,fields)=>{const j=await closingCall('offer_close',Obj
 S.offerFellThrough=async(offerId,reason)=>{const j=await closingCall('offer_fell_through',{offerId,reason:reason||''});applyClosingResult(j);return j;};
 S.refreshInvestor=refreshInvestor;
 S.refreshPortal=refreshPortal;
+
+/* ---- Web Push for approved agents (status-change alerts). iOS needs the app installed to the Home Screen (iOS 16.4+). ---- */
+(function(){
+  const isIOS=()=>/iphone|ipad|ipod/i.test(navigator.userAgent||'')||(navigator.platform==='MacIntel'&&navigator.maxTouchPoints>1);
+  const standalone=()=>{try{return (window.matchMedia&&window.matchMedia('(display-mode: standalone)').matches)||navigator.standalone===true;}catch(e){return false;}};
+  const native=()=>!!(window.Capacitor&&window.Capacitor.isNativePlatform&&window.Capacitor.isNativePlatform());
+  const supported=()=>!native()&&('serviceWorker' in navigator)&&('PushManager' in window)&&('Notification' in window);
+  const u8=b64=>{const p='='.repeat((4-b64.length%4)%4);const raw=atob((b64+p).replace(/-/g,'+').replace(/_/g,'/'));return Uint8Array.from(raw,c=>c.charCodeAt(0));};
+  S.pushInfo={supported:false,permission:'default',subscribed:false,eligible:false,iosNeedsInstall:false,busy:false,error:''};
+  const regOf=async()=>{try{return await Promise.race([navigator.serviceWorker.ready,new Promise((_,rej)=>setTimeout(()=>rej(new Error('sw_timeout')),6000))]);}catch(e){return null;}};
+  S.refreshPush=async()=>{
+    const info={supported:supported(),permission:('Notification' in window)?Notification.permission:'default',subscribed:false,eligible:false,iosNeedsInstall:isIOS()&&!standalone()&&!native(),busy:false,error:(S.pushInfo&&S.pushInfo.error)||''};
+    try{
+      if(S.isAgent&&S.isAgent()&&getToken()){
+        let endpoint='';
+        if(info.supported){const reg=await regOf();const sub=reg&&await reg.pushManager.getSubscription();endpoint=sub?sub.endpoint:'';}
+        const cfg=await api('push_config',{endpoint});
+        info.eligible=!!(cfg&&cfg.eligible&&cfg.enabled);
+        info.subscribed=!!(cfg&&cfg.subscribed)&&info.permission==='granted';
+      }
+    }catch(e){info.eligible=false;}
+    const same=JSON.stringify(info)===JSON.stringify(S.pushInfo);
+    S.pushInfo=info;
+    return !same;
+  };
+  S.pushEnable=async()=>{
+    S.pushInfo.busy=true;S.pushInfo.error='';
+    try{
+      if(!supported())throw new Error('unsupported');
+      const perm=await Notification.requestPermission();
+      if(perm!=='granted'){S.pushInfo.permission=perm;return;}
+      const reg=await regOf();if(!reg)throw new Error('sw');
+      const cfg=await api('push_config',{});
+      if(!cfg.publicKey)throw new Error('off');
+      let sub=await reg.pushManager.getSubscription();
+      if(!sub)sub=await reg.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:u8(cfg.publicKey)});
+      await api('push_subscribe',{subscription:sub.toJSON(),ua:String(navigator.userAgent||'').slice(0,150)});
+    }catch(e){S.pushInfo.error=String(e&&e.message||e);}
+    S.pushInfo.busy=false;
+    await S.refreshPush();
+    if(S.pushInfo.subscribed)S.pushInfo.error='';
+  };
+  S.pushDisable=async()=>{
+    try{
+      const reg=await regOf();const sub=reg&&await reg.pushManager.getSubscription();
+      if(sub){const ep=sub.endpoint;try{await api('push_unsubscribe',{endpoint:ep});}catch(e){}await sub.unsubscribe();}
+    }catch(e){}
+    await S.refreshPush();
+  };
+  S.pushTest=async()=>{try{await api('push_test',{});return true;}catch(e){S.pushInfo.error=String(e&&e.code||e&&e.message||e);return false;}};
+})();
 S.markAlertsRead=async()=>{
   if(!S.caps||!S.caps.ready||!S.user)return;
   if(!(S.alerts||[]).some(a=>!a.readAt))return;
@@ -1178,10 +1230,10 @@ S.openDocument=async id=>{
     if(w){w.location.href=j.url;}else{window.location.href=j.url;}
   }catch(e){if(w)w.close();throw e;}
 };
-S.STATUSES=['AVAILABLE','COMING_SOON','PENDING','PENDING_NO_EM','PENDING_EM','SOLD'];
-S.STATUS_LABEL={AVAILABLE:'Available',COMING_SOON:'Coming Soon',PENDING:'Pending',PENDING_NO_EM:'Pending/NoEM',PENDING_EM:'Pending/EM',SOLD:'Sold (3-Day)',CLOSED:'Sold (3-Day)'};
-S.STATUS_LABEL_ES={AVAILABLE:'Disponible',COMING_SOON:'Próximamente',PENDING:'Pendiente',PENDING_NO_EM:'Pendiente/Sin EM',PENDING_EM:'Pendiente/Con EM',SOLD:'Vendida (3 días)',CLOSED:'Vendida (3 días)'};
-S.statusText=st=>S.lang==='es'?(S.STATUS_LABEL_ES[st]||st):(S.STATUS_LABEL[st]||st);
+S.STATUSES=['AVAILABLE','COMING_SOON','PENDING','PENDING_NO_EM','SOLD'];
+S.STATUS_LABEL={AVAILABLE:'Available',COMING_SOON:'Coming Soon',PENDING:'Pending',PENDING_NO_EM:'Pending/NoEM',SOLD:'Sold (3-Day)',CLOSED:'Sold (3-Day)'};
+S.STATUS_LABEL_ES={AVAILABLE:'Disponible',COMING_SOON:'Próximamente',PENDING:'Pendiente',PENDING_NO_EM:'Pendiente/Sin EM',SOLD:'Vendida (3 días)',CLOSED:'Vendida (3 días)'};
+S.statusText=st0=>{const st=st0==='PENDING_EM'?'PENDING':st0;return S.lang==='es'?(S.STATUS_LABEL_ES[st]||st):(S.STATUS_LABEL[st]||st);};
 S.setInspection=(offerId,at)=>{const o=S.data.offers.find(x=>x.id===offerId);if(!o)return;if(at){o.inspectionAt=at;o.inspectionStatus='SCHEDULED';}else{o.inspectionStatus='CANCELLED';o.inspectionAt=null;}o.updatedAt=now();S.save();};
 S.OFFER_COLOR={ACCEPTED:'#16a34a',REJECTED:'#dc2626',COUNTERED:'#d97706',SUBMITTED:'#64748b',CLOSED:'#0f766e',FELL_THROUGH:'#b91c1c'};
 S.setListingStatus=(lid,st)=>{
