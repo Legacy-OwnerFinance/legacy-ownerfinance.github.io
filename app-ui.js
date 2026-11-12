@@ -1156,13 +1156,17 @@ function cardsSection(L){
   <h3 class="sc-h">${st('others')} (${rest.length})</h3><div class="cards-grid">${rest.map(x=>card(x.l,x.m)).join('')}</div>`;}
 window.__sc={matchScore,critOf};
 
+
+// Optional bilingual hook: public_title written as "English hook | Spanish hook" shows a highlight line. Plain titles ("Home on X St") show nothing.
+function hookText(l){const t=String((l&&l.publicTitle)||'');if(t.indexOf(' | ')<0)return '';const [en,es]=t.split(' | ');let h=(S.lang==='es'?(es||en):en)||'';h=h.trim();const num=String((l&&l.address)||'').match(/^\s*(\d+)/);if(num&&new RegExp('\\b'+num[1]+'\\b').test(h))return '';return h.slice(0,80);}
+const hookHtml=l=>{const h=hookText(l);return h?`<p class="hook-line" style="margin:4px 0 6px;font-weight:700;color:#b45309">✨ ${esc(h)}</p>`:'';};
 function guestShare(l){
   const ph=(l.photoUrls&&l.photoUrls.length)?l.photoUrls:[l.photoUrl||'listing-placeholder.svg'];
   const alt=partialAddr(l);
   return `<section class="share-view">
     <div class="share-toolbar"><button type="button" class="btn-card" data-shareclear="1">${tr('share.back')}</button></div>
     <article class="card share-card">
-      <div class="share-head"><h2 class="share-addr">📍 ${alt}</h2><div class="share-status">${badge(l.status)}</div></div>
+      <div class="share-head"><h2 class="share-addr">📍 ${alt}</h2><div class="share-status">${badge(l.status)}</div></div>${hookHtml(l)}
       <div class="share-gallery" aria-label="${esc(tr('share.gallery'))}">${ph.map((p,i)=>`<img src="${esc(p)}" alt="${alt}" referrerpolicy="no-referrer" ${i===0?'fetchpriority="high"':'loading="lazy"'} onerror="window.imgFallback&&window.imgFallback(this)">`).join('')}</div>
       <p class="share-count">${ph.length} ${tr('photosCount')}</p>
       <div class="share-cta">
@@ -1240,14 +1244,14 @@ function card(l,mt){
     ${multi?`<button type="button" class="carousel-btn prev" data-prev="${l.id}">‹</button><button type="button" class="carousel-btn next" data-next="${l.id}">›</button>`:''}<span class="photo-counter" data-cnt="${l.id}">📷 ${i+1} / ${ph.length}</span>`;
   if(limited()){
     return `<article class="prop-card" data-card="${l.id}">${media(`<span class="badge-top-left" style="background:#0f172a">🔒 ${S.lang==='es'?'Vista Previa':'Guest Preview'}</span>`)}</div>
-      <div class="card-body"><p class="addr-line">📍 ${partialAddr(l)}</p><div style="font-size:12px;color:var(--muted);background:var(--surface-2);border:1px dashed var(--border);padding:8px 10px;border-radius:9px">🔒 ${tr('guestCardPrompt')}</div>
+      <div class="card-body"><p class="addr-line">📍 ${partialAddr(l)}</p>${hookHtml(l)}<div style="font-size:12px;color:var(--muted);background:var(--surface-2);border:1px dashed var(--border);padding:8px 10px;border-radius:9px">🔒 ${tr('guestCardPrompt')}</div>
       ${todayApptHtml(l.id)}
       <div class="card-actions"><button type="button" class="btn-card primary" data-register="1">${tr('guestCardBtn')}</button><button type="button" class="btn-card" data-open="${l.id}">${tr('viewPhotos')} (${ph.length})</button></div></div></article>`;
   }
   const col=({AVAILABLE:'#16a34a',COMING_SOON:'#2563eb',SOLD:'#475569',CLOSED:'#475569'})[l.status]||'#d97706';
   return `<article class="prop-card" data-card="${l.id}">${media(`<span class="badge-top-left" style="background:${col}">${esc(S.statusText?S.statusText(l.status):l.status)}</span>`)}
     <div class="card-top-actions"><button type="button" class="icon-circle-btn" title="${esc(tr('compare'))}" data-compare="${l.id}">${CMP.has(l.id)?'✅':'⚖️'}</button><button type="button" class="icon-circle-btn" title="${esc(tr('favorite'))}" data-fav="${l.id}">${S.isFavorite(l.id)?'❤️':'🤍'}</button></div></div>
-    <div class="card-body">${matchBadge(mt)}<div class="price-strip"><span class="main-price">${S.money(l.askingPrice)}</span><span class="monthly-pill">${S.money(l.monthlyPayment)}${tr('perMo')}</span></div>
+    <div class="card-body">${matchBadge(mt)}${hookHtml(l)}<div class="price-strip"><span class="main-price">${S.money(l.askingPrice)}</span><span class="monthly-pill">${S.money(l.monthlyPayment)}${tr('perMo')}</span></div>
     <p class="addr-line">${title(l)}</p>
     ${tenureHtml(l)}
     <div class="down-box"><div>${tr('down')}<b>${S.money(l.downPayment)}</b></div><div>${tr('beds')}/${tr('baths')}<b>${l.beds??'—'} · ${l.baths??'—'}</b></div><div>${tr('sqft')}<b>${l.sqft?(+l.sqft).toLocaleString():'—'}</b></div></div>
@@ -1272,7 +1276,7 @@ function drawMap(){if(!window.L||!$('#inventory-map'))return;if(map){map.remove(
 function openListing(id){const l=S.listing(id);if(!l)return;if(!(S.isInvestor()&&S.ownsListing(l)))S.recordView(id);const ph=(l.photoUrls&&l.photoUrls.length?l.photoUrls:[l.photoUrl||'listing-placeholder.svg']);
   if(S.isInvestor()&&S.caps&&S.caps.investor&&!S.isPendingApproval(S.user))return S.ownsListing(l)?openOwnEditor(l):openInvestorReadonly(l);
   if(limited()){
-    const m=modal(`<h2>📍 ${partialAddr(l)}</h2>
+    const m=modal(`<h2>📍 ${partialAddr(l)}</h2>${hookHtml(l)}
       <div class="gallery" style="display:flex;gap:8px;overflow-x:auto;margin:12px 0;padding-bottom:6px">${ph.map(p=>`<img src="${esc(p)}" referrerpolicy="no-referrer" loading="lazy" onerror="window.imgFallback&&window.imgFallback(this)" style="height:220px;border-radius:8px;object-fit:cover">`).join('')}</div>
       <div style="background:#f8fafc;border:2px solid #d4af37;border-radius:12px;padding:16px;margin-top:12px;text-align:center">
         <h3 style="margin:0 0 8px 0;color:#0f172a">${tr('guestModalTitle')}</h3>
@@ -1288,7 +1292,7 @@ function openListing(id){const l=S.listing(id);if(!l)return;if(!(S.isInvestor()&
     return;
   }
   const ag=S.user&&S.agentFor(S.user);
-  const m=modal(`<h2>${title(l)}</h2>${badge(l.status)}${tenureHtml(l)}<div class="gallery" style="display:flex;gap:6px;overflow-x:auto;margin:10px 0">${ph.map(p=>`<img src="${esc(p)}" referrerpolicy="no-referrer" loading="lazy" onerror="window.imgFallback&&window.imgFallback(this)" style="height:200px;border-radius:8px">`).join('')}</div>
+  const m=modal(`<h2>${title(l)}</h2>${badge(l.status)}${hookHtml(l)}${tenureHtml(l)}<div class="gallery" style="display:flex;gap:6px;overflow-x:auto;margin:10px 0">${ph.map(p=>`<img src="${esc(p)}" referrerpolicy="no-referrer" loading="lazy" onerror="window.imgFallback&&window.imgFallback(this)" style="height:200px;border-radius:8px">`).join('')}</div>
    ${l.photosUrl?`<a href="${esc(l.photosUrl)}" target="_blank" rel="noopener">${tr('morePhotos')}</a>`:''}
    ${listingTracker(l)}
    <p>${tr('price')} <b>${S.money(l.askingPrice)}</b> · ${tr('down')} <b>${S.money(l.downPayment)}</b> · ${tr('monthly')} <b>${S.money(l.monthlyPayment)}</b> · ${l.termYears||'—'} ${tr('yrs')}</p>
