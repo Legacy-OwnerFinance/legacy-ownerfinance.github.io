@@ -738,7 +738,7 @@ function digestCards(){
   return ds.map(d=>{
     const items=(d.items||[]).slice(0,20);
     const when=d.date||'';
-    return `<article class="alert-item digest-card ${d.readAt?'':'is-unread'}"><div class="alert-place">📋 ${tr('digest.title')}${when?' · '+esc(String(when)):''}</div><div class="alert-meta">${(d.count|0)} ${tr((d.count|0)===1?'digest.change':'digest.changes')}</div><ul class="digest-list">${items.map(it=>`<li>${esc(streetCity(it.street,it.city)||tr('alerts.home'))}: ${esc(S.statusText(it.oldStatus))} → ${esc(S.statusText(it.newStatus))}</li>`).join('')}${(d.count|0)>items.length?`<li>… +${(d.count|0)-items.length}</li>`:''}</ul></article>`;
+    return `<article class="alert-item digest-card ${d.readAt?'':'is-unread'}">${alertDelBtn(d)}<div class="alert-place">📋 ${tr('digest.title')}${when?' · '+esc(String(when)):''}</div><div class="alert-meta">${(d.count|0)} ${tr((d.count|0)===1?'digest.change':'digest.changes')}</div><ul class="digest-list">${items.map(it=>`<li>${esc(streetCity(it.street,it.city)||tr('alerts.home'))}: ${esc(S.statusText(it.oldStatus))} → ${esc(S.statusText(it.newStatus))}</li>`).join('')}${(d.count|0)>items.length?`<li>… +${(d.count|0)-items.length}</li>`:''}</ul></article>`;
   }).join('');
 }
 function pushBox(){
@@ -753,11 +753,18 @@ function pushBox(){
   else body=`<p>${tr('push.desc')}</p><div class="push-actions"><button type="button" class="btn" data-pushon="1" ${p.busy?'disabled':''}>🔔 ${tr('push.on')}</button></div>`;
   return `<div class="push-box"><b>${tr('push.title')}</b>${body}${p.error?`<p class="push-err">${esc(tr('push.err'))}</p>`:''}</div>`;
 }
+function alertDelBtn(item){
+  if(!item||!item.readAt||!(S.canDeleteAlerts&&S.canDeleteAlerts()))return '';
+  const lbl=S.lang==='es'?'Borrar notificación':'Delete notification';
+  return `<button type="button" class="alert-del" data-alertdel="${esc(item.id)}" aria-label="${esc(lbl)}" title="${esc(lbl)}">✕</button>`;
+}
 function alertSheet(){
   if(!portalReady()||!alertOpen)return '';
   const items=(S.alerts||[]).slice(0,30);
-  return `<section class="alert-panel" role="region" aria-label="${esc(tr('alerts.title'))}"><div class="alert-panel-head"><b>${tr('alerts.title')}</b><button type="button" class="nav-pill" data-alertclose="1" aria-label="✕">✕</button></div>
-    ${pushBox()}${digestCards()}${items.length?items.map(a=>`<article class="alert-item ${a.readAt?'':'is-unread'}"><div class="alert-place">${alertPlace(a)}</div><div class="alert-meta">${a.oldStatus&&a.oldStatus!==a.newStatus?esc(S.statusText(a.oldStatus))+' → ':''}${esc(S.statusText(a.newStatus))} · ${esc(formatInstant(a.changedAt))}</div></article>`).join(''):`<p class="alert-empty">${tr('alerts.empty')}</p>`}
+  const anyRead=(S.alerts||[]).some(a=>a.readAt)||(S.digests||[]).some(d=>d.readAt);
+  const clearBtn=anyRead&&S.canDeleteAlerts&&S.canDeleteAlerts()?`<button type="button" class="nav-pill alert-clear" data-alertclear="1">🗑 ${S.lang==='es'?'Borrar vistas':'Clear seen'}</button>`:'';
+  return `<section class="alert-panel" role="region" aria-label="${esc(tr('alerts.title'))}"><div class="alert-panel-head"><b>${tr('alerts.title')}</b><span class="alert-head-actions">${clearBtn}<button type="button" class="nav-pill" data-alertclose="1" aria-label="✕">✕</button></span></div>
+    ${pushBox()}${digestCards()}${items.length?items.map(a=>`<article class="alert-item ${a.readAt?'':'is-unread'}">${alertDelBtn(a)}<div class="alert-place">${alertPlace(a)}</div><div class="alert-meta">${a.oldStatus&&a.oldStatus!==a.newStatus?esc(S.statusText(a.oldStatus))+' → ':''}${esc(S.statusText(a.newStatus))} · ${esc(formatInstant(a.changedAt))}</div></article>`).join(''):`<p class="alert-empty">${tr('alerts.empty')}</p>`}
   </section>`;
 }
 const MSG_SKIP_KIND={OFFER_CONFIRMATION:1,SHOWING_CONFIRMATION:1};
@@ -1552,13 +1559,55 @@ function calendarView(){
   </section>`;
 }
 
+/* v26: Admin account lists in two drop-downs (Users / Agents) with delete; rejected accounts can be deleted. */
+let ADM_OPEN={users:false,agents:false,rejected:true};
+function approvalLabel(u){const st=String(u&&u.approvalStatus||'APPROVED').toUpperCase();if(st==='PENDING')return S.lang==='es'?'⏳ Pendiente':'⏳ Pending';if(st==='REJECTED')return S.lang==='es'?'❌ Rechazada':'❌ Declined';return S.lang==='es'?'✅ Activa':'✅ Active';}
+function userDelCell(u){
+  if(!S.canAdminDelete())return '—';
+  if(S.user&&u.id===S.user.id)return `<span class="acct-note">${S.lang==='es'?'Tu cuenta':'Your account'}</span>`;
+  if(S.isMainAdmin(u))return `<span class="acct-note">${S.lang==='es'?'Admin principal':'Main admin'}</span>`;
+  const ap=S.agentProfile(u);if(ap&&(ap.id==='cmvrdnn1400059d7qvhmjlsxm'||ap.inviteCode==='D2D-385TSN'))return `<span class="acct-note">${S.lang==='es'?'Agente predeterminado':'Default agent'}</span>`;
+  return `<button type="button" class="btn-del" data-udel="${esc(u.id)}">🗑 ${S.lang==='es'?'Eliminar':'Delete'}</button>`;
+}
+function accountRows(list,agents){
+  const cols=agents?7:6;
+  if(!list.length)return `<tr><td colspan=${cols}>${S.lang==='es'?'No hay cuentas':'No accounts'}</td></tr>`;
+  return list.map(u=>{const ap=S.agentProfile(u);return `<tr><td>${esc(u.name)}</td><td>${esc(u.email)}</td><td>${esc(roleLabel(u.role))}</td><td>${approvalLabel(u)}</td>${agents?`<td>${esc(ap&&ap.inviteCode)}</td>`:''}<td><button data-reset="${u.id}">${tr('reset')}</button></td><td>${userDelCell(u)}</td></tr>`;}).join('');
+}
+function accountsCard(D){
+  const byName=(a,b)=>String(a.name||a.email||'').localeCompare(String(b.name||b.email||''));
+  const agents=D.users.filter(u=>u.role==='AGENT').sort(byName);
+  const users=D.users.filter(u=>u.role!=='AGENT').sort(byName);
+  const head=agents=>`<tr><th>${tr('colName')}</th><th>${tr('email')}</th><th>${tr('colRole')}</th><th>${S.lang==='es'?'Estado':'Status'}</th>${agents?`<th>${tr('colInvite')}</th>`:''}<th>${tr('colResetPw')}</th><th>${S.lang==='es'?'Eliminar':'Delete'}</th></tr>`;
+  return `<div class="card" style="padding:16px"><h2>${tr('usersAgents')}</h2>
+  <details class="acct-group" data-acct="users" ${ADM_OPEN.users?'open':''}><summary>👥 ${S.lang==='es'?'Usuarios':'Users'} <span class="acct-count">${users.length}</span></summary><div class="table-scroll"><table>${head(false)}${accountRows(users,false)}</table></div></details>
+  <details class="acct-group" data-acct="agents" ${ADM_OPEN.agents?'open':''}><summary>🪪 ${S.lang==='es'?'Agentes':'Agents'} <span class="acct-count">${agents.length}</span></summary><div class="table-scroll"><table>${head(true)}${accountRows(agents,true)}</table></div></details>
+  </div>`;
+}
+function rejectedAccounts(D){
+  const rej=D.users.filter(u=>u.approvalStatus==='REJECTED');
+  if(!rej.length)return '';
+  return `<details class="acct-group" data-acct="rejected" ${ADM_OPEN.rejected?'open':''} style="margin-top:12px"><summary>❌ ${S.lang==='es'?'Rechazadas':'Declined'} <span class="acct-count">${rej.length}</span></summary><div class="table-scroll"><table><tr><th>${tr('colName')}</th><th>${tr('email')}</th><th>${tr('colRole')}</th><th>${tr('colActions')}</th></tr>${rej.map(u=>`<tr><td>${esc(u.name)}</td><td>${esc(u.email)}</td><td>${esc(roleLabel(u.role))}</td><td><button data-approve="${u.id}" style="background:#16a34a;color:#fff">${S.lang==='es'?'Aprobar':'Approve'}</button> ${userDelCell(u)}</td></tr>`).join('')}</table></div></details>`;
+}
+function adminConfirmDelete(u){
+  const who=`${u.name||''} <${u.email||''}>`;
+  const isAdm=u.role==='ADMIN'||['admin@therivaslegacygroup.com','admin@legacy.app','fernando@legacy.app'].includes(String(u.email||'').toLowerCase());
+  if(isAdm){
+    const typed=prompt(S.lang==='es'?`Vas a eliminar una cuenta de ADMINISTRADOR: ${who}.\nEsto no se puede deshacer. Escribe su correo para confirmar:`:`You are deleting an ADMINISTRATOR account: ${who}.\nThis cannot be undone. Type their email to confirm:`);
+    if(typed==null)return null;
+    if(String(typed).trim().toLowerCase()!==String(u.email||'').trim().toLowerCase()){alert(S.lang==='es'?'El correo no coincide. No se eliminó nada.':'The email does not match. Nothing was deleted.');return null;}
+    return {confirmAdmin:String(typed).trim()};
+  }
+  const ok=confirm(S.lang==='es'?`¿Eliminar la cuenta de ${who}?\nSe borran su acceso, perfil, favoritos, vistas, mensajes, citas, ofertas y documentos. Esto no se puede deshacer.`:`Delete the account of ${who}?\nThis removes their login, profile, favorites, views, messages, showings, offers and documents. This cannot be undone.`);
+  return ok?{}:null;
+}
 function admin(){if(!S.isAdmin())return `<p style="padding:18px">${tr('adminsOnly')}</p>`;const D=S.data;
   return `<section style="padding:18px;display:grid;gap:16px">${investorAdminCard()}
-  ${(()=>{const pend=D.users.filter(u=>u.approvalStatus==='PENDING');return `<div class="card" style="padding:16px;border:2px solid #d97706"><h2>⏳ ${S.lang==='es'?'Cuentas Pendientes de Aprobación':'Accounts Pending Approval'} (${pend.length})</h2><table><tr><th>${tr('colName')}</th><th>${tr('email')}</th><th>${tr('colRole')}</th><th>${S.lang==='es'?'Licencia / Correduría':'License / Brokerage'}</th><th>${S.lang==='es'?'Registro':'Signed up'}</th><th>${tr('colActions')}</th></tr>${pend.map(u=>{const ap=S.agentProfile(u);return `<tr><td>${esc(u.name)}</td><td>${esc(u.email)}</td><td>${esc(roleLabel(u.role))}</td><td>${esc(ap?(ap.licenseNumber||'')+' / '+(ap.brokerage||''):(u.investorProfile?(u.investorProfile.businessName||'')+' / '+(u.investorProfile.representativeName||'')+' / '+(u.investorProfile.contactMethod||'')+': '+(u.investorProfile.contactValue||''):'—'))}</td><td>${esc(new Date(u.createdAt).toLocaleDateString())}</td><td><button data-approve="${u.id}" style="background:#16a34a;color:#fff">${S.lang==='es'?'Aprobar':'Approve'}</button> <button data-decline="${u.id}" style="background:#dc2626;color:#fff">${S.lang==='es'?'Rechazar':'Decline'}</button></td></tr>`;}).join('')||`<tr><td colspan=6>${S.lang==='es'?'No hay cuentas pendientes':'No accounts pending'}</td></tr>`}</table></div>`;})()}
+  ${(()=>{const pend=D.users.filter(u=>u.approvalStatus==='PENDING');return `<div class="card" style="padding:16px;border:2px solid #d97706"><h2>⏳ ${S.lang==='es'?'Cuentas Pendientes de Aprobación':'Accounts Pending Approval'} (${pend.length})</h2><table><tr><th>${tr('colName')}</th><th>${tr('email')}</th><th>${tr('colRole')}</th><th>${S.lang==='es'?'Licencia / Correduría':'License / Brokerage'}</th><th>${S.lang==='es'?'Registro':'Signed up'}</th><th>${tr('colActions')}</th></tr>${pend.map(u=>{const ap=S.agentProfile(u);return `<tr><td>${esc(u.name)}</td><td>${esc(u.email)}</td><td>${esc(roleLabel(u.role))}</td><td>${esc(ap?(ap.licenseNumber||'')+' / '+(ap.brokerage||''):(u.investorProfile?(u.investorProfile.businessName||'')+' / '+(u.investorProfile.representativeName||'')+' / '+(u.investorProfile.contactMethod||'')+': '+(u.investorProfile.contactValue||''):'—'))}</td><td>${esc(new Date(u.createdAt).toLocaleDateString())}</td><td><button data-approve="${u.id}" style="background:#16a34a;color:#fff">${S.lang==='es'?'Aprobar':'Approve'}</button> <button data-decline="${u.id}" style="background:#dc2626;color:#fff">${S.lang==='es'?'Rechazar':'Decline'}</button>${S.canAdminDelete()?` <button type="button" class="btn-del" data-rejdel="${esc(u.id)}">🗑 ${S.lang==='es'?'Rechazar y eliminar':'Decline & delete'}</button>`:''}</td></tr>`;}).join('')||`<tr><td colspan=6>${S.lang==='es'?'No hay cuentas pendientes':'No accounts pending'}</td></tr>`}</table>${rejectedAccounts(D)}</div>`;})()}
 <div class="card" style="padding:16px"><h2>${tr('recentOffers')}</h2><table><tr><th>${tr('colProperty')}</th><th>${tr('colBuyer')}</th><th>${tr('colOffer')}</th><th>${tr('colStatus')}</th><th>${tr('colActions')}</th></tr>
   ${D.offers.slice().reverse().map(o=>`<tr><td>${esc((S.listing(o.listingId)||{}).address)}</td><td>${esc((D.users.find(u=>u.id===o.userId)||{}).name)}</td><td>${S.money(o.offerPrice)} / ${S.money(o.downPayment)} / ${S.money(o.monthlyPayment)}</td><td>${offerBadge(o.status)}</td>
-   <td>${(o.status==='CLOSED'||o.status==='FELL_THROUGH')?'—':`<button data-acc="${o.id}" style="background:#16a34a;color:#fff">${tr('accept')}</button> <button data-ctr="${o.id}" style="background:#d97706;color:#fff">${tr('counterOffer')}</button> <button data-rej="${o.id}" style="background:#dc2626;color:#fff">${tr('reject')}</button>`}</td></tr>${(progOfOffer(o)||closingPanel(o))?`<tr><td colspan=5>${dealTracker(progOfOffer(o))}${closingPanel(o)}</td></tr>`:''}`).join('')||`<tr><td colspan=5>${tr('noOffers')}</td></tr>`}</table></div>
-  <div class="card" style="padding:16px"><h2>${tr('usersAgents')}</h2><table><tr><th>${tr('colName')}</th><th>${tr('email')}</th><th>${tr('colRole')}</th><th>${tr('colInvite')}</th><th>${tr('colResetPw')}</th></tr>${D.users.map(u=>{const ap=S.agentProfile(u);return `<tr><td>${esc(u.name)}</td><td>${esc(u.email)}</td><td>${esc(roleLabel(u.role))}</td><td>${esc(ap&&ap.inviteCode)}</td><td><button data-reset="${u.id}">${tr('reset')}</button></td></tr>`;}).join('')}</table></div>
+   <td>${(o.status==='CLOSED'||o.status==='FELL_THROUGH')?'—':`<button data-acc="${o.id}" style="background:#16a34a;color:#fff">${tr('accept')}</button> <button data-ctr="${o.id}" style="background:#d97706;color:#fff">${tr('counterOffer')}</button> <button data-rej="${o.id}" style="background:#dc2626;color:#fff">${tr('reject')}</button>`}${S.canAdminDelete()?` <button type="button" class="btn-del" data-offdel="${esc(o.id)}" title="${S.lang==='es'?'Eliminar oferta':'Delete offer'}">🗑 ${S.lang==='es'?'Eliminar':'Delete'}</button>`:''}</td></tr>${(progOfOffer(o)||closingPanel(o))?`<tr><td colspan=5>${dealTracker(progOfOffer(o))}${closingPanel(o)}</td></tr>`:''}`).join('')||`<tr><td colspan=5>${tr('noOffers')}</td></tr>`}</table></div>
+  ${accountsCard(D)}
   <div class="card" style="padding:16px"><h2>${S.lang==='es'?'Solicitudes de visita':'Showing requests'}</h2>
   <table><tr><th>${tr('colProperty')}</th><th>${S.lang==='es'?'Solicitado por':'Requested by'}</th><th>${S.lang==='es'?'Fecha/hora':'Date/time'}</th><th>${tr('colStatus')}</th><th>${tr('colActions')}</th></tr>
   ${(D.showings||[]).slice().sort((a,b)=>String(b.preferredAt||'').localeCompare(String(a.preferredAt||''))).map(sh=>{
@@ -1585,6 +1634,7 @@ S.rerender=function(){render();};
 function render(){captureMsgScroll();document.documentElement.lang=S.lang;syncMsgTitle();const root=$('#app-root');if(!S.data)return;if(map){try{map.stop();map.off();map.remove();}catch(e){}map=null;}
   const body={inventory,guides,dashboard,admin,auth,calendar:calendarView,'investor-tx':investorTx,'investor-map':investorMap}[tab]||inventory;root.innerHTML=header()+`<main>${body()}</main><footer style="padding:18px;font-size:12px;text-align:center">© Legacy - Owner Finance · Brokerage By: KLC Real Estate, LLC${footerLinks()}</footer>`;bind();applyMsgScroll();if(tab==='inventory')drawMap();if(tab==='investor-map')drawInvestorMap();maybeOpenSharedDetail();}
 function bind(){const r=$('#app-root');
+  if(!r.dataset.acctToggle){r.dataset.acctToggle='1';r.addEventListener('toggle',e=>{const el=e.target;if(el&&el.dataset&&el.dataset.acct)ADM_OPEN[el.dataset.acct]=el.open;},true);}
   r.onclick=async e=>{
    const c=e.target.closest('[data-view],[data-editsearch],[data-prev],[data-next],[data-compare],[data-chip],[data-cmpopen],[data-cmpclear]');
    if(c){e.preventDefault();e.stopPropagation();const d=c.dataset;
@@ -1599,7 +1649,7 @@ function bind(){const r=$('#app-root');
        modal(`<h2>⚖️ ${S.lang==='es'?'Comparación de Casas':'Side-by-Side Comparison'}</h2><div style="display:grid;grid-template-columns:repeat(${it.length},1fr);gap:12px">${it.map(l=>`<div class="card" style="padding:10px"><img src="${esc(l.photoUrl||'listing-placeholder.svg')}" referrerpolicy="no-referrer" onerror="window.imgFallback&&window.imgFallback(this)" style="width:100%;height:120px;object-fit:cover;border-radius:8px"><h4 style="margin:8px 0">${title(l)}</h4>
        <div style="font-size:13px;line-height:1.8">${tr('price')}: <b>${S.money(l.askingPrice)}</b><br>${tr('down')}: <b>${S.money(l.downPayment)}</b><br>${tr('monthly')}: <b>${S.money(l.monthlyPayment)}</b><br>${l.beds??'—'} ${tr('bdShort')} · ${l.baths??'—'} ${tr('baShort')}<br>${l.sqft?(+l.sqft).toLocaleString()+' '+tr('sqftUnit'):''}${l.sqft&&l.askingPrice?'<br>$'+Math.round(l.askingPrice/100/l.sqft)+tr('perSqft'):''}</div></div>`).join('')}</div>`);return;}
    }
-   const t=e.target.closest('[data-tab],[data-lang],[data-open],[data-fav],[data-acc],[data-rej],[data-ctr],[data-reset],[data-save],[data-client],[data-register],[data-login],[data-shareclear],[data-copylink],[data-calmode],[data-calnav],[data-showacc],[data-showden],[data-showcan],[data-showmsg],[data-approve],[data-decline],[data-inspsched],[data-inspcancel],[data-menu],[data-menuclose],[data-bell],[data-alertclose],[data-pushon],[data-pushoff],[data-pushtest],[data-msgbubble],[data-msgclose],[data-msgpeer],[data-msgback],[data-msgsend],[data-msgnew],[data-feedback],[data-checkin],[data-checkout],[data-activity],[data-metric],[data-views],[data-favs],[data-openmap],[data-mapscope],[data-closed],[data-cldate],[data-clcomm],[data-clclose],[data-clfell],[data-editown],[data-unassign],#logout,#forgot');
+   const t=e.target.closest('[data-tab],[data-lang],[data-open],[data-fav],[data-acc],[data-rej],[data-ctr],[data-reset],[data-save],[data-client],[data-register],[data-login],[data-shareclear],[data-copylink],[data-calmode],[data-calnav],[data-showacc],[data-showden],[data-showcan],[data-showmsg],[data-approve],[data-decline],[data-inspsched],[data-inspcancel],[data-menu],[data-menuclose],[data-bell],[data-alertclose],[data-pushon],[data-pushoff],[data-pushtest],[data-msgbubble],[data-msgclose],[data-msgpeer],[data-msgback],[data-msgsend],[data-msgnew],[data-feedback],[data-checkin],[data-checkout],[data-activity],[data-metric],[data-views],[data-favs],[data-openmap],[data-mapscope],[data-closed],[data-cldate],[data-clcomm],[data-clclose],[data-clfell],[data-editown],[data-unassign],[data-offdel],[data-udel],[data-rejdel],[data-alertdel],[data-alertclear],#logout,#forgot');
    if(!t)return;
    e.preventDefault();
    try{
@@ -1653,6 +1703,18 @@ function bind(){const r=$('#app-root');
      if(d.mapscope){MAPSCOPE=d.mapscope==='all'?'all':'mine';return render();}
      if(d.editown){const home=S.listing(d.editown);if(home)openOwnEditor(home);return;}
      if(d.unassign){const parts=String(d.unassign).split('|');if(parts[0]&&parts[1]){await S.assignInvestorListings(parts[0],[],[parts[1]]);render();}return;}
+     if(d.alertdel){await S.deleteAlert(d.alertdel);return render();}
+     if(d.alertclear){if(confirm(S.lang==='es'?'¿Borrar todas las notificaciones que ya viste?':'Delete all notifications you have already seen?')){const j=await S.clearReadAlerts();if(j&&!j.deleted)alert(S.lang==='es'?'No había notificaciones vistas para borrar.':'There were no seen notifications to delete.');render();}return;}
+     if(d.offdel){const o=S.data.offers.find(x=>x.id===d.offdel);if(!o)return;const where=(S.listing(o.listingId)||{}).address||'';const who=(S.data.users.find(u=>u.id===o.userId)||{}).name||'';
+       if(!confirm(S.lang==='es'?`¿Eliminar la oferta de ${who||'este cliente'}${where?' en '+where:''}?\nSe borra la oferta y sus datos de cierre. El estado de la casa no cambia y los documentos del cliente se conservan. Esto no se puede deshacer.`:`Delete ${who||'this client'}'s offer${where?' on '+where:''}?\nThe offer and its closing details are removed. The home's status does not change and the client's documents are kept. This cannot be undone.`))return;
+       t.disabled=true;t.textContent=S.lang==='es'?'Eliminando…':'Deleting…';
+       await S.adminDeleteOffer(d.offdel);alert(S.lang==='es'?'Oferta eliminada.':'Offer deleted.');return render();}
+     if(d.udel||d.rejdel){const id=d.udel||d.rejdel;const u=S.data.users.find(x=>x.id===id);if(!u)return;
+       let extra={};
+       if(d.rejdel){if(!confirm(S.lang==='es'?`¿Rechazar y eliminar la cuenta de ${u.name||''} <${u.email||''}>?\nEsto no se puede deshacer.`:`Decline and delete the account of ${u.name||''} <${u.email||''}>?\nThis cannot be undone.`))return;}
+       else{extra=adminConfirmDelete(u);if(!extra)return;}
+       t.disabled=true;t.textContent=S.lang==='es'?'Eliminando…':'Deleting…';
+       await S.adminDeleteUser(id,extra.confirmAdmin);alert(S.lang==='es'?'Cuenta eliminada.':'Account deleted.');return render();}
      if(d.approve){await S.setApproval(d.approve,'APPROVED');return render();}if(d.decline){if(confirm(S.lang==='es'?'¿Rechazar esta cuenta?':'Decline this account?')){await S.setApproval(d.decline,'REJECTED');render();}return;}if(d.inspsched){const v=($('#insp-'+d.inspsched)||{}).value;if(!v)return alert(S.lang==='es'?'Selecciona fecha y hora':'Pick a date and time');S.setInspection(d.inspsched,v);return render();}if(d.inspcancel){if(confirm(S.lang==='es'?'¿Cancelar la inspección?':'Cancel the inspection?')){S.setInspection(d.inspcancel,null);render();}return;}if(d.acc)return S.respondOffer(d.acc,'ACCEPTED');if(d.rej)return S.respondOffer(d.rej,'REJECTED');
      if(d.ctr){const p=prompt(tr('promptCounterPrice')),dn=prompt(tr('promptCounterDown')),mo=prompt(tr('promptCounterMonthly')),n=prompt(tr('promptAdminNotes'))||'';if(p)S.respondOffer(d.ctr,'COUNTERED',{counterPrice:p,counterDown:dn,counterMonthly:mo,adminNotes:n});return;}
      if(d.reset)return openAdminResetModal(d.reset);

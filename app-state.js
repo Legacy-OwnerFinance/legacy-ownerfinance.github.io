@@ -320,6 +320,20 @@ function merge(base,incoming){
   return base;
 }
 
+/* v26: ids the server deleted (offers, accounts and what they owned). Drop them from any local copy so they never come back. */
+const TOMB_LIST=['users','agentProfiles','buyerProfiles','offers','showings','messages','documents','favorites','propertyViews','propertyRequests'];
+const TOMB_OWN=['userId','fromUserId','toUserId','buyerId','clientId'];
+function applyTombstones(data,remoteIds){
+  if(!data)return data;
+  const ids=new Set([...(Array.isArray(data.deletedIds)?data.deletedIds:[]),...(Array.isArray(remoteIds)?remoteIds:[])].map(String));
+  if(!ids.size)return data;
+  data.deletedIds=[...ids];
+  const hit=x=>!!x&&((x.id&&ids.has(String(x.id)))||TOMB_OWN.some(k=>x[k]&&ids.has(String(x[k]))));
+  TOMB_LIST.forEach(k=>{if(Array.isArray(data[k]))data[k]=data[k].filter(x=>!hit(x));});
+  if(Array.isArray(data.documents))data.documents=data.documents.map(d=>d&&d.offerId&&ids.has(String(d.offerId))?Object.assign({},d,{offerId:null}):d);
+  return data;
+}
+S.applyTombstones=applyTombstones;
 async function fetchCloudState(){
   const st=await api('state');
   S.cloudConnected=true;
@@ -713,6 +727,41 @@ S.markAlertsRead=async()=>{
     notify();
   }catch(e){}
 };
+/* v26: anyone can delete their own notifications once seen; Admin can delete offers and accounts. All checks run on the server too. */
+S.canDeleteAlerts=()=>!!(S.caps&&S.caps.ready&&S.caps.version>=26&&S.user);
+S.deleteAlert=async id=>{
+  const j=await api('alerts_delete',{id});
+  if(j&&Array.isArray(j.alerts))S.alerts=j.alerts;
+  if(j&&Array.isArray(j.digests))S.digests=j.digests;
+  notify();return j;
+};
+S.clearReadAlerts=async()=>{
+  const j=await api('alerts_delete',{all:true});
+  if(j&&Array.isArray(j.alerts))S.alerts=j.alerts;
+  if(j&&Array.isArray(j.digests))S.digests=j.digests;
+  notify();return j;
+};
+S.canAdminDelete=()=>!!(S.isAdmin()&&S.caps&&S.caps.version>=26);
+S.isMainAdmin=u=>String(u&&u.email||'').trim().toLowerCase()==='fer.okc94@gmail.com';
+function forgetLocally(ids){
+  S.data.deletedIds=[...new Set([...(S.data.deletedIds||[]),...ids.filter(Boolean).map(String)])];
+  applyTombstones(S.data);
+  persistLocalState(S.data);
+}
+S.adminDeleteOffer=async offerId=>{
+  if(!S.isAdmin())throw new Error('Admins only');
+  const j=await api('admin_offer_delete',{offerId});
+  forgetLocally([offerId]);
+  if(S.closings)delete S.closings[offerId];
+  notify();return j;
+};
+S.adminDeleteUser=async(userId,confirmAdmin)=>{
+  if(!S.isAdmin())throw new Error('Admins only');
+  const j=await api('admin_user_delete',{userId,confirmAdmin:confirmAdmin||''});
+  const ap=(S.data.agentProfiles||[]).filter(a=>a.userId===userId).map(a=>a.id);
+  forgetLocally([userId,...ap]);
+  notify();return j;
+};
 S.saveFeedback=async(showingId,fields)=>{
   const j=await api('showing_feedback_save',Object.assign({showingId},fields||{}));
   if(j&&j.unavailable)throw new Error(S.t('ops.unavailable'));
@@ -752,6 +801,7 @@ S.load=async()=>{
     }
     applyRelationalUsers(merged,userRows);
     applyRelationalListings(merged,listRows,{allowTenure:!!S._me});
+    applyTombstones(merged,kvVal&&kvVal.deletedIds);
     S.lastSyncedAt=updatedAt;
   }catch(e){
     console.warn('Offline or fallback to app-data.json:',e);
@@ -791,6 +841,7 @@ async function pollSupabase(opts){
           S.data.removedSoldIds=Array.from(new Set([...(S.data.removedSoldIds||[]),...remoteVal.removedSoldIds]));
         }
         S.data=merge(S.data,remoteVal);
+        applyTombstones(S.data,remoteVal.deletedIds);
         enforceThreeDaySoldRule(S.data);
         if(Array.isArray(remoteVal.favorites))S.data.favorites=remoteVal.favorites;
         changed=true;
@@ -798,6 +849,7 @@ async function pollSupabase(opts){
     }
     if(userRows&&userRows.length){
       applyRelationalUsers(S.data,userRows);
+      applyTombstones(S.data);
     }
     if(st.listRows&&st.listRows.length){if(applyRelationalListings(S.data,st.listRows,{allowTenure:!!st.me}))changed=true;}
     const nextToday=Array.isArray(st.todayApprovedShowings)?st.todayApprovedShowings:[];
@@ -860,6 +912,7 @@ async function adoptSession(j){
   if(st.kv)merged=merge(merged,st.kv);
   applyRelationalUsers(merged,st.userRows||[]);
   applyRelationalListings(merged,st.listRows||[],{allowTenure:!!S._me});
+  applyTombstones(merged,st.kv&&st.kv.deletedIds);
   S.lastSyncedAt=st.updatedAt||S.lastSyncedAt;
   S.data=merged;
   let u=S.data.users.find(x=>x.id===S._me.id);
