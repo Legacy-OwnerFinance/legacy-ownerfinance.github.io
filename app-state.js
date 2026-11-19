@@ -1005,6 +1005,19 @@ S.adminResetPassword=async(userId,pw)=>{if(!S.isAdmin())throw new Error('Admins 
 S.updateProfile=p=>{Object.assign(S.user,p,{updatedAt:now()});const ap=S.agentProfile(S.user);
   if(ap){if(p.licenseNumber!=null)ap.licenseNumber=p.licenseNumber;if(p.brokerage!=null)ap.brokerage=p.brokerage;}
   S.save();sbUpsert('app_users',userToRow(S.user),'id');};
+// Investors (and anyone) can change only their own display name and phone. Sends just {id,name,phone};
+// the api's app_users write already limits non-admins to their own row and never lets them change role, email or approval.
+S.updateMyProfile=async p=>{
+  if(!S.user)throw new Error('Not signed in');
+  const name=String(p&&p.name||'').replace(/\s+/g,' ').trim().slice(0,80);
+  const phone=String(p&&p.phone||'').trim().slice(0,30);
+  if(!name)throw new Error(S.lang==='es'?'Escribe tu nombre.':'Enter your name.');
+  await api('write',{table:'app_users',rows:[{id:S.user.id,name,phone}]});
+  Object.assign(S.user,{name,phone,updatedAt:now()});
+  if(S.data&&Array.isArray(S.data.users))S.data.users=S.data.users.map(u=>u&&u.id===S.user.id?Object.assign({},u,{name,phone,updatedAt:S.user.updatedAt}):u);
+  persistLocalState(S.data);notify();
+  return S.user;
+};
 const readFile=file=>new Promise((res,rej)=>{const r=new FileReader();r.onload=()=>res(r.result);r.onerror=rej;r.readAsDataURL(file);});
 S.uploadAvatar=async file=>{
   const bad=S.uploadProblem(file,true);if(bad)throw new Error(bad);
