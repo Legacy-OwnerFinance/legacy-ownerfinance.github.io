@@ -429,6 +429,7 @@ function applyRelationalListings(stateData,listRows,opts){
       areas:r.areas??cur.areas,
       soldAt:r.sold_at??cur.soldAt??null,
       investorId:Object.prototype.hasOwnProperty.call(r,'investor_id')?r.investor_id:(cur.investorId??null),
+      companyId:Object.prototype.hasOwnProperty.call(r,'company_id')?r.company_id:(cur.companyId??null),
       sourceSheetId:Object.prototype.hasOwnProperty.call(r,'source_sheet_id')?r.source_sheet_id:(cur.sourceSheetId??null),
       inspectionAt:Object.prototype.hasOwnProperty.call(r,'inspection_at')?r.inspection_at:(cur.inspectionAt??null),
       rowCreatedAt:r.created_at??cur.rowCreatedAt??null,
@@ -454,7 +455,7 @@ function sameJson(a,b){try{return JSON.stringify(a)===JSON.stringify(b);}catch(e
 function capsFrom(raw){
   const version=Number(raw&&raw.version)||0;
   const v13=version>=13;
-  return {v13,ready:v13&&!!(raw&&raw.ready),investor:version>=14&&!!(raw&&raw.investor),messages:version>=15&&!!(raw&&raw.messages_badge),closing:version>=16&&!!(raw&&raw.offer_closing),deal_progress:version>=20&&!!(raw&&raw.deal_progress),version};
+  return {v13,ready:v13&&!!(raw&&raw.ready),investor:version>=14&&!!(raw&&raw.investor),companies:!!(raw&&raw.companies),messages:version>=15&&!!(raw&&raw.messages_badge),closing:version>=16&&!!(raw&&raw.offer_closing),deal_progress:version>=20&&!!(raw&&raw.deal_progress),version};
 }
 function clearMsgUnread(){
   const changed=!!S.msgUnread||(S.msgThreads&&S.msgThreads.length>0);
@@ -500,7 +501,7 @@ async function refreshPortal(opts){
       msgChanged=true;
     }
     const changed=!(S.caps&&S.caps.ready)||!!(S.caps&&S.caps.investor)!==investor||!!(S.caps&&S.caps.messages)!==messages||!!(S.caps&&S.caps.closing)!==!!parsed.closing||!!(S.caps&&S.caps.deal_progress)!==!!parsed.deal_progress||!sameJson(S.alerts,nextA)||!sameJson(S.digests||[],nextD)||!sameJson(S.myShowings,nextS)||msgChanged;
-    S.caps={v13:true,ready:true,investor,messages,closing:!!parsed.closing,deal_progress:!!parsed.deal_progress,version:parsed.version||(investor?14:13)};
+    S.caps={v13:true,ready:true,investor,messages,closing:!!parsed.closing,deal_progress:!!parsed.deal_progress,companies:!!parsed.companies,version:parsed.version||(investor?14:13)};
     S.alerts=nextA;
     S.digests=nextD;
     S.myShowings=nextS;
@@ -588,8 +589,12 @@ async function refreshInvestor(){
       if(!onAdmin&&S.investorAdmin)return false;
       const j=await api('investor_admin');
       if(!j||j.unavailable)return false;
-      const changed=!sameJson(S.investorAdmin,j);
+      // Company model: companies, their members, homes, sheets and archived deals (Admin only).
+      let co=null;
+      if(S.caps&&S.caps.companies){try{co=await api('company_admin');if(co&&co.unavailable)co=null;}catch(e){co=null;}}
+      const changed=!sameJson(S.investorAdmin,j)||!sameJson(S.companyAdmin,co);
       S.investorAdmin=j;
+      S.companyAdmin=co;
       return changed;
     }
     if(!S.isInvestor()||S.isPendingApproval(S.user)){
@@ -900,7 +905,14 @@ S.buyerProfile=u=>u&&(S.data.buyerProfiles.find(b=>b.userId===u.id)||u.buyerProf
 S.isAdmin=()=>Boolean(S.user&&(S.user.role==='ADMIN'||['admin@therivaslegacygroup.com','fer.okc94@gmail.com','admin@legacy.app','fernando@legacy.app'].includes((S.user.email||'').toLowerCase())));
 S.isAgent=()=>Boolean(S.user&&(S.user.role==='AGENT'||(S.user.email||'').toLowerCase()==='admin@therivaslegacygroup.com'));
 S.isInvestor=()=>Boolean(S.user&&S.user.role==='INVESTOR'&&!S.isAdmin());
-S.ownsListing=l=>Boolean(l&&S.user&&l.investorId&&l.investorId===S.user.id);
+// Company model: an investor owns a home when they belong to the company that owns it (each person keeps their own login).
+S.myCompanies=()=>((S.investorHome&&S.investorHome.companies)||(S.user&&S.user.companies)||[]);
+S.myCompanyIds=()=>S.myCompanies().map(c=>c.id);
+S.ownsListing=l=>Boolean(l&&S.user&&(l.companyId?S.myCompanyIds().includes(l.companyId):(!(S.caps&&S.caps.companies)&&l.investorId&&l.investorId===S.user.id)));
+const ACTIVE_CO_KEY='lof_active_company';
+S.activeCompanyId=()=>{const cos=S.myCompanyIds();if(cos.length<2)return cos[0]||'';let v='';try{v=localStorage.getItem(ACTIVE_CO_KEY)||'';}catch(e){}return v&&cos.includes(v)?v:'';};
+S.setActiveCompany=id=>{try{if(id)localStorage.setItem(ACTIVE_CO_KEY,id);else localStorage.removeItem(ACTIVE_CO_KEY);}catch(e){}notify();};
+S.companyName=id=>{const c=S.myCompanies().find(x=>x.id===id)||((S.companyAdmin&&S.companyAdmin.companies)||[]).find(x=>x.id===id);return c?c.name:'';};
 S.listing=id=>S.data.listings.find(l=>l.id===id);
 function setUser(u){S.user=u;S.save(true);}
 
@@ -974,6 +986,15 @@ S.decideShowing=async(id,status)=>{
 S.messageShowingAgent=async(id,body)=>{
   const j=await api('showing_message',{showingId:id,body});
   if(!j||j.unavailable||j.error)throw new Error((j&&j.message)||(S.lang==='es'?'No se pudo enviar el mensaje.':'Could not send the message.'));
+  return j;
+};
+// Company model Admin actions (Admin only; the server re-checks): new company, add/remove partner, rename, assign homes, sheets, delete empty.
+S.companyAction=async(action,body)=>{
+  const j=await api(action,body||{});
+  if(!j||j.unavailable||j.error)throw new Error((j&&j.message)||(S.lang==='es'?'No se pudo guardar.':'Could not save.'));
+  S.companyAdmin=j;
+  if(action==='company_assign'||action==='company_sheets_save'){try{const st=await api('state');if(st&&st.listRows)applyRelationalListings(S.data,st.listRows,{allowTenure:!!st.me});}catch(e){}}
+  notify();
   return j;
 };
 S.saveInvestorSheets=async(userId,sheets)=>{
