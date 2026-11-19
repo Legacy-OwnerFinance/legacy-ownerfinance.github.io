@@ -193,6 +193,27 @@ const L10N={
     closingDateL:'Closing date',
     soldPriceL:'Sold for',
     invGreetKicker:'Investor portal',
+    companiesTitle:'Companies',
+    companiesHint:'Each person keeps their own login. Everyone linked to a company sees all of that company\'s homes, closed deals and documents, and nothing from other companies.',
+    newCompany:'New company',
+    companyNameL:'Company name',
+    firstMember:'First member (existing account)',
+    addPartner:'Add partner',
+    addPartnerHint:'Link an existing account to this company.',
+    membersL:'Members',
+    removeMember:'Remove',
+    renameCompany:'Rename',
+    deleteCompany:'Delete company',
+    companyHomesL:'Homes',
+    companyArchivedL:'Archived closed deals',
+    allCompanies:'All companies',
+    companyL:'Company',
+    myAdminAccount:'my Admin account (optional)',
+    confirmRemoveMember:'Remove this person from the company? They lose access to its homes, closed deals and documents.',
+    confirmDeleteCompany:'Delete this empty company?',
+    investorAccountsL:'Investor accounts',
+    noCompanyYet:'No company yet (one is created when the account is approved)',
+    pendingL:'pending review',
     invProfileHint:'This is the name shown in your greeting and to the Legacy team.',
     nameRequired:'Enter your name (up to 80 characters).',
     yourInviteCode:'Your invite code:',
@@ -405,6 +426,27 @@ const L10N={
     closingDateL:'Fecha de cierre',
     soldPriceL:'Vendida en',
     invGreetKicker:'Portal de inversionistas',
+    companiesTitle:'Compañías',
+    companiesHint:'Cada persona tiene su propio acceso. Todos los vinculados a una compañía ven todas sus casas, cierres y documentos, y nada de otras compañías.',
+    newCompany:'Nueva compañía',
+    companyNameL:'Nombre de la compañía',
+    firstMember:'Primer miembro (cuenta existente)',
+    addPartner:'Agregar socio',
+    addPartnerHint:'Vincula una cuenta existente a esta compañía.',
+    membersL:'Miembros',
+    removeMember:'Quitar',
+    renameCompany:'Cambiar nombre',
+    deleteCompany:'Borrar compañía',
+    companyHomesL:'Casas',
+    companyArchivedL:'Cierres archivados',
+    allCompanies:'Todas las compañías',
+    companyL:'Compañía',
+    myAdminAccount:'mi cuenta de Admin (opcional)',
+    confirmRemoveMember:'¿Quitar a esta persona de la compañía? Pierde el acceso a sus casas, cierres y documentos.',
+    confirmDeleteCompany:'¿Borrar esta compañía vacía?',
+    investorAccountsL:'Cuentas de inversionista',
+    noCompanyYet:'Sin compañía todavía (se crea al aprobar la cuenta)',
+    pendingL:'en revisión',
     invProfileHint:'Este es el nombre que aparece en tu saludo y que ve el equipo de Legacy.',
     nameRequired:'Escribe tu nombre (máximo 80 caracteres).',
     yourInviteCode:'Tu código de invitación:',
@@ -882,7 +924,7 @@ function messageContacts(){
   };
   if(S.isAdmin()){(S.data.users||[]).forEach(add);return out;}
   if(S.isInvestor()){
-    const mine=new Set((S.data.listings||[]).filter(l=>l&&l.investorId===u.id).map(l=>l.id));
+    const mine=new Set((S.data.listings||[]).filter(l=>l&&S.ownsListing(l)).map(l=>l.id));
     const ids=new Set();
     (S.data.showings||[]).forEach(sh=>{
       if(!sh||!mine.has(sh.listingId))return;
@@ -1409,31 +1451,56 @@ function highlightClosedDeal(){
 function investorGreetingHtml(){
   const u=S.user||{},prof=u.investorProfile||{};
   const name=String(u.name||'').trim()||String(prof.representativeName||'').trim()||tr('roleInvestor');
-  const biz=String(prof.businessName||'').trim();
+  const cos=S.myCompanies?S.myCompanies():[];const act=S.activeCompanyId?S.activeCompanyId():'';
+  // Company model: the company line shows the selected company, or every company the person belongs to.
+  const biz=cos.length?(act?S.companyName(act):cos.map(c=>c.name).join(' · ')):String(prof.businessName||'').trim();
   return `<div class="inv-greet" id="investor-greeting"><div class="inv-greet-text"><span class="inv-greet-kicker">${tr('invGreetKicker')}</span><h2 class="inv-greet-title">${tr('invGreetHello')}, <span class="inv-greet-name">${esc(name)}</span></h2>${biz?`<p class="inv-greet-biz">${esc(biz)}</p>`:''}<p class="inv-greet-brand">Legacy - Owner Finance · Brokerage By: KLC Real Estate, LLC</p></div><img src="legacy-logo.png" alt="" class="inv-greet-logo" aria-hidden="true"></div>`;
 }
 // Permanent list of the investor's closed deals and their documents. Purged (archived) deals come from the
 // api's private closed-deal snapshot, so they stay here after the home leaves the public inventory.
 function investorClosedDealsHtml(){
-  const closed=((S.investorTx&&S.investorTx.closed)||[]);
+  // A deep-linked deal (email/push notice) always shows, even when another company is selected in the switcher.
+  const closed=((S.investorTx&&S.investorTx.closed)||[]).filter(c=>coKeep(c)||peekDeal()===String(c&&c.id));
   const closingOf=c=>{if(c.closingDate)return c.closingDate;const cl=Object.values(S.closings||{}).find(x=>x.listingId===c.id&&x.outcome==='CLOSED');return cl&&cl.closingDate||'';};
-  const items=closed.map(c=>{const cd=closingOf(c);const price=c.soldPrice!=null?c.soldPrice:c.askingPrice;
+  const itemHtml=c=>{const cd=closingOf(c);const price=c.soldPrice!=null?c.soldPrice:c.askingPrice;
     const on=peekDeal()===String(c.id);return `<article class="inv-deal${on?' inv-deal-highlight':''}" data-deal="${esc(c.id)}" id="${on?'investor-deal-focus':''}"><div class="inv-deal-head"><b>${esc(c.address)}${c.city?', '+esc(c.city):''}</b>${c.archived?`<span class="inv-deal-tag">${tr('dealArchived')}</span>`:''}</div>
     <div class="inv-deal-meta"><span>🏁 ${tr('closingDateL')}: <b>${cd?esc(fmtYmd(cd)):(c.soldAt?esc(formatInstant(c.soldAt)):'—')}</b></span><span>${tr(c.soldPrice!=null?'soldPriceL':'price')} <b>${price!=null?S.money(price):'—'}</b></span></div>
     <ul class="inv-deal-docs">${(c.documents||[]).map(d=>`<li><a href="#" data-opendoc="${esc(d.id)}">📄 ${esc(d.name||tr('documents'))}</a> <i>${esc(d.docType||'')}</i></li>`).join('')||`<li>${tr('noDocs')}</li>`}</ul>
-    <label class="ops-meta">${cx('uploadFinal')} <input type="file" accept="${S.UPLOAD_ACCEPT}" data-invcontract="${esc(c.id)}"></label></article>`;}).join('');
-  return `<div class="card inv-closed" id="investor-closed-deals" style="padding:16px"><h2>${tr('myClosedDeals')}</h2><p class="ops-meta">${tr('myClosedDealsHint')}</p>${items||`<p>${tr('noneYet')}</p>`}</div>`;
+    <label class="ops-meta">${cx('uploadFinal')} <input type="file" accept="${S.UPLOAD_ACCEPT}" data-invcontract="${esc(c.id)}"></label></article>`;};
+  const items=closed.map(itemHtml).join('');
+  const cos=S.myCompanies?S.myCompanies():[];
+  let body=items;
+  if(cos.length>1&&!coActive()&&closed.length){
+    // Grouped by company, in the order of the person's companies; deals without a company last.
+    const html=c=>itemHtml(c);
+    const groups=cos.map(co=>({co,list:closed.filter(c=>c.companyId===co.id)})).filter(g=>g.list.length);
+    const rest=closed.filter(c=>!cos.some(co=>co.id===c.companyId));
+    body=groups.map(g=>`<section class="inv-co-group" data-cogroup="${esc(g.co.id)}"><h3>${esc(g.co.name)}</h3>${g.list.map(html).join('')}</section>`).join('')+(rest.length?`<section class="inv-co-group">${rest.map(html).join('')}</section>`:'');
+  }
+  return `<div class="card inv-closed" id="investor-closed-deals" style="padding:16px"><h2>${tr('myClosedDeals')}</h2><p class="ops-meta">${tr('myClosedDealsHint')}</p>${body||`<p>${tr('noneYet')}</p>`}</div>`;
+}
+// Company model: when a person belongs to several companies, a simple switcher filters Mis casas and the closed deals.
+const coActive=()=>(S.activeCompanyId?S.activeCompanyId():'');
+const coKeep=r=>{const a=coActive();return !a||!r||!r.companyId||r.companyId===a;};
+function companySwitcherHtml(){
+  const cos=S.myCompanies?S.myCompanies():[];if(cos.length<2)return '';
+  const a=coActive();
+  const b=(id,label)=>`<button type="button" class="btn-card${a===id?' primary':''}" data-cosel="${esc(id||'all')}" aria-pressed="${a===id}">${esc(label)}</button>`;
+  return `<div class="inv-co-switch" id="company-switcher" role="group" aria-label="${esc(tr('companyL'))}"><span class="ops-meta">${tr('companyL')}:</span> ${b('',tr('allCompanies'))}${cos.map(c=>b(c.id,c.name)).join('')}</div>`;
 }
 function investorHomeHtml(){
-  const home=S.investorHome||{homes:[],totals:{},feed:[]};
-  const t=home.totals||{};
+  const home0=S.investorHome||{homes:[],totals:{},feed:[]};
+  const homes0=(home0.homes||[]).filter(coKeep);
+  const home=Object.assign({},home0,{homes:homes0,feed:(home0.feed||[]).filter(coKeep)});
+  const t=coActive()?{views:homes0.reduce((n,h)=>n+(h.views||0),0),favorites:homes0.reduce((n,h)=>n+(h.favorites||0),0),closedYtd:(home0.closedYtd||[]).filter(coKeep).length,underContract:(home0.underContract||[]).filter(coKeep).length}:(home0.totals||{});
   const tile=(key,n,label)=>`<button type="button" class="inv-tile" data-metric="${key}"><b>${n||0}</b><span>${label}</span></button>`;
-  const rows=(home.homes||[]).map(h=>`<tr><td><button type="button" class="btn-card" data-editown="${esc(h.id)}">${esc(h.address)}, ${esc(h.city)}</button></td><td>${esc(S.statusText?S.statusText(h.status):h.status)}</td><td><button type="button" class="btn-card" data-views="${esc(h.id)}">${h.views||0}</button></td><td><button type="button" class="btn-card" data-favs="${esc(h.id)}">${h.favorites||0}</button></td></tr>`).join('');
+  const multiCo=(S.myCompanies?S.myCompanies():[]).length>1&&!coActive();
+  const rows=(home.homes||[]).map(h=>`<tr><td><button type="button" class="btn-card" data-editown="${esc(h.id)}">${esc(h.address)}, ${esc(h.city)}</button>${multiCo&&h.companyId?`<div class="ops-meta">${esc(S.companyName(h.companyId))}</div>`:''}</td><td>${esc(S.statusText?S.statusText(h.status):h.status)}</td><td><button type="button" class="btn-card" data-views="${esc(h.id)}">${h.views||0}</button></td><td><button type="button" class="btn-card" data-favs="${esc(h.id)}">${h.favorites||0}</button></td></tr>`).join('');
   const feed=(home.feed||[]).map(it=>{const detail=it.kind==='SHOWING'&&it.detail&&S.formatShowingWhen?S.formatShowingWhen(it.detail):(it.detail&&it.detail!==it.status?it.detail:'');return `<article class="ops-showing"><div class="ops-showing-head"><b>${esc(feedKind(it.kind))}</b><span>${esc(formatInstant(it.at)||'')}</span></div><div>${esc(it.address||'')}${it.city?', '+esc(it.city):''}</div><p class="ops-meta">${esc(it.status||'')} ${esc(detail||'')}</p></article>`;}).join('');
   const prof=S.user.investorProfile||{};
   return `<section id="investor-home" style="padding:18px;display:grid;gap:16px">
     ${investorGreetingHtml()}
-    <div class="card" style="padding:16px"><h2>${tr('navInvestorHome')}</h2><p class="ops-meta">${esc(prof.businessName||S.user.name||'')} · ${esc(prof.representativeName||'')}</p>
+    <div class="card" style="padding:16px"><h2>${tr('navInvestorHome')}</h2>${companySwitcherHtml()}<p class="ops-meta">${esc((coActive()&&S.companyName(coActive()))||((S.myCompanies&&S.myCompanies().length)?S.myCompanies().map(c=>c.name).join(' · '):(prof.businessName||S.user.name||'')))} · ${esc(S.user.name||prof.representativeName||'')}</p>
     <div class="inv-tiles">${tile('views',t.views,tr('totalViews'))}${tile('favorites',t.favorites,tr('totalFavorites'))}${tile('closed',t.closedYtd,tr('closedYtd'))}${tile('contract',t.underContract,tr('underContract'))}</div>
     <div class="table-scroll"><table><tr><th>${tr('colAddress')}</th><th>${tr('colStatus')}</th><th>${tr('totalViews')}</th><th>${tr('totalFavorites')}</th></tr>${rows||`<tr><td colspan="4">${tr('noneYet')}</td></tr>`}</table></div></div>
     ${investorClosedDealsHtml()}
@@ -1465,7 +1532,8 @@ function invDocsHtml(r){
   return `<ul style="margin:4px 0">${docs}</ul><label>${cx('uploadFinal')} <input type="file" accept="${S.UPLOAD_ACCEPT}" data-invcontract="${esc(r.id)}"></label>`;
 }
 function investorTxHtml(){
-  const tx=S.investorTx||{offers:[],approvedShowings:[],underContract:[],inspectionsThisWeek:[],closed:[]};
+  const tx0=S.investorTx||{offers:[],approvedShowings:[],underContract:[],inspectionsThisWeek:[],closed:[]};
+  const tx=Object.assign({},tx0);['offers','approvedShowings','showings','underContract','inspectionsThisWeek','closed'].forEach(k=>{if(Array.isArray(tx0[k]))tx[k]=tx0[k].filter(coKeep);});
   const line=(r,extra)=>`<tr><td>${esc(r.address||'')}${r.city?', '+esc(r.city):''}</td><td>${extra}</td></tr>`;
   const offers=(tx.offers||[]).map(o=>line(o,`${esc(o.buyerName||'—')} · ${S.money(o.offerPrice)} ${offerBadge(o.status)}`)).join('');
   const shows=(tx.approvedShowings||[]).map(sh=>`<tr><td>${esc(sh.address||'')}${sh.city?', '+esc(sh.city):''}</td><td>${esc(S.formatShowingWhen?S.formatShowingWhen(sh.preferredAt):sh.preferredAt)}</td><td>${esc(sh.requester||'—')}</td><td>${txShowingActs(sh)}</td></tr>`).join('');
@@ -1540,8 +1608,39 @@ function openInvestorReadonly(l){
    <p>${l.beds??'—'} ${tr('bdShort')} · ${l.baths??'—'} ${tr('baShort')} · ${l.sqft?l.sqft+' '+tr('sqftUnit'):''}</p>
    <p>${esc(l.description||'')}</p>`);
 }
+function companiesAdminCard(){
+  const pack=S.companyAdmin;
+  if(!pack)return `<div class="card" style="padding:16px"><h2>${tr('companiesTitle')}</h2><p>${tr('activity.loading')}</p></div>`;
+  const acct=pack.accounts||[];
+  const label=a=>a.isMe?`${esc(a.name||a.email)} — ${tr('myAdminAccount')}`:`${esc(a.name||a.email)} · ${esc(a.email)}${a.businessName?' · '+esc(a.businessName):''}${a.approvalStatus!=='APPROVED'?' ('+tr('pendingL')+')':''}`;
+  const acctOpts=excl=>acct.filter(a=>!excl.includes(a.userId)).map(a=>`<option value="${esc(a.userId)}">${label(a)}</option>`).join('');
+  const blocks=(pack.companies||[]).map(c=>{
+    const ids=(c.members||[]).map(m=>m.userId);
+    const members=(c.members||[]).map(m=>`<li><b>${esc(m.name||m.email)}</b> · ${esc(m.email)}${m.isMe?' · Admin':''}${m.approvalStatus!=='APPROVED'?' · '+tr('pendingL'):''} <button type="button" class="btn-card" data-coremove="${esc(c.id)}|${esc(m.userId)}">${tr('removeMember')}</button></li>`).join('');
+    const homes=(c.homes||[]).map(h=>`<li>${esc(h.address)}, ${esc(h.city)} · ${esc(S.statusText?S.statusText(h.status):h.status)} <button type="button" class="btn-card" data-counassign="${esc(c.id)}|${esc(h.id)}">${tr('unassign')}</button></li>`).join('');
+    const arch=(c.archivedDeals||[]).map(d=>`<li>${esc(d.address)}, ${esc(d.city)} · ${tr('dealArchived')}${d.closingDate?' · '+esc(d.closingDate):''}</li>`).join('');
+    const opts=(pack.catalog||[]).filter(l=>l.companyId!==c.id).map(l=>`<option value="${esc(l.id)}">${esc(l.address)}, ${esc(l.city)}${l.companyId?' · '+esc(((pack.companies||[]).find(x=>x.id===l.companyId)||{}).name||''):''}</option>`).join('');
+    const sheets=(c.sheets||[]).map(s=>s.url||s.spreadsheetId).join('\n');
+    const empty=!(c.members||[]).length&&!(c.homes||[]).length&&!(c.sheets||[]).length&&!(c.archivedDeals||[]).length;
+    return `<article class="ops-showing co-admin" data-company="${esc(c.id)}"><form data-corename="${esc(c.id)}" class="co-rename"><input name="name" value="${esc(c.name)}" maxlength="160" aria-label="${esc(tr('companyNameL'))}" required><button class="btn-card">${tr('renameCompany')}</button></form>
+      <h4>${tr('membersL')}</h4><ul>${members||`<li>${tr('noneYet')}</li>`}</ul>
+      <form data-coadd="${esc(c.id)}"><label>${tr('addPartner')} <span class="ops-meta">${tr('addPartnerHint')}</span><select name="userId" required><option value="">—</option>${acctOpts(ids)}</select></label><button class="btn-card primary">${tr('addPartner')}</button></form>
+      <h4>${tr('companyHomesL')}</h4><ul>${homes||`<li>${tr('noneYet')}</li>`}</ul>
+      <form data-coassign="${esc(c.id)}"><label>${tr('assignHome')}<select name="listingId"><option value="">—</option>${opts}</select></label><button class="btn-card">${tr('assignHome')}</button></form>
+      ${arch?`<h4>${tr('companyArchivedL')}</h4><ul>${arch}</ul>`:''}
+      <form data-cosheets="${esc(c.id)}"><label>${tr('sheetsLabel')}<textarea name="sheets" rows="2">${esc(sheets)}</textarea></label><button class="btn-card">${tr('save')}</button></form>
+      ${empty?`<p><button type="button" class="btn-card" data-codelete="${esc(c.id)}">${tr('deleteCompany')}</button></p>`:''}</article>`;
+  }).join('');
+  const inCo=new Set((pack.companies||[]).flatMap(c=>(c.members||[]).map(m=>m.userId)));
+  const people=acct.filter(a=>!a.isMe).map(a=>`<li>${label(a)}${inCo.has(a.userId)?'':' · <i>'+tr('noCompanyYet')+'</i>'}</li>`).join('');
+  return `<div class="card" id="company-admin" style="padding:16px"><h2>${tr('companiesTitle')}</h2><p class="ops-meta">${tr('companiesHint')}</p>
+    <form id="coNewF" class="co-new"><h3>${tr('newCompany')}</h3><label>${tr('companyNameL')}<input name="name" maxlength="160" required></label><label>${tr('firstMember')}<select name="userId" required><option value="">—</option>${acctOpts([])}</select></label><button class="btn-card primary">${tr('newCompany')}</button></form>
+    ${blocks||`<p>${tr('noneYet')}</p>`}
+    <h3>${tr('investorAccountsL')}</h3><ul>${people||`<li>${tr('noneYet')}</li>`}</ul></div>`;
+}
 function investorAdminCard(){
   if(!(S.caps&&S.caps.investor))return '';
+  if(S.caps.companies)return companiesAdminCard();
   const pack=S.investorAdmin||{investors:[],catalog:[]};
   if(!S.investorAdmin)return `<div class="card" style="padding:16px"><h2>${tr('investorsTitle')}</h2><p>${tr('activity.loading')}</p></div>`;
   const blocks=(pack.investors||[]).map(inv=>{
@@ -1733,7 +1832,7 @@ function bind(){const r=$('#app-root');
        modal(`<h2>⚖️ ${S.lang==='es'?'Comparación de Casas':'Side-by-Side Comparison'}</h2><div style="display:grid;grid-template-columns:repeat(${it.length},1fr);gap:12px">${it.map(l=>`<div class="card" style="padding:10px"><img src="${esc(l.photoUrl||'listing-placeholder.svg')}" referrerpolicy="no-referrer" onerror="window.imgFallback&&window.imgFallback(this)" style="width:100%;height:120px;object-fit:cover;border-radius:8px"><h4 style="margin:8px 0">${title(l)}</h4>
        <div style="font-size:13px;line-height:1.8">${tr('price')}: <b>${S.money(l.askingPrice)}</b><br>${tr('down')}: <b>${S.money(l.downPayment)}</b><br>${tr('monthly')}: <b>${S.money(l.monthlyPayment)}</b><br>${l.beds??'—'} ${tr('bdShort')} · ${l.baths??'—'} ${tr('baShort')}<br>${l.sqft?(+l.sqft).toLocaleString()+' '+tr('sqftUnit'):''}${l.sqft&&l.askingPrice?'<br>$'+Math.round(l.askingPrice/100/l.sqft)+tr('perSqft'):''}</div></div>`).join('')}</div>`);return;}
    }
-   const t=e.target.closest('[data-tab],[data-lang],[data-open],[data-fav],[data-acc],[data-rej],[data-ctr],[data-reset],[data-save],[data-client],[data-register],[data-login],[data-shareclear],[data-copylink],[data-calmode],[data-calnav],[data-showacc],[data-showden],[data-showcan],[data-showmsg],[data-approve],[data-decline],[data-inspsched],[data-inspcancel],[data-menu],[data-menuclose],[data-bell],[data-alertclose],[data-pushon],[data-pushoff],[data-pushtest],[data-msgbubble],[data-msgclose],[data-msgpeer],[data-msgback],[data-msgsend],[data-msgnew],[data-feedback],[data-checkin],[data-checkout],[data-activity],[data-metric],[data-views],[data-favs],[data-openmap],[data-mapscope],[data-closed],[data-cldate],[data-clcomm],[data-clclose],[data-clfell],[data-editown],[data-unassign],[data-offdel],[data-udel],[data-rejdel],[data-alertdel],[data-alertclear],#logout,#forgot');
+   const t=e.target.closest('[data-cosel],[data-coremove],[data-counassign],[data-codelete],[data-tab],[data-lang],[data-open],[data-fav],[data-acc],[data-rej],[data-ctr],[data-reset],[data-save],[data-client],[data-register],[data-login],[data-shareclear],[data-copylink],[data-calmode],[data-calnav],[data-showacc],[data-showden],[data-showcan],[data-showmsg],[data-approve],[data-decline],[data-inspsched],[data-inspcancel],[data-menu],[data-menuclose],[data-bell],[data-alertclose],[data-pushon],[data-pushoff],[data-pushtest],[data-msgbubble],[data-msgclose],[data-msgpeer],[data-msgback],[data-msgsend],[data-msgnew],[data-feedback],[data-checkin],[data-checkout],[data-activity],[data-metric],[data-views],[data-favs],[data-openmap],[data-mapscope],[data-closed],[data-cldate],[data-clcomm],[data-clclose],[data-clfell],[data-editown],[data-unassign],[data-offdel],[data-udel],[data-rejdel],[data-alertdel],[data-alertclear],#logout,#forgot');
    if(!t)return;
    e.preventDefault();
    try{
@@ -1786,6 +1885,10 @@ function bind(){const r=$('#app-root');
      if(d.openmap){const u=new URL(location.href);u.hash='investor-map';window.open(u.toString(),'legacyInvestorMap');return;}
      if(d.mapscope){MAPSCOPE=d.mapscope==='all'?'all':'mine';return render();}
      if(d.editown){const home=S.listing(d.editown);if(home)openOwnEditor(home);return;}
+     if(d.cosel){S.setActiveCompany(d.cosel==='all'?'':d.cosel);return render();}
+     if(d.coremove){const [co,u]=String(d.coremove).split('|');if(co&&u&&confirm(tr('confirmRemoveMember'))){try{await S.companyAction('company_member_remove',{companyId:co,userId:u});}catch(err){alert(err.message);}render();}return;}
+     if(d.counassign){const [co,l]=String(d.counassign).split('|');if(co&&l){try{await S.companyAction('company_assign',{companyId:co,listingIds:[],unassignIds:[l]});}catch(err){alert(err.message);}render();}return;}
+     if(d.codelete){if(confirm(tr('confirmDeleteCompany'))){try{await S.companyAction('company_delete',{companyId:d.codelete});}catch(err){alert(err.message);}render();}return;}
      if(d.unassign){const parts=String(d.unassign).split('|');if(parts[0]&&parts[1]){await S.assignInvestorListings(parts[0],[],[parts[1]]);render();}return;}
      if(d.alertdel){await S.deleteAlert(d.alertdel);return render();}
      if(d.alertclear){if(confirm(S.lang==='es'?'¿Borrar todas las notificaciones que ya viste?':'Delete all notifications you have already seen?')){const j=await S.clearReadAlerts();if(j&&!j.deleted)alert(S.lang==='es'?'No había notificaciones vistas para borrar.':'There were no seen notifications to delete.');render();}return;}
@@ -1827,6 +1930,11 @@ function bind(){const r=$('#app-root');
   const sub=(id,fn)=>{const el=$(id);if(el)el.onsubmit=wrap(()=>fn(fd(el)));};
   sub('#loginF',async v=>{const u=await S.login(v.email,v.password);if(u&&u.needsVerify)return openVerifyEmail(u.email,false);go(u&&u.role==='ADMIN'?'admin':'dashboard');maybePromptCriteria();});
   sub('#regF',async v=>{if(v.role==='INVESTOR'&&!(v.businessName&&v.contactMethod&&v.contactValue&&v.representativeName))throw new Error(S.lang==='es'?'Ingresa el nombre del negocio, el método de contacto y el nombre del representante.':'Enter the business name, preferred contact method, and the representative\'s name.');const u=await S.register(v);if(u&&u.needsVerify)return openVerifyEmail(u.email,true);go(u&&u.role==='ADMIN'?'admin':'dashboard');maybePromptCriteria();});
+  sub('#coNewF',async v=>{await S.companyAction('company_create',{name:v.name,userId:v.userId});render();});
+  r.querySelectorAll('form[data-coadd]').forEach(f=>{f.onsubmit=wrap(async()=>{const id=String(new FormData(f).get('userId')||'');if(!id)return;await S.companyAction('company_member_add',{companyId:f.dataset.coadd,userId:id});render();});});
+  r.querySelectorAll('form[data-coassign]').forEach(f=>{f.onsubmit=wrap(async()=>{const id=String(new FormData(f).get('listingId')||'');if(!id)return;await S.companyAction('company_assign',{companyId:f.dataset.coassign,listingIds:[id],unassignIds:[]});render();});});
+  r.querySelectorAll('form[data-corename]').forEach(f=>{f.onsubmit=wrap(async()=>{await S.companyAction('company_rename',{companyId:f.dataset.corename,name:String(new FormData(f).get('name')||'')});alert(tr('savedAlert'));render();});});
+  r.querySelectorAll('form[data-cosheets]').forEach(f=>{f.onsubmit=wrap(async()=>{const lines=String(new FormData(f).get('sheets')||'').split(/\n+/).map(s=>s.trim()).filter(Boolean);await S.companyAction('company_sheets_save',{companyId:f.dataset.cosheets,sheets:lines.map(url=>({url}))});alert(tr('savedAlert'));render();});});
   r.querySelectorAll('form[data-sheets]').forEach(f=>{f.onsubmit=wrap(async()=>{const lines=String(new FormData(f).get('sheets')||'').split(/\n+/).map(s=>s.trim()).filter(Boolean);await S.saveInvestorSheets(f.dataset.sheets,lines.map(url=>({url})));alert(tr('savedAlert'));render();});});
   r.querySelectorAll('form[data-assign]').forEach(f=>{f.onsubmit=wrap(async()=>{const id=String(new FormData(f).get('listingId')||'');if(!id)return;await S.assignInvestorListings(f.dataset.assign,[id],[]);render();});});
   sub('#profF',v=>{S.updateProfile(v);alert(tr('savedAlert'));});
