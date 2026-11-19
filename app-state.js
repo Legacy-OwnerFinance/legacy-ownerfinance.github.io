@@ -64,8 +64,8 @@ const getToken=()=>{try{return localStorage.getItem(TOKEN_KEY)||'';}catch(e){ret
 function usePreviewApi(){
   try{
     const host=String(location.hostname||'').toLowerCase();
-    if(host==='legacy-investor-preview.vercel.app')return true;
-    if(host.startsWith('legacy-investor-preview-')&&host.endsWith('.vercel.app'))return true;
+    if(host==='legacy-investor-preview.vercel.app'||host==='legacy-company-preview.vercel.app')return true;
+    if((host.startsWith('legacy-investor-preview-')||host.startsWith('legacy-company-preview-'))&&host.endsWith('.vercel.app'))return true;
     const q=new URLSearchParams(location.search).get('api');
     if(q==='preview'||q==='api-preview')return true;
   }catch(e){}
@@ -785,6 +785,13 @@ S.adminDeleteUser=async(userId,confirmAdmin)=>{
   const j=await api('admin_user_delete',{userId,confirmAdmin:confirmAdmin||''});
   const ap=(S.data.agentProfiles||[]).filter(a=>a.userId===userId).map(a=>a.id);
   forgetLocally([userId,...ap]);
+  notify();return j;
+};
+S.adminDeleteInvestor=async userId=>{
+  if(!S.isAdmin())throw new Error('Admins only');
+  const j=await api('admin_investor_delete',{userId});
+  forgetLocally([userId]);
+  try{if(S.companyAdmin)S.companyAdmin=await api('company_admin');}catch(e){}
   notify();return j;
 };
 S.saveFeedback=async(showingId,fields)=>{
