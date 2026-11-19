@@ -1206,3 +1206,15 @@ form.interactive-controls .chip.active{background:var(--accent);color:#fff;borde
 .inv-deal-tag { font-size: 11px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; background: var(--surface-2); color: var(--muted); border-radius: 999px; padding: 3px 9px; }
 .inv-deal-meta { display: flex; flex-wrap: wrap; gap: 6px 18px; font-size: 14px; color: var(--muted); margin: 6px 0; }
 .inv-deal-docs { margin: 4px 0 8px; padding-left: 18px; }
+/* Company model: company switcher, closed deals grouped by company, Admin companies card */
+.inv-co-switch { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 6px 0 10px; }
+.inv-co-switch .btn-card { padding: 6px 12px; }
+.inv-co-group { display: grid; gap: 10px; margin-top: 10px; }
+.inv-co-group > h3 { margin: 6px 0 0; font-size: 15px; border-bottom: 1px solid var(--surface-2); padding-bottom: 4px; }
+.co-admin { display: grid; gap: 6px; }
+.co-admin h4 { margin: 8px 0 2px; }
+.co-admin form, .co-new { display: flex; flex-wrap: wrap; gap: 8px; align-items: flex-end; }
+.co-admin form label, .co-new label { display: grid; gap: 4px; flex: 1 1 220px; }
+.co-rename input { font-weight: 700; font-size: 16px; flex: 1 1 220px; }
+.co-new { border: 1px dashed var(--surface-2); border-radius: 10px; padding: 10px; margin: 8px 0 12px; }
+.co-new h3 { flex-basis: 100%; margin: 0; }
