@@ -83,7 +83,7 @@ function apiUrl(){
   return live;
 }
 async function api(action,body={}){
-  const r=await fetch(apiUrl(),{method:'POST',headers:sbHeaders(getToken()?{'x-session':getToken()}:{}),body:JSON.stringify(Object.assign({action,lang:S.lang},body)),cache:'no-store'});
+  const r=await fetch(apiUrl(),{method:'POST',headers:sbHeaders(getToken()?{'x-session':getToken()}:{}),body:JSON.stringify(Object.assign({action,lang:S.lang,langManual:!!savedManualLang()},body)),cache:'no-store'});
   let j={};try{j=await r.json();}catch(e){}
   if(j.error==='no_session'&&getToken()){try{localStorage.removeItem(TOKEN_KEY);}catch(e){}}
   if(!r.ok||j.error){const err=new Error(j.message||j.error||('HTTP '+r.status));err.code=j.error;err.status=j.status||r.status;throw err;}
@@ -245,6 +245,14 @@ S.save=(skipCloud=false)=>{
 };
 
 S.t=(k,v)=>window.translateI18n?window.translateI18n(S.lang,k,v):k;
+function applyPreferredLang(l){
+  if(l!=='en'&&l!=='es')return;
+  if(savedManualLang())return;
+  S.lang=l;
+  window.__legacyLang=l;
+  try{document.documentElement.lang=l;}catch(e){}
+}
+S.applyPreferredLang=applyPreferredLang;
 S.setLang=l=>{
   if(l!=='en'&&l!=='es')return;
   S.lang=l;
@@ -252,6 +260,7 @@ S.setLang=l=>{
   try{document.documentElement.lang=l;}catch(e){}
   try{localStorage.setItem('legacy_lang',l);}catch(e){}
   notify();
+  if(getToken())api('me').catch(()=>{});
 };
 
 const SOLD_RULE_CUTOFF_MS=Date.parse('2026-10-28T19:10:00.000Z');
@@ -824,8 +833,10 @@ S.load=async()=>{
   S.data.users=(S.data.users||[]).map(u=>{const c=Object.assign({},u);delete c.passwordHash;delete c.resetCode;delete c.resetExpires;return c;});
   S.user=S._me?(S.data.users.find(u=>u.id===S._me.id)||S._me):null;
   if(S.user&&!S.data.users.some(u=>u.id===S.user.id))S.data.users.push(S.user);
+  applyPreferredLang((S.user&&S.user.preferredLang)||(S._me&&S._me.preferredLang));
   try{await refreshPortal();}catch(e){}
-  try{if(S.user&&S._me){if(S._me.role)S.user.role=S._me.role;if(S._me.approvalStatus)S.user.approvalStatus=S._me.approvalStatus;if(S._me.investorProfile)S.user.investorProfile=S._me.investorProfile;}}catch(e){}
+  try{if(S.user&&S._me){if(S._me.role)S.user.role=S._me.role;if(S._me.approvalStatus)S.user.approvalStatus=S._me.approvalStatus;if(S._me.investorProfile)S.user.investorProfile=S._me.investorProfile;if(S._me.preferredLang)S.user.preferredLang=S._me.preferredLang;}}catch(e){}
+  applyPreferredLang((S.user&&S.user.preferredLang)||(S._me&&S._me.preferredLang));
   try{await refreshInvestor();}catch(e){}
   try{await refreshClosings(true);}catch(e){}
   try{await refreshProgress(true);}catch(e){}
@@ -919,6 +930,7 @@ async function adoptSession(j){
   try{localStorage.setItem(TOKEN_KEY,j.token);}catch(e){}
   const st=j.state||{};
   S._me=st.me||j.user;
+  applyPreferredLang(S._me&&S._me.preferredLang);
   let merged=S.data;
   if(st.kv)merged=merge(merged,st.kv);
   applyRelationalUsers(merged,st.userRows||[]);
