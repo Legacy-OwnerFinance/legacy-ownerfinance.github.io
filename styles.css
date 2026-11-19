@@ -1187,3 +1187,16 @@ form.interactive-controls .chip.active{background:var(--accent);color:#fff;borde
 .alert-item .alert-place, .alert-item .alert-meta { padding-right: 26px; }
 .alert-head-actions { display: inline-flex; gap: 6px; align-items: center; }
 .alert-clear { font-size: 12px; }
+
+/* Investor greeting banner (display only; name is edited in the investor's My profile card) */
+.inv-greet { position: relative; overflow: hidden; display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 22px 24px; border-radius: var(--card-radius); background: linear-gradient(135deg, var(--navy) 0%, var(--navy-soft) 62%, #2b3a55 100%); color: #fff; box-shadow: var(--shadow); border-bottom: 4px solid var(--gold); }
+.inv-greet::after { content: ""; position: absolute; right: -60px; top: -60px; width: 220px; height: 220px; border-radius: 50%; background: radial-gradient(circle, rgba(212, 175, 55, 0.22), rgba(212, 175, 55, 0) 70%); pointer-events: none; }
+.inv-greet-text { position: relative; z-index: 1; min-width: 0; }
+.inv-greet-kicker { display: inline-block; font-size: 11px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; color: var(--gold-soft); margin-bottom: 6px; }
+.inv-greet-title { margin: 0; font-family: var(--font-heading); font-size: clamp(22px, 4.2vw, 32px); font-weight: 700; line-height: 1.15; color: #fff; overflow-wrap: anywhere; }
+.inv-greet-name { color: var(--gold-soft); font-family: var(--font-serif); font-style: italic; font-weight: 600; font-size: 1.12em; }
+.inv-greet-biz { margin: 6px 0 0; font-size: 15px; font-weight: 600; color: #e2e8f0; }
+.inv-greet-brand { margin: 8px 0 0; font-size: 12px; color: #94a3b8; letter-spacing: .02em; }
+.inv-greet-logo { position: relative; z-index: 1; width: 76px; height: 76px; object-fit: contain; border-radius: 14px; background: rgba(255, 255, 255, 0.96); padding: 8px; flex: 0 0 auto; box-shadow: 0 6px 18px rgba(0, 0, 0, .25); }
+@media (max-width: 520px) { .inv-greet { padding: 18px; } .inv-greet-logo { width: 54px; height: 54px; } }
+.inv-profile form label { display: block; font-weight: 600; font-size: 13px; color: var(--muted); }

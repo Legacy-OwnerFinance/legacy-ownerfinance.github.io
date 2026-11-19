@@ -157,6 +157,10 @@ const L10N={
     brokerage:'Brokerage',
     createAccount:'Create account',
     myProfile:'My Profile',
+    invGreetHello:'Hello',
+    invGreetKicker:'Investor portal',
+    invProfileHint:'This is the name shown in your greeting and to the Legacy team.',
+    nameRequired:'Enter your name (up to 80 characters).',
     yourInviteCode:'Your invite code:',
     save:'Save',
     yourAgent:'Your agent:',
@@ -360,6 +364,10 @@ const L10N={
     brokerage:'Inmobiliaria (Brokerage)',
     createAccount:'Crear cuenta',
     myProfile:'Mi Perfil',
+    invGreetHello:'Hola',
+    invGreetKicker:'Portal de inversionistas',
+    invProfileHint:'Este es el nombre que aparece en tu saludo y que ve el equipo de Legacy.',
+    nameRequired:'Escribe tu nombre (máximo 80 caracteres).',
     yourInviteCode:'Tu código de invitación:',
     save:'Guardar',
     yourAgent:'Tu agente asignado:',
@@ -1343,6 +1351,12 @@ function accountDeleteCard(){
 }
 function investorDash(){return investorGate()||investorHomeHtml();}
 function feedKind(k){return tr({SHOWING:'feedShowing',OFFER:'feedOffer',CONTRACT:'feedContract',CLOSED:'feedClosed'}[k]||'notifications');}
+function investorGreetingHtml(){
+  const u=S.user||{},prof=u.investorProfile||{};
+  const name=String(u.name||'').trim()||String(prof.representativeName||'').trim()||tr('roleInvestor');
+  const biz=String(prof.businessName||'').trim();
+  return `<div class="inv-greet" id="investor-greeting"><div class="inv-greet-text"><span class="inv-greet-kicker">${tr('invGreetKicker')}</span><h2 class="inv-greet-title">${tr('invGreetHello')}, <span class="inv-greet-name">${esc(name)}</span></h2>${biz?`<p class="inv-greet-biz">${esc(biz)}</p>`:''}<p class="inv-greet-brand">Legacy - Owner Finance · Brokerage By: KLC Real Estate, LLC</p></div><img src="legacy-logo.png" alt="" class="inv-greet-logo" aria-hidden="true"></div>`;
+}
 function investorHomeHtml(){
   const home=S.investorHome||{homes:[],totals:{},feed:[]};
   const t=home.totals||{};
@@ -1351,11 +1365,13 @@ function investorHomeHtml(){
   const feed=(home.feed||[]).map(it=>{const detail=it.kind==='SHOWING'&&it.detail&&S.formatShowingWhen?S.formatShowingWhen(it.detail):(it.detail&&it.detail!==it.status?it.detail:'');return `<article class="ops-showing"><div class="ops-showing-head"><b>${esc(feedKind(it.kind))}</b><span>${esc(formatInstant(it.at)||'')}</span></div><div>${esc(it.address||'')}${it.city?', '+esc(it.city):''}</div><p class="ops-meta">${esc(it.status||'')} ${esc(detail||'')}</p></article>`;}).join('');
   const prof=S.user.investorProfile||{};
   return `<section id="investor-home" style="padding:18px;display:grid;gap:16px">
+    ${investorGreetingHtml()}
     <div class="card" style="padding:16px"><h2>${tr('navInvestorHome')}</h2><p class="ops-meta">${esc(prof.businessName||S.user.name||'')} · ${esc(prof.representativeName||'')}</p>
     <div class="inv-tiles">${tile('views',t.views,tr('totalViews'))}${tile('favorites',t.favorites,tr('totalFavorites'))}${tile('closed',t.closedYtd,tr('closedYtd'))}${tile('contract',t.underContract,tr('underContract'))}</div>
     <div class="table-scroll"><table><tr><th>${tr('colAddress')}</th><th>${tr('colStatus')}</th><th>${tr('totalViews')}</th><th>${tr('totalFavorites')}</th></tr>${rows||`<tr><td colspan="4">${tr('noneYet')}</td></tr>`}</table></div></div>
     <div class="card ops-card"><h2>${tr('notifications')}</h2>${feed||`<p>${tr('noneYet')}</p>`}</div>
-    <div class="card" style="padding:16px"><h3>${tr('changePw')}</h3><form id="pwF"><input name="cur" type="password" placeholder="${tr('currentPw')}" required><input name="pw" type="password" placeholder="${tr('newPw')}" minlength="8" required><button>${tr('updatePw')}</button></form></div>
+    <div class="card inv-profile" id="investor-profile" style="padding:16px"><h3>${tr('myProfile')}</h3><p class="ops-meta">${tr('invProfileHint')}</p><form id="invProfF"><label>${tr('fullName')}<input name="name" value="${esc(S.user.name||'')}" maxlength="80" required autocomplete="name"></label><label>${tr('phone')}<input name="phone" value="${esc(S.user.phone||'')}" maxlength="30" autocomplete="tel"></label><button>${tr('save')}</button></form>
+    <h3>${tr('changePw')}</h3><form id="pwF"><input name="cur" type="password" placeholder="${tr('currentPw')}" required><input name="pw" type="password" placeholder="${tr('newPw')}" minlength="8" required><button>${tr('updatePw')}</button></form></div>
   </section>`;
 }
 function openMetric(kind){
@@ -1746,6 +1762,7 @@ function bind(){const r=$('#app-root');
   r.querySelectorAll('form[data-sheets]').forEach(f=>{f.onsubmit=wrap(async()=>{const lines=String(new FormData(f).get('sheets')||'').split(/\n+/).map(s=>s.trim()).filter(Boolean);await S.saveInvestorSheets(f.dataset.sheets,lines.map(url=>({url})));alert(tr('savedAlert'));render();});});
   r.querySelectorAll('form[data-assign]').forEach(f=>{f.onsubmit=wrap(async()=>{const id=String(new FormData(f).get('listingId')||'');if(!id)return;await S.assignInvestorListings(f.dataset.assign,[id],[]);render();});});
   sub('#profF',v=>{S.updateProfile(v);alert(tr('savedAlert'));});
+  sub('#invProfF',async v=>{await S.updateMyProfile({name:v.name,phone:v.phone});alert(tr('savedAlert'));render();});
   sub('#pwF',async v=>{await S.changePassword(v.cur,v.pw);alert(tr('pwUpdatedAlert'));});
   sub('#msgF',v=>{S.sendMessage(v);});
   const box=r.querySelector('[data-msginput]');
