@@ -61,8 +61,19 @@ const sbHeaders=(extra={})=>Object.assign({
 },extra);
 
 const getToken=()=>{try{return localStorage.getItem(TOKEN_KEY)||'';}catch(e){return '';}};
+function usePreviewApi(){
+  try{
+    const host=String(location.hostname||'').toLowerCase();
+    if(host==='legacy-investor-preview.vercel.app')return true;
+    if(host.startsWith('legacy-investor-preview-')&&host.endsWith('.vercel.app'))return true;
+    const q=new URLSearchParams(location.search).get('api');
+    if(q==='preview'||q==='api-preview')return true;
+  }catch(e){}
+  return false;
+}
 function apiUrl(){
-  const live=`${SUPABASE_URL}/functions/v1/api`;
+  const fn=usePreviewApi()?'api-preview':'api';
+  const live=`${SUPABASE_URL}/functions/v1/${fn}`;
   try{
     const host=String(location.hostname||'');
     if(host!=='localhost'&&host!=='127.0.0.1')return live;
