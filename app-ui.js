@@ -15,9 +15,38 @@ window.imgFallback=function(el){
 };
 
 const esc=v=>String(v==null?'':v).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const DEAL_KEY='legacy_deal_deep_link';
+function parseAppHash(raw){
+  const h=String(raw==null?(location.hash||''):raw).replace(/^#/,'').trim();
+  if(!h)return {tab:'',deal:''};
+  const parts=h.split(/[&?]/);
+  const tab=parts[0]||'';
+  let deal='';
+  for(let i=1;i<parts.length;i++){
+    const p=parts[i];
+    if(p.slice(0,5)==='deal='){try{deal=decodeURIComponent(p.slice(5));}catch(e){deal=p.slice(5);} }
+  }
+  return {tab,deal};
+}
+function rememberDeal(id){
+  const v=String(id||'').trim();
+  if(!v)return;
+  try{sessionStorage.setItem(DEAL_KEY,v);}catch(e){}
+}
+function peekDeal(){
+  const fromHash=parseAppHash().deal;
+  if(fromHash){rememberDeal(fromHash);return fromHash;}
+  try{return sessionStorage.getItem(DEAL_KEY)||'';}catch(e){return '';}
+}
+function clearDeal(){try{sessionStorage.removeItem(DEAL_KEY);}catch(e){}}
+function dashboardHash(deal){
+  const id=String(deal||'').trim();
+  return id?('dashboard&deal='+encodeURIComponent(id)):'dashboard';
+}
 const initTab=()=>{
-  const h=location.hash.slice(1);
-  if(h)return h;
+  const parsed=parseAppHash();
+  if(parsed.deal)rememberDeal(parsed.deal);
+  if(parsed.tab)return parsed.tab;
   const p=location.pathname.toLowerCase();
   if(p.includes('/login')||p.includes('/register')||p.includes('/forgot-password')||p.includes('/reset-password'))return 'auth';
   if(p.includes('/admin'))return 'admin';
@@ -619,7 +648,12 @@ function stripAllAsk(value){
 
 const go=(t,focusSel)=>{
   tab=t;
-  location.hash=t;
+  if(t==='dashboard'){
+    const deal=peekDeal();
+    location.hash=dashboardHash(deal);
+  }else{
+    location.hash=t;
+  }
   render();
   if(focusSel){
     setTimeout(()=>{const el=$(focusSel);if(el){el.scrollIntoView({behavior:'smooth',block:'center'});el.focus();}},60);
@@ -802,7 +836,7 @@ function digestCards(){
   }).join('');
 }
 function pushBox(){
-  if(!((S.isAgent&&S.isAgent())||(S.isAdmin&&S.isAdmin())))return '';
+  if(!((S.isAgent&&S.isAgent())||(S.isAdmin&&S.isAdmin())||(S.isInvestor&&S.isInvestor())))return '';
   const p=S.pushInfo||{};
   let body='';
   if(!p.eligible&&!p.iosNeedsInstall)return '';
@@ -1403,6 +1437,17 @@ function accountDeleteCard(){
 }
 function investorDash(){return investorGate()||investorHomeHtml();}
 function feedKind(k){return tr({SHOWING:'feedShowing',OFFER:'feedOffer',CONTRACT:'feedContract',CLOSED:'feedClosed'}[k]||'notifications');}
+function highlightClosedDeal(){
+  if(tab!=='dashboard'||!S.user||!(S.isInvestor&&S.isInvestor()))return;
+  const id=peekDeal();
+  if(!id)return;
+  const sel='[data-deal="'+CSS.escape(id)+'"]';
+  const el=document.querySelector(sel)||document.getElementById('investor-closed-deals');
+  if(!el)return;
+  document.querySelectorAll('.inv-deal-highlight').forEach(n=>n.classList.remove('inv-deal-highlight'));
+  el.classList.add('inv-deal-highlight');
+  try{el.scrollIntoView({behavior:'smooth',block:'center'});}catch(e){}
+}
 function investorGreetingHtml(){
   const u=S.user||{},prof=u.investorProfile||{};
   const name=String(u.name||'').trim()||String(prof.representativeName||'').trim()||tr('roleInvestor');
@@ -1414,10 +1459,11 @@ function investorGreetingHtml(){
 // Permanent list of the investor's closed deals and their documents. Purged (archived) deals come from the
 // api's private closed-deal snapshot, so they stay here after the home leaves the public inventory.
 function investorClosedDealsHtml(){
-  const closed=((S.investorTx&&S.investorTx.closed)||[]).filter(coKeep);
+  // A deep-linked deal (email/push notice) always shows, even when another company is selected in the switcher.
+  const closed=((S.investorTx&&S.investorTx.closed)||[]).filter(c=>coKeep(c)||peekDeal()===String(c&&c.id));
   const closingOf=c=>{if(c.closingDate)return c.closingDate;const cl=Object.values(S.closings||{}).find(x=>x.listingId===c.id&&x.outcome==='CLOSED');return cl&&cl.closingDate||'';};
   const itemHtml=c=>{const cd=closingOf(c);const price=c.soldPrice!=null?c.soldPrice:c.askingPrice;
-    return `<article class="inv-deal" data-deal="${esc(c.id)}"><div class="inv-deal-head"><b>${esc(c.address)}${c.city?', '+esc(c.city):''}</b>${c.archived?`<span class="inv-deal-tag">${tr('dealArchived')}</span>`:''}</div>
+    const on=peekDeal()===String(c.id);return `<article class="inv-deal${on?' inv-deal-highlight':''}" data-deal="${esc(c.id)}" id="${on?'investor-deal-focus':''}"><div class="inv-deal-head"><b>${esc(c.address)}${c.city?', '+esc(c.city):''}</b>${c.archived?`<span class="inv-deal-tag">${tr('dealArchived')}</span>`:''}</div>
     <div class="inv-deal-meta"><span>🏁 ${tr('closingDateL')}: <b>${cd?esc(fmtYmd(cd)):(c.soldAt?esc(formatInstant(c.soldAt)):'—')}</b></span><span>${tr(c.soldPrice!=null?'soldPriceL':'price')} <b>${price!=null?S.money(price):'—'}</b></span></div>
     <ul class="inv-deal-docs">${(c.documents||[]).map(d=>`<li><a href="#" data-opendoc="${esc(d.id)}">📄 ${esc(d.name||tr('documents'))}</a> <i>${esc(d.docType||'')}</i></li>`).join('')||`<li>${tr('noDocs')}</li>`}</ul>
     <label class="ops-meta">${cx('uploadFinal')} <input type="file" accept="${S.UPLOAD_ACCEPT}" data-invcontract="${esc(c.id)}"></label></article>`;};
@@ -1769,7 +1815,7 @@ function maybeOpenSharedDetail(){
 }
 S.rerender=function(){render();};
 function render(){captureMsgScroll();document.documentElement.lang=S.lang;syncMsgTitle();const root=$('#app-root');if(!S.data)return;if(map){try{map.stop();map.off();map.remove();}catch(e){}map=null;}
-  const body={inventory,guides,dashboard,admin,auth,calendar:calendarView,'investor-tx':investorTx,'investor-map':investorMap}[tab]||inventory;root.innerHTML=header()+`<main>${body()}</main><footer style="padding:18px;font-size:12px;text-align:center">© Legacy - Owner Finance · Brokerage By: KLC Real Estate, LLC${footerLinks()}</footer>`;bind();applyMsgScroll();if(tab==='inventory')drawMap();if(tab==='investor-map')drawInvestorMap();maybeOpenSharedDetail();}
+  const body={inventory,guides,dashboard,admin,auth,calendar:calendarView,'investor-tx':investorTx,'investor-map':investorMap}[tab]||inventory;root.innerHTML=header()+`<main>${body()}</main><footer style="padding:18px;font-size:12px;text-align:center">© Legacy - Owner Finance · Brokerage By: KLC Real Estate, LLC${footerLinks()}</footer>`;bind();applyMsgScroll();if(tab==='inventory')drawMap();if(tab==='investor-map')drawInvestorMap();maybeOpenSharedDetail();highlightClosedDeal();}
 function bind(){const r=$('#app-root');
   if(!r.dataset.acctToggle){r.dataset.acctToggle='1';r.addEventListener('toggle',e=>{const el=e.target;if(el&&el.dataset&&el.dataset.acct)ADM_OPEN[el.dataset.acct]=el.open;},true);}
   r.onclick=async e=>{
@@ -1933,6 +1979,6 @@ function checkResetUrlParams(){
 }
 
 document.addEventListener('keydown',e=>{if(e.key!=='Escape'||!msgOpen)return;msgOpen=false;render();});
-S.on(render);window.addEventListener('hashchange',()=>{tab=location.hash.slice(1)||'inventory';render();});
+S.on(render);window.addEventListener('hashchange',()=>{const parsed=parseAppHash();if(parsed.deal)rememberDeal(parsed.deal);tab=parsed.tab||'inventory';render();});
 S.load().then(()=>{render();checkResetUrlParams();maybePromptCriteria();}).catch(e=>{document.documentElement.lang=S.lang;$('#app-root').innerHTML='<p style="padding:20px">'+esc(tr('loadFail'))+': '+esc(e.message)+'</p>';}).then(()=>{try{window.legacySplashHide&&window.legacySplashHide()}catch(_){}});
 })();
