@@ -1476,8 +1476,12 @@ footer.app-footer a { color: var(--accent); }
 .tab-bar { display: none; }
 @media (max-width: 640px) {
   /* Header slides away while scrolling down, returns on scroll up */
-  .app-header { transition: padding 0.18s ease, transform 0.22s ease; will-change: transform; }
+  .app-header { transition: padding 0.18s ease, transform 0.22s ease; }
   .app-header.is-hidden { transform: translateY(-110%); }
+  /* A transform on the header traps the fixed menu inside it; never transform while the menu is open */
+  .app-header:has(.nav-drawer.open) { transform: none !important; }
+  .nav-drawer-bg { z-index: 2395; }
+  .nav-drawer { z-index: 2400; }
   .app-header.is-compact .brand-wrap img.main-logo { height: 40px; }
   .app-header.is-compact .brand-title { font-size: 18px; }
 
