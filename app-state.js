@@ -1240,6 +1240,13 @@ S.listingTenure=l=>{
   if(date)return {kind:'active',text:S.t('tenure.activeDate',{date}),sub:''};
   return {kind:'active',text:S.t(daysActive===1?'tenure.activeDaysOne':'tenure.activeDays',{days:daysActive}),sub:''};
 };
+// Days only (for the short card pill). Read-only: same fields as listingTenure. Returns {kind:'active'|'pending',days} or null.
+S.listingTenureDays=l=>{
+  if(!l)return null;const kind=tenureKind(l.status);
+  if(kind==='active'){const d=tenureDays(l,'daysActive','days_active','activeDaysAccum','active_days_accum','activeSince','active_since');return d==null?null:{kind,days:d};}
+  if(kind==='pending'){const d=tenureDays(l,'daysPending','days_pending','pendingDaysAccum','pending_days_accum','pendingSince','pending_since');return d==null?null:{kind,days:d};}
+  return null;
+};
 S.preferredYmd=at=>{const s=String(at||'').trim();if(!s)return '';if(/^\d{4}-\d{2}-\d{2}/.test(s)&&!/[zZ]|[+\-]\d{2}:?\d{2}$/.test(s))return s.slice(0,10);const d=new Date(s);if(isNaN(d.getTime()))return s.slice(0,10);return S.chicagoYmd(d);};
 S.todayApprovedForListing=lid=>{
   const today=S.chicagoYmd();

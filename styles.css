@@ -1687,3 +1687,33 @@ html.lof-map-on .app-footer, html.lof-map-on .guide-banner { display: none !impo
   .lof-mappop-img img { min-height: 140px; }
 }
 @media (max-width: 370px) { .lof-mappop-img { flex-basis: 96px; width: 96px; } }
+
+/* Card: short "days active" pill on the left of the price row; Down on its own; beds/baths/sqft as a separate line */
+.days-pill { display: inline-flex; align-items: center; gap: 3px; padding: 2px 8px; border-radius: 999px; font-size: 11.5px; font-weight: 700; line-height: 1.5; white-space: nowrap; background: #ecfdf5; color: #166534; border: 1px solid #bbf7d0; }
+.days-pill.days-pending { background: #fffbeb; color: #92400e; border-color: #fde68a; }
+.prop-card .price-strip { flex-wrap: wrap; align-items: center; justify-content: flex-start; gap: 6px 8px; }
+.prop-card .price-strip .monthly-pill { margin-left: auto; }
+.down-box.down-only { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; text-align: left; padding: 7px 10px; font-size: 12px; }
+.down-box.down-only b { display: inline; font-size: 14px; margin: 0; }
+.card-facts { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 12.5px; color: var(--muted); }
+.card-facts b { color: var(--text); font-weight: 700; }
+.guest-pill-row { display: flex; }
+.fav-price .days-pill { margin-right: 6px; vertical-align: 1px; }
+@media (max-width: 640px) {
+  .prop-card .price-strip { flex-direction: row; flex-wrap: wrap; align-items: center; gap: 4px 6px; }
+  .prop-card .price-strip .monthly-pill { margin-left: 0; }
+  .prop-card .days-pill { font-size: 10px; padding: 1px 6px; }
+  .prop-card .down-box.down-only { padding: 5px 7px; font-size: 10.5px; }
+  .prop-card .down-box.down-only b { font-size: 12px; }
+  .prop-card .card-facts { gap: 2px 8px; font-size: 11px; }
+  .fav-price .days-pill { font-size: 10px; padding: 1px 6px; }
+  .fav-g1 .prop-card .price-strip { flex-direction: row; align-items: center; justify-content: flex-start; gap: 6px 10px; }
+  .fav-g1 .prop-card .price-strip .monthly-pill { margin-left: auto; }
+  .fav-g1 .prop-card .days-pill { font-size: 11.5px; padding: 2px 8px; }
+  .fav-g1 .prop-card .down-box.down-only { padding: 8px 12px; font-size: 12.5px; }
+  .fav-g1 .prop-card .down-box.down-only b { display: inline; font-size: 15px; }
+  .fav-g1 .prop-card .card-facts { font-size: 13px; gap: 4px 14px; }
+}
+
+/* Menu open: lift the header's stacking context so the drawer and its backdrop cover the tab bar (header z 2360 < tab bar 2390) */
+.app-header:has(.nav-drawer.open) { z-index: 2401; }

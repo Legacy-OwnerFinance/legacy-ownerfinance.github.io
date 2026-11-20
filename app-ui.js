@@ -1538,23 +1538,32 @@ function tenureHtml(l){
   return `<div class="tenure-note tenure-${kind}"><span class="tenure-main">${esc(info.text)}</span>${sub}</div>`;
 }
 
+// Short "days active" pill for cards (replaces the long "Activo desde …" note on cards; the detail view keeps the full note).
+function daysPill(l){
+  if(!l||typeof S.listingTenureDays!=='function')return '';
+  const t=S.listingTenureDays(l);if(!t||t.days==null||t.days<0)return '';
+  const es=S.lang==='es',d=Math.round(t.days);
+  const txt=t.kind==='pending'?(es?(d===0?'Pendiente hoy':`Pendiente ${d} ${d===1?'día':'días'}`):(d===0?'Pending today':`Pending ${d} ${d===1?'day':'days'}`))
+    :(es?(d===0?'Activa hoy':`Activa ${d} ${d===1?'día':'días'}`):(d===0?'Active today':`Active ${d} ${d===1?'day':'days'}`));
+  return `<span class="days-pill days-${t.kind}">⏱ ${esc(txt)}</span>`;
+}
 function card(l,mt){
   const ph=(l.photoUrls&&l.photoUrls.length)?l.photoUrls:[l.photoUrl||'listing-placeholder.svg'],i=(PIDX[l.id]||0)%ph.length,multi=ph.length>1;
   const media=badgeHtml=>`<div class="card-media">${badgeHtml}<img src="${esc(cardImg(ph[i]))}" data-img="${l.id}" referrerpolicy="no-referrer" loading="lazy" onerror="window.imgFallback&&window.imgFallback(this)" data-open="${l.id}" style="cursor:pointer">
     ${multi?`<button type="button" class="carousel-btn prev" data-prev="${l.id}">‹</button><button type="button" class="carousel-btn next" data-next="${l.id}">›</button>`:''}<span class="photo-counter" data-cnt="${l.id}">📷 ${i+1} / ${ph.length}</span>`;
   if(limited()){
     return `<article class="prop-card" data-card="${l.id}">${media(`<span class="badge-top-left" style="background:#0f172a">🔒 ${S.lang==='es'?'Vista Previa':'Guest Preview'}</span>`)}</div>
-      <div class="card-body"><p class="addr-line">📍 ${partialAddr(l)}</p>${hookHtml(l)}
+      <div class="card-body"><p class="addr-line">📍 ${partialAddr(l)}</p>${daysPill(l)?`<div class="guest-pill-row">${daysPill(l)}</div>`:''}${hookHtml(l)}
       ${todayApptHtml(l.id)}
       <div class="card-actions"><button type="button" class="btn-card primary" data-open="${l.id}">${S.lang==='es'?'Ver casa':'View home'}<span class="btn-extra"> · ${ph.length} ${tr('photosCount')}</span></button></div></div></article>`;
   }
   const col=({AVAILABLE:'#16a34a',COMING_SOON:'#2563eb',SOLD:'#475569',CLOSED:'#475569'})[l.status]||'#d97706';
   return `<article class="prop-card" data-card="${l.id}">${media(`<span class="badge-top-left" style="background:${col}">${esc(S.statusText?S.statusText(l.status):l.status)}</span>`)}
     <div class="card-top-actions"><button type="button" class="icon-circle-btn" title="${esc(tr('compare'))}" data-compare="${l.id}">${CMP.has(l.id)?'✅':'⚖️'}</button><button type="button" class="icon-circle-btn" title="${esc(tr('favorite'))}" data-fav="${l.id}">${S.isFavorite(l.id)?'❤️':'🤍'}</button></div></div>
-    <div class="card-body">${matchBadge(mt)}${hookHtml(l)}<div class="price-strip"><span class="main-price">${S.money(l.askingPrice)}</span><span class="monthly-pill">${S.money(l.monthlyPayment)}${tr('perMo')}</span></div>
+    <div class="card-body">${matchBadge(mt)}${hookHtml(l)}<div class="price-strip">${daysPill(l)}<span class="main-price">${S.money(l.askingPrice)}</span><span class="monthly-pill">${S.money(l.monthlyPayment)}${tr('perMo')}</span></div>
     <p class="addr-line">${title(l)}</p>
-    ${tenureHtml(l)}
-    <div class="down-box"><div>${tr('down')}<b>${S.money(l.downPayment)}</b></div><div>${tr('beds')}/${tr('baths')}<b>${l.beds??'—'} · ${l.baths??'—'}</b></div><div>${tr('sqft')}<b>${l.sqft?(+l.sqft).toLocaleString():'—'}</b></div></div>
+    <div class="down-box down-only"><span>${tr('down')}</span><b>${S.money(l.downPayment)}</b></div>
+    <div class="card-facts"><span>🛏️ <b>${esc(l.beds??'—')}</b> ${tr('bdShort')}</span><span>🛁 <b>${esc(l.baths??'—')}</b> ${tr('baShort')}</span>${l.sqft?`<span>📐 <b>${(+l.sqft).toLocaleString()}</b> ${tr('sqftUnit')}</span>`:''}</div>
     ${listingTracker(l)}
     ${todayApptHtml(l.id)}
     <div class="card-actions"><button type="button" class="btn-card primary" data-open="${l.id}">${S.lang==='es'?'Ver Detalles':'View Details'}</button>${S.isAdmin()&&S.caps&&S.caps.ready?`<button type="button" class="btn-card" data-activity="${esc(l.id)}">${tr('activity.button')}</button>`:''}</div></div></article>`;
@@ -1564,7 +1573,7 @@ function card(l,mt){
 function favRow(l){
   const es=S.lang==='es',lim=limited(),ph=(l.photoUrls&&l.photoUrls.length)?l.photoUrls[0]:(l.photoUrl||'listing-placeholder.svg');
   return `<article class="fav-row" data-card="${l.id}"><button type="button" class="fav-thumb" data-open="${l.id}" aria-label="${es?'Ver casa':'View home'}"><img src="${esc(cardImg(ph))}" alt="" referrerpolicy="no-referrer" loading="lazy" onerror="window.imgFallback&&window.imgFallback(this)"></button>
-   <div class="fav-info" data-open="${l.id}" role="button" tabindex="0">${badge(l.status)}<p class="fav-addr">${lim?'📍 '+partialAddr(l):title(l)}</p>${!lim?`<p class="fav-price"><b>${S.money(l.askingPrice)}</b> · ${S.money(l.monthlyPayment)}${tr('perMo')}</p><p class="fav-facts">${esc(l.beds??'—')} ${tr('bdShort')} · ${esc(l.baths??'—')} ${tr('baShort')} · ${tr('down')} ${S.money(l.downPayment)}</p>`:''}</div>
+   <div class="fav-info" data-open="${l.id}" role="button" tabindex="0">${badge(l.status)}<p class="fav-addr">${lim?'📍 '+partialAddr(l):title(l)}</p>${lim?daysPill(l):''}${!lim?`<p class="fav-price">${daysPill(l)}<b>${S.money(l.askingPrice)}</b> · ${S.money(l.monthlyPayment)}${tr('perMo')}</p><p class="fav-facts">${esc(l.beds??'—')} ${tr('bdShort')} · ${esc(l.baths??'—')} ${tr('baShort')} · ${tr('down')} ${S.money(l.downPayment)}</p>`:''}</div>
    <button type="button" class="fav-heart" data-fav="${l.id}" aria-label="${es?'Quitar de favoritas':'Remove from favorites'}" title="${es?'Quitar de favoritas':'Remove from favorites'}">❤️</button></article>`;
 }
 function favoritesView(){
@@ -1612,7 +1621,7 @@ function drawFullMap(){
   sizeMapView();
   map=L.map(el,{zoomControl:true});L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{attribution:'© OpenStreetMap'}).addTo(map);
   const pts=[],marks={};
-  filtered().forEach(l=>{const a=l.approxLocation||{};const lat=!limited()?l.latitude:a.lat,lng=!limited()?l.longitude:a.lng;if(lat==null||lng==null)return;
+  filtered().forEach(l=>{const a=l.approxLocation||{},ex=!limited()&&l.latitude!=null&&l.longitude!=null;const lat=ex?l.latitude:a.lat,lng=ex?l.longitude:a.lng;if(lat==null||lng==null)return;
     pts.push([lat,lng]);const m=L.marker([lat,lng],{keyboard:true}).addTo(map);marks[l.id]=m;m.on('click',()=>showMapPop(l.id));});
   window.__lofFullMarks=marks;
   if(MAPVIEW)map.setView(MAPVIEW.c,MAPVIEW.z,{animate:false});else if(pts.length)map.fitBounds(pts,{padding:[40,40],animate:false});else map.setView([35.47,-97.52],10);
