@@ -195,6 +195,8 @@ const L10N={
     invGreetKicker:'Investor portal',
     companiesTitle:'Companies',
     companiesHint:'Each person keeps their own login. Everyone linked to a company sees all of that company\'s homes, closed deals and documents, and nothing from other companies.',
+    thanksBanner:'Happy Thanksgiving',
+    thanksDismiss:'Dismiss',
     newCompany:'New company',
     companyNameL:'Company name',
     firstMember:'First member (existing account)',
@@ -428,6 +430,8 @@ const L10N={
     invGreetKicker:'Portal de inversionistas',
     companiesTitle:'Compañías',
     companiesHint:'Cada persona tiene su propio acceso. Todos los vinculados a una compañía ven todas sus casas, cierres y documentos, y nada de otras compañías.',
+    thanksBanner:'Feliz Día de Acción de Gracias',
+    thanksDismiss:'Cerrar',
     newCompany:'Nueva compañía',
     companyNameL:'Nombre de la compañía',
     firstMember:'Primer miembro (cuenta existente)',
@@ -1126,6 +1130,13 @@ function setHeaderCompact(v){if(v===headerCompact)return;headerCompact=v;const h
   document.addEventListener('scroll',onScroll,true);
   document.addEventListener('keydown',e=>{if(e.key==='Escape'&&menuOpen){menuOpen=false;render();const mb=document.querySelector('.menu-btn');if(mb)mb.focus();}});
 })();
+
+function thanksBanner(){
+  const s=window.__legacySeasonal;
+  if(!s||!s.theme||(window.legacyThanksBannerDismissed&&window.legacyThanksBannerDismissed()))return '';
+  const leaf='<svg class="lof-tg-banner-leaf" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 2c.8 2.6 3.2 4.6 3.8 5 1.4-.4 3.8-.6 5.2 1.6-1.5.9-2.4 2.6-2.6 3.6 1.8.8 3.6 2.4 3.2 5.2-2.2-.6-4.2.2-5.2.8.2 1.6.2 3.8-2.8 6.8-3-3-2.8-5.2-2.6-6.8-1-.6-3-.1-5.2-.8-.4-2.8 1.4-4.4 3.2-5.2-.2-1-1.1-2.7-2.6-3.6 1.4-2.2 3.8-2 5.2-1.6C8.8 6.6 11.2 4.6 12 2z"/></svg>';
+  return `<div class="lof-tg-banner" role="region" aria-label="${esc(tr('thanksBanner'))}">${leaf}<span><b>${tr('thanksBanner')}</b></span>${leaf}<button type="button" class="lof-tg-banner-dismiss" data-tgdismiss="1" aria-label="${esc(tr('thanksDismiss'))}">×</button></div>`;
+}
 function header(){
   const investorHome=S.isInvestor()&&S.caps&&S.caps.investor&&!S.isPendingApproval(S.user);
   const T=investorHome?[['dashboard',tr('navInvestorHome')],['investor-tx',tr('navTransactions')],['inventory',tr('navInventory')],['guides',tr('navGuides')]]:[['inventory',tr('navInventory')],['guides',tr('navGuides')],['dashboard',tr('navDashboard')]];
@@ -1144,7 +1155,7 @@ function header(){
    <div class="header-actions">${bellHtml()}</div>
    ${menuOpen?`<div class="nav-drawer-bg" data-menuclose="1"></div>`:''}
    <nav id="nav-drawer" class="nav-drawer${menuOpen?' open':''}" role="menu" aria-label="${esc(tr('menu.label'))}" ${menuOpen?'':'aria-hidden="true" inert'}><div class="nav-drawer-head"><b>${tr('menu.label')}</b><button type="button" class="nav-pill" data-menuclose="1" aria-label="${esc(tr('menu.close'))}">✕</button></div>${menuItems}</nav></header>
-   <div class="guide-banner"><span>${tr('newHere')} <a href="#guides" data-tab="guides">${tr('guideLink')}</a></span></div>${alertSheet()}${msgBubble()}${msgPanel()}`;
+   ${thanksBanner()}<div class="guide-banner"><span>${tr('newHere')} <a href="#guides" data-tab="guides">${tr('guideLink')}</a></span></div>${alertSheet()}${msgBubble()}${msgPanel()}`;
 }
 
 function guides(){
