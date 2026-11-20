@@ -1533,3 +1533,59 @@ footer.app-footer a { color: var(--accent); }
   #app-root:has(.tab-bar) .msg-bubble { display: none; }
   #app-root:has(.tab-bar) ~ .compare-tray, .compare-tray { bottom: calc(70px + env(safe-area-inset-bottom, 0px)); }
 }
+
+/* Offer / appointment: two buttons + popups */
+.lof-act-row { display: flex; gap: 8px; margin: 12px 0; scroll-margin-bottom: 96px; }
+.drawer-panel:has(.lof-act-row) { scroll-padding-bottom: 96px; }
+.lof-act-row .btn-card { flex: 1 1 0; min-width: 0; min-height: 50px; font-size: 15px; font-weight: 700; display: flex; align-items: center; justify-content: center; text-align: center; line-height: 1.2; padding: 8px 10px; white-space: normal; }
+.lof-pop-bg {
+  position: fixed; inset: 0; z-index: 10040; background: rgba(15, 23, 42, 0.6); display: flex; align-items: center; justify-content: center; padding: 16px;
+}
+.lof-pop {
+  background: var(--surface); color: var(--text); width: min(520px, 100%); max-height: calc(100dvh - 32px); overflow-y: auto; overscroll-behavior: contain;
+  border-radius: 16px; padding: 18px 20px 0; box-shadow: 0 20px 50px rgba(15, 23, 42, 0.35); box-sizing: border-box; animation: lofPopIn 0.18s ease;
+}
+@keyframes lofPopIn { from { transform: translateY(16px); opacity: 0; } to { transform: none; opacity: 1; } }
+.lof-pop-head { display: flex; align-items: flex-start; gap: 10px; }
+.lof-pop-head h3 { margin: 0; font-size: 19px; flex: 1 1 auto; }
+.lof-pop-x { flex: 0 0 auto; width: 40px; height: 40px; border-radius: 999px; border: 1px solid var(--border); background: var(--surface-2); color: var(--text); font-size: 16px; cursor: pointer; padding: 0; margin: -4px -6px 0 0; }
+.lof-pop-sub { margin: 6px 0 12px; font-size: 14px; color: var(--muted); line-height: 1.4; }
+.lof-pop-sub b { color: var(--text); }
+.lof-pop form { display: flex; flex-direction: column; gap: 10px; margin: 0; }
+.lof-fld { display: flex; flex-direction: column; gap: 4px; font-size: 14px; font-weight: 600; min-width: 0; margin: 0; }
+.lof-fld input, .lof-fld select, .lof-fld textarea { width: 100%; box-sizing: border-box; font-size: 16px; min-height: 46px; margin: 0; }
+.lof-fld textarea { min-height: 76px; }
+.lof-fld em { font-style: normal; font-weight: 500; font-size: 12.5px; color: var(--muted); }
+.lof-fld .lof-err { color: #b91c1c; font-weight: 600; font-size: 12.5px; min-height: 0; }
+.lof-fld .lof-err:empty { display: none; }
+.lof-fld.bad input, .lof-fld.bad select, .lof-fld.bad .lof-seg { border-color: #dc2626 !important; box-shadow: 0 0 0 2px rgba(220, 38, 38, 0.15); }
+.lof-money { position: relative; }
+.lof-money b { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: var(--muted); font-weight: 700; pointer-events: none; }
+.lof-money input { padding-left: 26px !important; }
+.lof-money input[readonly] { background: var(--surface-2); }
+.lof-two { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.lof-check { display: flex; gap: 10px; align-items: flex-start; font-weight: 600; font-size: 14px; padding: 10px 12px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface-2); margin: 0; cursor: pointer; }
+.lof-check input { width: 20px !important; height: 20px; margin: 0; flex: 0 0 auto; min-height: 0; }
+.lof-seg { display: flex; gap: 8px; border-radius: 10px; }
+.lof-seg label { flex: 1 1 0; margin: 0; }
+.lof-seg input { position: absolute; opacity: 0; pointer-events: none; }
+.lof-seg span { display: flex; align-items: center; justify-content: center; min-height: 46px; border: 1px solid var(--border); border-radius: 10px; font-weight: 700; cursor: pointer; background: var(--surface); }
+.lof-seg input:checked + span { background: var(--accent); border-color: var(--accent); color: #fff; }
+.lof-seg input:focus-visible + span { outline: 2px solid var(--accent); outline-offset: 2px; }
+.lof-pop-me { margin: 0; font-size: 14px; padding: 10px 12px; border-radius: 10px; background: var(--surface-2); }
+.lof-pop-foot {
+  position: sticky; bottom: 0; display: flex; gap: 8px; margin: 6px -20px 0; padding: 12px 20px calc(14px + env(safe-area-inset-bottom, 0px));
+  background: var(--surface); border-top: 1px solid var(--border);
+}
+.lof-pop-foot .btn-card { flex: 1 1 0; min-height: 50px; font-size: 15px; }
+.lof-pop-foot .btn-card.primary { flex: 1.5 1 0; }
+.lof-pop-stack { flex-direction: column; }
+.lof-pop-stack .btn-card { flex: 0 0 auto; }
+.lof-pop-call { display: flex; align-items: center; justify-content: center; min-height: 44px; font-weight: 700; text-decoration: none; }
+@media (max-width: 640px) {
+  .lof-pop-bg { align-items: flex-end; padding: 0; }
+  .lof-pop { width: 100%; max-height: 92dvh; border-radius: 18px 18px 0 0; padding: 16px 16px 0; }
+  .lof-pop-foot { margin: 6px -16px 0; padding-left: 16px; padding-right: 16px; }
+  .lof-act-row .btn-card { font-size: 14.5px; }
+}
+@media (max-width: 370px) { .lof-two { grid-template-columns: 1fr; } }
