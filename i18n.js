@@ -535,6 +535,8 @@ const en = {
   "activity.minutes": "{count} min",
   "activity.hours": "{hours}h {minutes}m",
   "activity.truncated": "Showing the latest 500 views.",
+  "season.banner": "Happy Thanksgiving",
+  "season.dismiss": "Dismiss Thanksgiving notice",
 };
 
 const es = {
@@ -1074,6 +1076,8 @@ const es = {
   "activity.minutes": "{count} min",
   "activity.hours": "{hours}h {minutes}m",
   "activity.truncated": "Se muestran las últimas 500 vistas.",
+  "season.banner": "Feliz Día de Acción de Gracias",
+  "season.dismiss": "Cerrar aviso de Acción de Gracias",
 };
 
 
