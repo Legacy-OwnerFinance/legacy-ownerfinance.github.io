@@ -101,7 +101,7 @@
       '.pwa-err{color:#b91c1c;font-size:13px;margin-top:8px;min-height:1em}.pwa-note{font-size:12px;color:#475569;margin-top:10px}'+
       '.pwa-foot a,.pwa-foot button{color:inherit;text-decoration:underline;background:none;border:0;padding:0;margin:0;font:inherit;cursor:pointer}'+
       'html[data-standalone="1"] [data-install-app]{display:none}'+
-      '@media (max-width:640px){.pwa-banner{flex-wrap:nowrap;padding:8px 10px;gap:8px;font-size:13px;border-radius:12px}.pwa-banner img{width:30px;height:30px;border-radius:7px}.pwa-banner .pwa-tx{min-width:0;flex:1 1 auto}.pwa-banner .pwa-tx span{display:none}.pwa-banner b{color:#e8c872;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.pwa-banner button{padding:7px 10px;white-space:nowrap}.pwa-banner>span{flex:0 0 auto}}';
+      '@media (max-width:640px){body:has(.tab-bar) .pwa-banner{bottom:calc(68px + env(safe-area-inset-bottom,0px))}.pwa-banner{flex-wrap:nowrap;padding:8px 10px;gap:8px;font-size:13px;border-radius:12px}.pwa-banner img{width:30px;height:30px;border-radius:7px}.pwa-banner .pwa-tx{min-width:0;flex:1 1 auto}.pwa-banner .pwa-tx span{display:none}.pwa-banner b{color:#e8c872;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.pwa-banner button{padding:7px 10px;white-space:nowrap}.pwa-banner>span{flex:0 0 auto}}';
     D.head.appendChild(s);
   }
   function canShowBanner(){

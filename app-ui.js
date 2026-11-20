@@ -776,6 +776,22 @@ function scrollToResults(){const el=document.querySelector('.cards-toolbar');if(
   const re=()=>{if(S.data&&tab==='inventory')render();};
   if(narrowMQ.addEventListener)narrowMQ.addEventListener('change',re);else if(narrowMQ.addListener)narrowMQ.addListener(re);
 })();
+function tabBar(){
+  if(tab==='inventory'&&!S.user&&shareId()&&!resetQueryActive()&&S.listing(shareId()))return '';
+  const es=S.lang==='es',mUnread=S.msgUnread|0;
+  const act=k=>k==='home'?(tab==='inventory'&&!MAPOPEN):k==='map'?(tab==='inventory'&&MAPOPEN):k==='msgs'?msgOpen:k==='acct'?(tab==='dashboard'||tab==='auth'):false;
+  const it=[['home','🏠',es?'Casas':'Homes'],['map','🗺️',es?'Mapa':'Map'],['favs','❤️',es?'Favoritas':'Favorites'],['msgs','💬',es?'Mensajes':'Messages'],['acct','👤',S.user?(es?'Cuenta':'Account'):(es?'Entrar':'Sign in')]];
+  return `<nav class="tab-bar show-phone" aria-label="${es?'Navegación':'Navigation'}">${it.map(([k,i,t])=>`<button type="button" data-tabbar="${k}" class="${act(k)?'active':''}"${act(k)?' aria-current="page"':''}><span class="tb-i" aria-hidden="true">${i}</span><span class="tb-l">${esc(t)}</span>${k==='msgs'&&mUnread?`<span class="tb-badge">${mUnread>9?'9+':mUnread}</span>`:''}</button>`).join('')}</nav>`;
+}
+function tabBarGo(k){
+  menuOpen=false;
+  if(k==='home'){MAPOPEN=false;if(msgOpen)msgOpen=false;if(tab!=='inventory')go('inventory');else render();window.scrollTo({top:0,behavior:'smooth'});return;}
+  if(k==='map'){MAPOPEN=true;msgOpen=false;if(tab!=='inventory')go('inventory');else render();setTimeout(()=>{const mp=document.querySelector('.map-pane');if(mp)mp.scrollIntoView({behavior:'smooth',block:'start'});},80);return;}
+  if(!S.user)return go('auth','#loginF [name="email"]');
+  if(k==='msgs'){if(S.msgEnabled&&S.msgEnabled()){msgOpen=!msgOpen;if(msgOpen){alertOpen=false;msgNew=false;if(msgPeer)S.markThreadRead(msgPeer);}return render();}return go('dashboard');}
+  if(k==='favs'){msgOpen=false;go('dashboard');setTimeout(()=>{const f=document.getElementById('my-favs');if(f)f.scrollIntoView({behavior:'smooth',block:'start'});},120);return;}
+  if(k==='acct'){msgOpen=false;return go('dashboard');}
+}
 function modal(html){const m=document.createElement('div');m.className='modal-backdrop';m.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.55);display:flex;align-items:center;justify-content:center;z-index:9999';
   m.style.justifyContent='flex-end';m.innerHTML=`<div class="drawer-panel"><button class="close nav-pill" style="float:right">✕</button>${html}</div>`;
   m.onclick=e=>{if(e.target===m||e.target.classList.contains('close'))m.remove();};document.body.appendChild(m);return m;}
@@ -1179,13 +1195,17 @@ function setHeaderCompact(v){if(v===headerCompact)return;headerCompact=v;const h
 /* Collapsing header: compact (logo + name only) once the page scrolls; Esc closes the menu */
 (function(){
   if(window.__hdrInit)return;window.__hdrInit=true;
-  let ticking=false;
+  let ticking=false,lastY=0;
   function pos(t){return t&&t!==document&&t!==document.documentElement&&t!==document.body?(t.scrollTop||0):(window.scrollY||document.documentElement.scrollTop||0);}
   function onScroll(e){
     const t=e&&e.target;
     if(t&&t!==document&&!(t.classList&&(t.classList.contains('cards-pane')||t.classList.contains('main-scroll'))))return;
     if(ticking)return;ticking=true;
-    requestAnimationFrame(()=>{ticking=false;const y=pos(t);if(y>80)setHeaderCompact(true);else if(y<10)setHeaderCompact(false);});
+    requestAnimationFrame(()=>{ticking=false;const y=pos(t);if(y>80)setHeaderCompact(true);else if(y<10)setHeaderCompact(false);
+      // Phones: slide the header away while scrolling down, bring it back on any scroll up.
+      const h=document.querySelector('.app-header');if(h){const ph=window.matchMedia&&matchMedia('(max-width: 640px)').matches;const dy=y-lastY;
+        if(!ph||menuOpen||y<160)h.classList.remove('is-hidden');else if(dy>6)h.classList.add('is-hidden');else if(dy<-6)h.classList.remove('is-hidden');}
+      lastY=y;});
   }
   document.addEventListener('scroll',onScroll,true);
   document.addEventListener('keydown',e=>{if(e.key==='Escape'&&menuOpen){menuOpen=false;render();const mb=document.querySelector('.menu-btn');if(mb)mb.focus();}});
@@ -1418,7 +1438,7 @@ function card(l,mt){
     return `<article class="prop-card" data-card="${l.id}">${media(`<span class="badge-top-left" style="background:#0f172a">🔒 ${S.lang==='es'?'Vista Previa':'Guest Preview'}</span>`)}</div>
       <div class="card-body"><p class="addr-line">📍 ${partialAddr(l)}</p>${hookHtml(l)}
       ${todayApptHtml(l.id)}
-      <div class="card-actions"><button type="button" class="btn-card primary" data-open="${l.id}">${S.lang==='es'?'Ver casa':'View home'} · ${ph.length} ${tr('photosCount')}</button></div></div></article>`;
+      <div class="card-actions"><button type="button" class="btn-card primary" data-open="${l.id}">${S.lang==='es'?'Ver casa':'View home'}<span class="btn-extra"> · ${ph.length} ${tr('photosCount')}</span></button></div></div></article>`;
   }
   const col=({AVAILABLE:'#16a34a',COMING_SOON:'#2563eb',SOLD:'#475569',CLOSED:'#475569'})[l.status]||'#d97706';
   return `<article class="prop-card" data-card="${l.id}">${media(`<span class="badge-top-left" style="background:${col}">${esc(S.statusText?S.statusText(l.status):l.status)}</span>`)}
@@ -1738,7 +1758,7 @@ function dashboard(){if(!S.user)return auth();if(S.isInvestor())return investorD
    <form id="profF"><input name="name" value="${esc(u.name)}"><input name="phone" value="${esc(u.phone)}">${ap?`<label>${tr('orecLicense')}<input name="licenseNumber" value="${esc(ap.licenseNumber)}"></label><label>${tr('brokerage')}<input name="brokerage" value="${esc(ap.brokerage)}"></label><p>${tr('yourInviteCode')} <b>${esc(ap.inviteCode)}</b></p>`:''}<button>${tr('save')}</button></form>
    ${ag?`<p>${tr('yourAgent')} <b>${esc(ag.name)}</b></p>`:''}<h3>${tr('changePw')}</h3><form id="pwF"><input name="cur" type="password" placeholder="${tr('currentPw')}" required><input name="pw" type="password" placeholder="${tr('newPw')}" minlength="8" required><button>${tr('updatePw')}</button></form>${accountDeleteCard()}</div>
   ${isClient()?`<div class="card" style="padding:16px"><h2>🏡 ${st('mySearch')}</h2>${critSummary(critOf(u))}<button type="button" class="btn-card primary" data-editsearch="1">✏️ ${st('edit')}</button></div>`:''}
-  <div class="card" style="padding:16px"><h2>${tr('favorites')}</h2><ul>${favs.map(li).join('')||`<li>${tr('noneYet')}</li>`}</ul><h2>${tr('viewedHomes')}</h2><ul>${views.map(li).join('')||`<li>${tr('noneYet')}</li>`}</ul></div>
+  <div class="card" id="my-favs" style="padding:16px"><h2>${tr('favorites')}</h2><ul>${favs.map(li).join('')||`<li>${tr('noneYet')}</li>`}</ul><h2>${tr('viewedHomes')}</h2><ul>${views.map(li).join('')||`<li>${tr('noneYet')}</li>`}</ul></div>
   <div class="card" style="padding:16px"><h2>${tr('messages')}</h2>${contacts.length?`<form id="msgF"><select name="toUserId">${contacts.map(c=>`<option value="${c.id}">${esc(c.name)}</option>`).join('')}</select>
    <select name="listingId"><option value="">${tr('propAddress')}</option>${D.listings.map(l=>`<option value="${l.id}">${esc(l.address)}, ${esc(l.city)}</option>`).join('')}</select>
    <select name="kind"><option value="MESSAGE">${tr('kindMsg')}</option><option value="REQUEST_ACCESS">${tr('requestAccess')}</option><option value="SHARE_HOUSE">${tr('shareHouse')}</option></select><textarea name="body" placeholder="${tr('kindMsg')}" required></textarea><button>${tr('send')}</button></form>`:`<p>${tr('noAgentLinked')}</p>`}
@@ -1886,10 +1906,11 @@ function maybeOpenSharedDetail(){
 }
 S.rerender=function(){render();};
 function render(){captureMsgScroll();document.documentElement.lang=S.lang;syncMsgTitle();const root=$('#app-root');if(!S.data)return;if(map){try{map.stop();map.off();map.remove();}catch(e){}map=null;}
-  const body={inventory,guides,dashboard,admin,auth,calendar:calendarView,'investor-tx':investorTx,'investor-map':investorMap}[tab]||inventory;root.innerHTML=header()+`<main>${body()}</main><footer class="app-footer" style="padding:18px;font-size:12px;text-align:center">© Legacy - Owner Finance · Brokerage By: KLC Real Estate, LLC${footerLinks()}</footer>`;bind();applyMsgScroll();if(tab==='inventory'&&(MAPOPEN||!narrowMQ.matches))drawMap();if(tab==='investor-map')drawInvestorMap();maybeOpenSharedDetail();highlightClosedDeal();}
+  const body={inventory,guides,dashboard,admin,auth,calendar:calendarView,'investor-tx':investorTx,'investor-map':investorMap}[tab]||inventory;root.innerHTML=header()+`<main>${body()}</main><footer class="app-footer" style="padding:18px;font-size:12px;text-align:center">© Legacy - Owner Finance · Brokerage By: KLC Real Estate, LLC${footerLinks()}</footer>${tabBar()}`;bind();applyMsgScroll();if(tab==='inventory'&&(MAPOPEN||!narrowMQ.matches))drawMap();if(tab==='investor-map')drawInvestorMap();maybeOpenSharedDetail();highlightClosedDeal();}
 function bind(){const r=$('#app-root');
   if(!r.dataset.acctToggle){r.dataset.acctToggle='1';r.addEventListener('toggle',e=>{const el=e.target;if(el&&el.dataset&&el.dataset.acct)ADM_OPEN[el.dataset.acct]=el.open;},true);}
   r.onclick=async e=>{
+   const tb=e.target.closest('[data-tabbar]');if(tb){e.preventDefault();return tabBarGo(tb.dataset.tabbar);}
    const mt=e.target.closest('[data-maptoggle]');
    if(mt){e.preventDefault();MAPOPEN=!MAPOPEN;const ws=r.querySelector('.workspace-split');if(ws)ws.classList.toggle('map-open',MAPOPEN);const es=S.lang==='es';mt.setAttribute('aria-expanded',MAPOPEN?'true':'false');mt.textContent='🗺️ '+(MAPOPEN?(es?'Ocultar mapa':'Hide map'):(es?'Ver mapa':'Show map'));
      if(MAPOPEN){if(!map)drawMap();else setTimeout(()=>map&&map.invalidateSize(),60);const mp=r.querySelector('.map-pane');if(mp)mp.scrollIntoView({behavior:'smooth',block:'start'});}return;}
