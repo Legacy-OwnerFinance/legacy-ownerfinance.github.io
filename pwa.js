@@ -100,24 +100,26 @@
       '.pwa-modal button.pwa-danger{background:#b91c1c;border-color:#b91c1c;color:#fff;font-weight:700}.pwa-modal button[disabled]{opacity:.6}'+
       '.pwa-err{color:#b91c1c;font-size:13px;margin-top:8px;min-height:1em}.pwa-note{font-size:12px;color:#475569;margin-top:10px}'+
       '.pwa-foot a,.pwa-foot button{color:inherit;text-decoration:underline;background:none;border:0;padding:0;margin:0;font:inherit;cursor:pointer}'+
-      'html[data-standalone="1"] [data-install-app]{display:none}';
+      'html[data-standalone="1"] [data-install-app]{display:none}'+
+      '@media (max-width:640px){.pwa-banner{flex-wrap:nowrap;padding:8px 10px;gap:8px;font-size:13px;border-radius:12px}.pwa-banner img{width:30px;height:30px;border-radius:7px}.pwa-banner .pwa-tx{min-width:0;flex:1 1 auto}.pwa-banner .pwa-tx span{display:none}.pwa-banner b{color:#e8c872;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.pwa-banner button{padding:7px 10px;white-space:nowrap}.pwa-banner>span{flex:0 0 auto}}';
     D.head.appendChild(s);
   }
   function canShowBanner(){
     if(standalone()||dismissed())return false;
+    if(D.querySelector('.lof-contact-bar,.modal-backdrop,.lof-sheet-bg'))return false; // never cover a listing's Contactar bar
     if(deferred)return true;
     return isIOS&&!/crios|fxios|edgios/i.test(ua); // iOS Safari only
   }
   var bannerTimer=null;
   function scheduleBanner(){
     if(banner||bannerTimer)return;
-    bannerTimer=setTimeout(function(){bannerTimer=null;showBanner();},5000);
+    bannerTimer=setTimeout(function(){bannerTimer=null;showBanner();},20000);
   }
   function showBanner(){
     if(banner||!canShowBanner())return;
     css();
     banner=D.createElement('div');banner.className='pwa-banner';banner.setAttribute('role','dialog');
-    banner.innerHTML='<img src="/android-chrome-192x192.png" alt=""><div class="pwa-tx"><b>'+esc(t('installTitle'))+'</b>'+esc(t('installSub'))+'</div>'+
+    banner.innerHTML='<img src="/android-chrome-192x192.png" alt=""><div class="pwa-tx"><b>'+esc(t('installTitle'))+'</b><span>'+esc(t('installSub'))+'</span></div>'+
       '<span style="display:flex;gap:6px">'+(deferred?'<button type="button" class="pwa-go" data-pwa="install">'+esc(t('installBtn'))+'</button>':'<button type="button" class="pwa-go" data-pwa="how">'+esc(t('howBtn'))+'</button>')+
       '<button type="button" data-pwa="later">'+esc(t('later'))+'</button></span>';
     D.body.appendChild(banner);
