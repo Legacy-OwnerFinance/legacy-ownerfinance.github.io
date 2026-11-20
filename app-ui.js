@@ -721,6 +721,9 @@ const title=l=>limited()?partialAddr(l):`${esc(l.address)}, ${esc(l.city)}, ${es
 const narrowMQ=window.matchMedia?matchMedia('(max-width: 960px)'):{matches:false};
 const phoneMQ=window.matchMedia?matchMedia('(max-width: 640px)'):{matches:false};
 let MAPOPEN=false;
+// Full-screen Mapa view + Favoritas view (UI only): remembered map position, open pin popup and favorites layout.
+let MAPPOP='',MAPVIEW=null,MAPRO=null;
+let FAVMODE=(()=>{try{const v=localStorage.getItem('lof-fav-view');return ['list','g2','g1'].indexOf(v)>=0?v:'g2';}catch(e){return 'g2';}})();
 // Smaller Google photo size for card thumbnails on phones (detail gallery keeps the full size).
 const cardImg=u=>{const v=String(u||'');if(!phoneMQ.matches||!/googleusercontent\.com\/d\//.test(v))return v;return v.replace(/=w\d+(-h\d+)?$/,'=w800');};
 const CONTACT_TEL='+14053384124',CONTACT_SHOW='(405) 338-4124';
@@ -883,17 +886,17 @@ function scrollToResults(){const el=document.querySelector('.cards-toolbar');if(
 function tabBar(){
   if(tab==='inventory'&&!S.user&&shareId()&&!resetQueryActive()&&S.listing(shareId()))return '';
   const es=S.lang==='es',mUnread=S.msgUnread|0;
-  const act=k=>k==='home'?(tab==='inventory'&&!MAPOPEN):k==='map'?(tab==='inventory'&&MAPOPEN):k==='msgs'?msgOpen:k==='acct'?(tab==='dashboard'||tab==='auth'):false;
+  const act=k=>k==='home'?(tab==='inventory'&&!MAPOPEN):k==='map'?(tab==='map'||(tab==='inventory'&&MAPOPEN)):k==='favs'?tab==='favorites':k==='msgs'?msgOpen:k==='acct'?(tab==='dashboard'||tab==='auth'):false;
   const it=[['home','🏠',es?'Casas':'Homes'],['map','🗺️',es?'Mapa':'Map'],['favs','❤️',es?'Favoritas':'Favorites'],['msgs','💬',es?'Mensajes':'Messages'],['acct','👤',S.user?(es?'Cuenta':'Account'):(es?'Entrar':'Sign in')]];
   return `<nav class="tab-bar show-phone" aria-label="${es?'Navegación':'Navigation'}">${it.map(([k,i,t])=>`<button type="button" data-tabbar="${k}" class="${act(k)?'active':''}"${act(k)?' aria-current="page"':''}><span class="tb-i" aria-hidden="true">${i}</span><span class="tb-l">${esc(t)}</span>${k==='msgs'&&mUnread?`<span class="tb-badge">${mUnread>9?'9+':mUnread}</span>`:''}</button>`).join('')}</nav>`;
 }
 function tabBarGo(k){
   menuOpen=false;
   if(k==='home'){MAPOPEN=false;if(msgOpen)msgOpen=false;if(tab!=='inventory')go('inventory');else render();window.scrollTo({top:0,behavior:'smooth'});return;}
-  if(k==='map'){MAPOPEN=true;msgOpen=false;if(tab!=='inventory')go('inventory');else render();setTimeout(()=>{const mp=document.querySelector('.map-pane');if(mp)mp.scrollIntoView({behavior:'smooth',block:'start'});},80);return;}
+  if(k==='map'){MAPOPEN=false;msgOpen=false;return go('map');}
   if(!S.user)return go('auth','#loginF [name="email"]');
   if(k==='msgs'){if(S.msgEnabled&&S.msgEnabled()){msgOpen=!msgOpen;if(msgOpen){alertOpen=false;msgNew=false;if(msgPeer)S.markThreadRead(msgPeer);}return render();}return go('dashboard');}
-  if(k==='favs'){msgOpen=false;go('dashboard');setTimeout(()=>{const f=document.getElementById('my-favs');if(f)f.scrollIntoView({behavior:'smooth',block:'start'});},120);return;}
+  if(k==='favs'){msgOpen=false;window.scrollTo(0,0);return go('favorites');}
   if(k==='acct'){msgOpen=false;return go('dashboard');}
 }
 function modal(html){const m=document.createElement('div');m.className='modal-backdrop';m.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.55);display:flex;align-items:center;justify-content:center;z-index:9999';
@@ -1323,7 +1326,7 @@ function thanksBanner(){
 }
 function header(){
   const investorHome=S.isInvestor()&&S.caps&&S.caps.investor&&!S.isPendingApproval(S.user);
-  const T=investorHome?[['dashboard',tr('navInvestorHome')],['investor-tx',tr('navTransactions')],['inventory',tr('navInventory')],['guides',tr('navGuides')]]:[['inventory',tr('navInventory')],['guides',tr('navGuides')],['dashboard',tr('navDashboard')]];
+  const T=investorHome?[['dashboard',tr('navInvestorHome')],['investor-tx',tr('navTransactions')],['inventory',tr('navInventory')],['guides',tr('navGuides')]]:[['inventory',tr('navInventory')],['map','🗺️ '+(S.lang==='es'?'Mapa':'Map')]].concat(S.user?[['favorites','❤️ '+(S.lang==='es'?'Favoritas':'Favorites')]]:[]).concat([['guides',tr('navGuides')],['dashboard',tr('navDashboard')]]);
   if(!investorHome&&S.canSeeShowingCalendar&&S.canSeeShowingCalendar())T.push(['calendar',tr('navCalendar')]);
   if(S.isAdmin())T.push(['admin',tr('navAdmin')]);
   if(!S.user)T.push(['auth',tr('navAuth')]);
@@ -1535,27 +1538,106 @@ function tenureHtml(l){
   return `<div class="tenure-note tenure-${kind}"><span class="tenure-main">${esc(info.text)}</span>${sub}</div>`;
 }
 
+// Short "days active" pill for cards (replaces the long "Activo desde …" note on cards; the detail view keeps the full note).
+function daysPill(l){
+  if(!l||typeof S.listingTenureDays!=='function')return '';
+  const t=S.listingTenureDays(l);if(!t||t.days==null||t.days<0)return '';
+  const es=S.lang==='es',d=Math.round(t.days);
+  const txt=t.kind==='pending'?(es?(d===0?'Pendiente hoy':`Pendiente ${d} ${d===1?'día':'días'}`):(d===0?'Pending today':`Pending ${d} ${d===1?'day':'days'}`))
+    :(es?(d===0?'Activa hoy':`Activa ${d} ${d===1?'día':'días'}`):(d===0?'Active today':`Active ${d} ${d===1?'day':'days'}`));
+  return `<span class="days-pill days-${t.kind}">⏱ ${esc(txt)}</span>`;
+}
 function card(l,mt){
   const ph=(l.photoUrls&&l.photoUrls.length)?l.photoUrls:[l.photoUrl||'listing-placeholder.svg'],i=(PIDX[l.id]||0)%ph.length,multi=ph.length>1;
   const media=badgeHtml=>`<div class="card-media">${badgeHtml}<img src="${esc(cardImg(ph[i]))}" data-img="${l.id}" referrerpolicy="no-referrer" loading="lazy" onerror="window.imgFallback&&window.imgFallback(this)" data-open="${l.id}" style="cursor:pointer">
     ${multi?`<button type="button" class="carousel-btn prev" data-prev="${l.id}">‹</button><button type="button" class="carousel-btn next" data-next="${l.id}">›</button>`:''}<span class="photo-counter" data-cnt="${l.id}">📷 ${i+1} / ${ph.length}</span>`;
   if(limited()){
     return `<article class="prop-card" data-card="${l.id}">${media(`<span class="badge-top-left" style="background:#0f172a">🔒 ${S.lang==='es'?'Vista Previa':'Guest Preview'}</span>`)}</div>
-      <div class="card-body"><p class="addr-line">📍 ${partialAddr(l)}</p>${hookHtml(l)}
+      <div class="card-body"><p class="addr-line">📍 ${partialAddr(l)}</p>${daysPill(l)?`<div class="guest-pill-row">${daysPill(l)}</div>`:''}${hookHtml(l)}
       ${todayApptHtml(l.id)}
       <div class="card-actions"><button type="button" class="btn-card primary" data-open="${l.id}">${S.lang==='es'?'Ver casa':'View home'}<span class="btn-extra"> · ${ph.length} ${tr('photosCount')}</span></button></div></div></article>`;
   }
   const col=({AVAILABLE:'#16a34a',COMING_SOON:'#2563eb',SOLD:'#475569',CLOSED:'#475569'})[l.status]||'#d97706';
   return `<article class="prop-card" data-card="${l.id}">${media(`<span class="badge-top-left" style="background:${col}">${esc(S.statusText?S.statusText(l.status):l.status)}</span>`)}
     <div class="card-top-actions"><button type="button" class="icon-circle-btn" title="${esc(tr('compare'))}" data-compare="${l.id}">${CMP.has(l.id)?'✅':'⚖️'}</button><button type="button" class="icon-circle-btn" title="${esc(tr('favorite'))}" data-fav="${l.id}">${S.isFavorite(l.id)?'❤️':'🤍'}</button></div></div>
-    <div class="card-body">${matchBadge(mt)}${hookHtml(l)}<div class="price-strip"><span class="main-price">${S.money(l.askingPrice)}</span><span class="monthly-pill">${S.money(l.monthlyPayment)}${tr('perMo')}</span></div>
+    <div class="card-body">${matchBadge(mt)}${hookHtml(l)}<div class="price-strip">${daysPill(l)}<span class="main-price">${S.money(l.askingPrice)}</span><span class="monthly-pill">${S.money(l.monthlyPayment)}${tr('perMo')}</span></div>
     <p class="addr-line">${title(l)}</p>
-    ${tenureHtml(l)}
-    <div class="down-box"><div>${tr('down')}<b>${S.money(l.downPayment)}</b></div><div>${tr('beds')}/${tr('baths')}<b>${l.beds??'—'} · ${l.baths??'—'}</b></div><div>${tr('sqft')}<b>${l.sqft?(+l.sqft).toLocaleString():'—'}</b></div></div>
+    <div class="down-box down-only"><span>${tr('down')}</span><b>${S.money(l.downPayment)}</b></div>
+    <div class="card-facts"><span>🛏️ <b>${esc(l.beds??'—')}</b> ${tr('bdShort')}</span><span>🛁 <b>${esc(l.baths??'—')}</b> ${tr('baShort')}</span>${l.sqft?`<span>📐 <b>${(+l.sqft).toLocaleString()}</b> ${tr('sqftUnit')}</span>`:''}</div>
     ${listingTracker(l)}
     ${todayApptHtml(l.id)}
     <div class="card-actions"><button type="button" class="btn-card primary" data-open="${l.id}">${S.lang==='es'?'Ver Detalles':'View Details'}</button>${S.isAdmin()&&S.caps&&S.caps.ready?`<button type="button" class="btn-card" data-activity="${esc(l.id)}">${tr('activity.button')}</button>`:''}</div></div></article>`;
 }
+
+/* ---- Favoritas view (UI only: reads S.data.favorites, removes with the same S.toggleFavorite) ---- */
+function favRow(l){
+  const es=S.lang==='es',lim=limited(),ph=(l.photoUrls&&l.photoUrls.length)?l.photoUrls[0]:(l.photoUrl||'listing-placeholder.svg');
+  return `<article class="fav-row" data-card="${l.id}"><button type="button" class="fav-thumb" data-open="${l.id}" aria-label="${es?'Ver casa':'View home'}"><img src="${esc(cardImg(ph))}" alt="" referrerpolicy="no-referrer" loading="lazy" onerror="window.imgFallback&&window.imgFallback(this)"></button>
+   <div class="fav-info" data-open="${l.id}" role="button" tabindex="0">${badge(l.status)}<p class="fav-addr">${lim?'📍 '+partialAddr(l):title(l)}</p>${lim?daysPill(l):''}${!lim?`<p class="fav-price">${daysPill(l)}<b>${S.money(l.askingPrice)}</b> · ${S.money(l.monthlyPayment)}${tr('perMo')}</p><p class="fav-facts">${esc(l.beds??'—')} ${tr('bdShort')} · ${esc(l.baths??'—')} ${tr('baShort')} · ${tr('down')} ${S.money(l.downPayment)}</p>`:''}</div>
+   <button type="button" class="fav-heart" data-fav="${l.id}" aria-label="${es?'Quitar de favoritas':'Remove from favorites'}" title="${es?'Quitar de favoritas':'Remove from favorites'}">❤️</button></article>`;
+}
+function favoritesView(){
+  const es=S.lang==='es';
+  if(!S.user)return `<section class="fav-view"><div class="card fav-empty"><div class="fav-empty-i" aria-hidden="true">❤️</div><h2>${es?'Tus casas favoritas':'Your favorite homes'}</h2><p>${es?'Entra o crea tu cuenta gratis para guardar casas y verlas aquí.':'Sign in or create a free account to save homes and see them here.'}</p><div class="fav-empty-acts"><button type="button" class="btn-card primary" data-login="1">${es?'Entrar':'Sign in'}</button><button type="button" class="btn-card" data-register="1">${es?'Crear cuenta':'Create account'}</button></div></div></section>`;
+  const seen=new Set(),L=S.data.favorites.filter(f=>f.userId===S.user.id).slice().sort((a,b)=>String(b.createdAt||'').localeCompare(String(a.createdAt||''))).map(f=>S.listing(f.listingId)).filter(l=>l&&!seen.has(l.id)&&seen.add(l.id));
+  const modes=[['list','☰',es?'Lista':'List'],['g2','▦',es?'Cuadrícula 2':'Grid 2'],['g1','▭',es?'Cuadrícula 1':'Grid 1']];
+  const seg=`<div class="fav-seg" role="group" aria-label="${es?'Cómo ver':'View as'}">${modes.map(([k,i,t])=>`<button type="button" data-favmode="${k}" class="${FAVMODE===k?'active':''}" aria-pressed="${FAVMODE===k?'true':'false'}"><span aria-hidden="true">${i}</span> ${esc(t)}</button>`).join('')}</div>`;
+  const head=`<div class="fav-head"><h2>❤️ ${es?'Mis Favoritas':'My Favorites'} <span class="fav-n">(${L.length})</span></h2>${L.length?seg:''}</div>`;
+  if(!L.length)return `<section class="fav-view">${head}<div class="card fav-empty"><div class="fav-empty-i" aria-hidden="true">🤍</div><h3>${es?'Aún no tienes casas favoritas':"You don't have any favorite homes yet"}</h3><p>${es?'Toca 🤍 en cualquier casa para guardarla aquí y encontrarla rápido.':'Tap 🤍 on any home to save it here and find it fast.'}</p><div class="fav-empty-acts"><button type="button" class="btn-card primary" data-tabbar="home">🏠 ${es?'Ver casas':'Browse homes'}</button></div></div></section>`;
+  const body=FAVMODE==='list'?`<div class="fav-list">${L.map(favRow).join('')}</div>`:`<div class="cards-grid">${L.map(l=>card(l)).join('')}</div>`;
+  return `<section class="fav-view fav-${FAVMODE}">${head}${body}</section>`;
+}
+
+/* ---- Mapa view: full-screen map only; tapping a pin opens a small card over the map (UI only) ---- */
+function mapView(){
+  const es=S.lang==='es',n=filtered().length;
+  return `<section class="lof-mapview" aria-label="${es?'Mapa de casas':'Homes map'}"><div id="full-map"></div>
+   <div class="lof-map-top"><span class="lof-map-count">🏠 ${n} ${tr('homesCount')}</span><button type="button" class="lof-map-list" data-tabbar="home">☰ ${es?'Ver lista':'List view'}</button></div>
+   <div class="lof-mappop" aria-live="polite"></div></section>`;
+}
+function mapPopHtml(l){
+  const es=S.lang==='es',lim=limited(),ph=(l.photoUrls&&l.photoUrls.length)?l.photoUrls[0]:(l.photoUrl||'listing-placeholder.svg');
+  const n=(l.photoUrls&&l.photoUrls.length)||0;
+  return `<div class="lof-mappop-card" role="dialog" aria-label="${es?'Casa seleccionada':'Selected home'}">
+   <button type="button" class="lof-mappop-x" data-mappopclose="1" aria-label="${es?'Cerrar':'Close'}">✕</button>
+   <button type="button" class="lof-mappop-img" data-open="${l.id}" aria-label="${es?'Ver casa':'View home'}"><img src="${esc(cardImg(ph))}" alt="" referrerpolicy="no-referrer" onerror="window.imgFallback&&window.imgFallback(this)">${n>1?`<span class="lof-mappop-n">📷 ${n}</span>`:''}</button>
+   <div class="lof-mappop-body">${badge(l.status)}<p class="lof-mappop-addr">${lim?'📍 '+partialAddr(l):title(l)}</p>
+    ${!lim?`<p class="lof-mappop-price"><b>${S.money(l.askingPrice)}</b> · ${S.money(l.monthlyPayment)}${tr('perMo')}</p><p class="lof-mappop-facts">${tr('down')} ${S.money(l.downPayment)} · ${esc(l.beds??'—')} ${tr('bdShort')} · ${esc(l.baths??'—')} ${tr('baShort')}</p>`:`<p class="lof-mappop-lock">🔒 ${es?'Crea tu cuenta gratis para ver precio y dirección':'Create a free account to see price and address'}</p>`}
+    <div class="lof-mappop-acts"><button type="button" class="btn-card primary" data-open="${l.id}">🏠 ${es?'Ver casa':'View home'}</button>${!S.user?`<button type="button" class="btn-card" data-register="1">${es?'Crear cuenta':'Create account'}</button>`:''}</div></div></div>`;
+}
+function markPin(id){const v=document.querySelector('.lof-mapview');if(!v)return;v.querySelectorAll('.leaflet-marker-icon.lof-pin-on').forEach(x=>x.classList.remove('lof-pin-on'));if(id){const m=window.__lofFullMarks&&window.__lofFullMarks[id];const el=m&&m.getElement&&m.getElement();if(el)el.classList.add('lof-pin-on');}}
+function showMapPop(id){const l=S.listing(id),box=document.querySelector('.lof-mappop');if(!l||!box)return;MAPPOP=id;box.innerHTML=mapPopHtml(l);markPin(id);}
+function closeMapPop(){MAPPOP='';const box=document.querySelector('.lof-mappop');if(box)box.innerHTML='';markPin('');}
+function sizeMapView(){
+  const v=document.querySelector('.lof-mapview');if(!v)return;
+  const m=document.querySelector('#app-root main'),tb=document.querySelector('.tab-bar');
+  const top=m?Math.max(0,Math.round(m.getBoundingClientRect().top+(window.scrollY||0))):0;
+  const bot=tb&&getComputedStyle(tb).display!=='none'?Math.round(tb.getBoundingClientRect().height):0;
+  v.style.top=top+'px';v.style.bottom=bot+'px';if(map)map.invalidateSize({pan:false});
+}
+function drawFullMap(){
+  const el=$('#full-map');if(!window.L||!el)return;
+  const hd=document.querySelector('.app-header');if(hd)hd.classList.remove('is-hidden','is-compact');
+  sizeMapView();
+  map=L.map(el,{zoomControl:true});L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{attribution:'© OpenStreetMap'}).addTo(map);
+  const pts=[],marks={};
+  filtered().forEach(l=>{const a=l.approxLocation||{},ex=!limited()&&l.latitude!=null&&l.longitude!=null;const lat=ex?l.latitude:a.lat,lng=ex?l.longitude:a.lng;if(lat==null||lng==null)return;
+    pts.push([lat,lng]);const m=L.marker([lat,lng],{keyboard:true}).addTo(map);marks[l.id]=m;m.on('click',()=>showMapPop(l.id));});
+  window.__lofFullMarks=marks;
+  if(MAPVIEW)map.setView(MAPVIEW.c,MAPVIEW.z,{animate:false});else if(pts.length)map.fitBounds(pts,{padding:[40,40],animate:false});else map.setView([35.47,-97.52],10);
+  const keep=()=>{if(!map)return;const c=map.getCenter();MAPVIEW={c:[c.lat,c.lng],z:map.getZoom()};};keep();
+  map.on('moveend',keep);map.on('click',closeMapPop);
+  if(MAPPOP&&marks[MAPPOP])showMapPop(MAPPOP);else MAPPOP='';
+  if(MAPRO){try{MAPRO.disconnect();}catch(_){}MAPRO=null;}
+  if(window.ResizeObserver){MAPRO=new ResizeObserver(()=>sizeMapView());if(hd)MAPRO.observe(hd);const tb=document.querySelector('.tab-bar');if(tb)MAPRO.observe(tb);}
+  setTimeout(sizeMapView,150);
+}
+(function(){
+  if(window.__lofMapViewInit)return;window.__lofMapViewInit=true;
+  window.addEventListener('resize',()=>{if(tab==='map')sizeMapView();});
+  document.addEventListener('keydown',e=>{if(e.key==='Escape'&&tab==='map'&&MAPPOP&&!document.querySelector('.modal-backdrop,.lof-pop-bg,.lof-sheet-bg'))closeMapPop();});
+  document.addEventListener('keydown',e=>{const t=e.target;if((e.key==='Enter'||e.key===' ')&&t&&t.classList&&t.classList.contains('fav-info')){e.preventDefault();t.click();}});
+})();
 
 function drawMap(){if(!window.L||!$('#inventory-map'))return;if(map){map.remove();map=null;}MARK={};
   map=L.map('inventory-map').setView([35.47,-97.52],10);L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{attribution:'© OpenStreetMap'}).addTo(map);
@@ -1861,7 +1943,7 @@ function dashboard(){if(!S.user)return auth();if(S.isInvestor())return investorD
    <form id="profF"><input name="name" value="${esc(u.name)}"><input name="phone" value="${esc(u.phone)}">${ap?`<label>${tr('orecLicense')}<input name="licenseNumber" value="${esc(ap.licenseNumber)}"></label><label>${tr('brokerage')}<input name="brokerage" value="${esc(ap.brokerage)}"></label><p>${tr('yourInviteCode')} <b>${esc(ap.inviteCode)}</b></p>`:''}<button>${tr('save')}</button></form>
    ${ag?`<p>${tr('yourAgent')} <b>${esc(ag.name)}</b></p>`:''}<h3>${tr('changePw')}</h3><form id="pwF"><input name="cur" type="password" placeholder="${tr('currentPw')}" required><input name="pw" type="password" placeholder="${tr('newPw')}" minlength="8" required><button>${tr('updatePw')}</button></form>${accountDeleteCard()}</div>
   ${isClient()?`<div class="card" style="padding:16px"><h2>🏡 ${st('mySearch')}</h2>${critSummary(critOf(u))}<button type="button" class="btn-card primary" data-editsearch="1">✏️ ${st('edit')}</button></div>`:''}
-  <div class="card" id="my-favs" style="padding:16px"><h2>${tr('favorites')}</h2><ul>${favs.map(li).join('')||`<li>${tr('noneYet')}</li>`}</ul><h2>${tr('viewedHomes')}</h2><ul>${views.map(li).join('')||`<li>${tr('noneYet')}</li>`}</ul></div>
+  <div class="card" id="my-favs" style="padding:16px"><h2>${tr('favorites')}</h2>${favs.length?`<button type="button" class="btn-card" data-tab="favorites" style="margin:0 0 8px">❤️ ${S.lang==='es'?'Ver mis favoritas':'See my favorites'}</button>`:''}<ul>${favs.map(li).join('')||`<li>${tr('noneYet')}</li>`}</ul><h2>${tr('viewedHomes')}</h2><ul>${views.map(li).join('')||`<li>${tr('noneYet')}</li>`}</ul></div>
   <div class="card" style="padding:16px"><h2>${tr('messages')}</h2>${contacts.length?`<form id="msgF"><select name="toUserId">${contacts.map(c=>`<option value="${c.id}">${esc(c.name)}</option>`).join('')}</select>
    <select name="listingId"><option value="">${tr('propAddress')}</option>${D.listings.map(l=>`<option value="${l.id}">${esc(l.address)}, ${esc(l.city)}</option>`).join('')}</select>
    <select name="kind"><option value="MESSAGE">${tr('kindMsg')}</option><option value="REQUEST_ACCESS">${tr('requestAccess')}</option><option value="SHARE_HOUSE">${tr('shareHouse')}</option></select><textarea name="body" placeholder="${tr('kindMsg')}" required></textarea><button>${tr('send')}</button></form>`:`<p>${tr('noAgentLinked')}</p>`}
@@ -2009,11 +2091,14 @@ function maybeOpenSharedDetail(){
 }
 S.rerender=function(){render();};
 function render(){captureMsgScroll();document.documentElement.lang=S.lang;syncMsgTitle();const root=$('#app-root');if(!S.data)return;if(map){try{map.stop();map.off();map.remove();}catch(e){}map=null;}
-  const body={inventory,guides,dashboard,admin,auth,calendar:calendarView,'investor-tx':investorTx,'investor-map':investorMap}[tab]||inventory;root.innerHTML=header()+`<main>${body()}</main><footer class="app-footer" style="padding:18px;font-size:12px;text-align:center">© Legacy - Owner Finance · Brokerage By: KLC Real Estate, LLC${footerLinks()}</footer>${tabBar()}`;bind();applyMsgScroll();if(tab==='inventory'&&(MAPOPEN||!narrowMQ.matches))drawMap();if(tab==='investor-map')drawInvestorMap();maybeOpenSharedDetail();highlightClosedDeal();}
+  const mapFull=tab==='map';document.documentElement.classList.toggle('lof-map-on',mapFull);if(mapFull){headerCompact=false;if(window.scrollY)window.scrollTo(0,0);}
+  const body={inventory,guides,dashboard,admin,auth,calendar:calendarView,'investor-tx':investorTx,'investor-map':investorMap,favorites:favoritesView,map:mapView}[tab]||inventory;root.innerHTML=header()+`<main>${body()}</main><footer class="app-footer" style="padding:18px;font-size:12px;text-align:center">© Legacy - Owner Finance · Brokerage By: KLC Real Estate, LLC${footerLinks()}</footer>${tabBar()}`;bind();applyMsgScroll();if(tab==='inventory'&&(MAPOPEN||!narrowMQ.matches))drawMap();if(tab==='investor-map')drawInvestorMap();if(mapFull)drawFullMap();maybeOpenSharedDetail();highlightClosedDeal();}
 function bind(){const r=$('#app-root');
   if(!r.dataset.acctToggle){r.dataset.acctToggle='1';r.addEventListener('toggle',e=>{const el=e.target;if(el&&el.dataset&&el.dataset.acct)ADM_OPEN[el.dataset.acct]=el.open;},true);}
   r.onclick=async e=>{
    const tb=e.target.closest('[data-tabbar]');if(tb){e.preventDefault();return tabBarGo(tb.dataset.tabbar);}
+   const fm=e.target.closest('[data-favmode]');if(fm){e.preventDefault();FAVMODE=fm.dataset.favmode;try{localStorage.setItem('lof-fav-view',FAVMODE);}catch(_){}return render();}
+   if(e.target.closest('[data-mappopclose]')){e.preventDefault();return closeMapPop();}
    const mt=e.target.closest('[data-maptoggle]');
    if(mt){e.preventDefault();MAPOPEN=!MAPOPEN;const ws=r.querySelector('.workspace-split');if(ws)ws.classList.toggle('map-open',MAPOPEN);const es=S.lang==='es';mt.setAttribute('aria-expanded',MAPOPEN?'true':'false');mt.textContent='🗺️ '+(MAPOPEN?(es?'Ocultar mapa':'Hide map'):(es?'Ver mapa':'Show map'));
      if(MAPOPEN){if(!map)drawMap();else setTimeout(()=>map&&map.invalidateSize(),60);const mp=r.querySelector('.map-pane');if(mp)mp.scrollIntoView({behavior:'smooth',block:'start'});}return;}
