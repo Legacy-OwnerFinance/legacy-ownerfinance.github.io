@@ -756,6 +756,110 @@ function openContactSheet(id){
   bg.onclick=e=>{if(e.target===bg||e.target.closest('[data-sheetclose]'))bg.remove();};
   document.body.appendChild(bg);
 }
+// ---- Offer / appointment popups (UI only: same S.submitOffer / S.requestShowing calls and data shapes as before) ----
+const POP_TX={
+  en:{offer:'Make an Offer',appt:'Request an Appointment',offerSub:'Tell us what you would like to offer. Your agent and our team review every offer.',apptSub:'Pick a day and time to see the home. We will confirm by phone or message.',
+    allAsk:'Offer the full asking price, down and monthly',asking:'Asking',price:'Offer price',down:'Down payment',monthly:'Monthly payment',insp:'Do you plan to do inspections?',yes:'Yes',no:'No',closing:'Proposed closing date (optional)',notes:'Notes (optional)',
+    date:'Preferred date',time:'Preferred time',alt:'Other times that work (optional)',altNone:'Only that time',altAM:'Mornings (9 AM–12 PM)',altPM:'Afternoons (12–5 PM)',altEve:'Evenings (5–7 PM)',altAny:'Any time that day',phone:'Phone to confirm',contactAs:'We will contact',
+    send:'Send offer',sendAppt:'Request appointment',cancel:'Cancel',close:'Close',sentOffer:'Offer sent!',sentOfferB:'We received your offer. You can follow it under My Offers.',sentAppt:'Appointment requested!',sentApptB:'We will confirm the day and time with you. Questions? Call',
+    req:'Required',num:'Enter an amount greater than 0',downBig:'The down payment cannot be more than the offer price',pickInsp:'Choose Yes or No',past:'Pick today or a later date',closePast:'Pick a future date',
+    needAcct:'You need a free account',needOffer:'Create a free account or log in to make an offer on this home. It takes about a minute.',needAppt:'Create a free account or log in to request an appointment to see this home.',create:'Create account',login:'Log in',call:'Or call us'},
+  es:{offer:'Hacer una oferta',appt:'Solicitar una cita',offerSub:'Dinos cuánto quieres ofrecer. Tu agente y nuestro equipo revisan cada oferta.',apptSub:'Escoge el día y la hora para ver la casa. Te confirmamos por teléfono o mensaje.',
+    allAsk:'Ofrecer todo lo que pide (precio, enganche y mensualidad)',asking:'Pide',price:'Precio ofrecido',down:'Enganche',monthly:'Mensualidad',insp:'¿Piensas hacer inspecciones?',yes:'Sí',no:'No',closing:'Fecha de cierre propuesta (opcional)',notes:'Notas (opcional)',
+    date:'Fecha preferida',time:'Hora preferida',alt:'Otros horarios que te sirven (opcional)',altNone:'Solo a esa hora',altAM:'Mañanas (9 AM–12 PM)',altPM:'Tardes (12–5 PM)',altEve:'Noches (5–7 PM)',altAny:'Cualquier hora ese día',phone:'Teléfono para confirmar',contactAs:'Te contactaremos',
+    send:'Enviar oferta',sendAppt:'Solicitar cita',cancel:'Cancelar',close:'Cerrar',sentOffer:'¡Oferta enviada!',sentOfferB:'Recibimos tu oferta. Puedes seguirla en Mis Ofertas.',sentAppt:'¡Cita solicitada!',sentApptB:'Te confirmamos el día y la hora. ¿Preguntas? Llama al',
+    req:'Obligatorio',num:'Escribe una cantidad mayor a 0',downBig:'El enganche no puede ser mayor que el precio ofrecido',pickInsp:'Escoge Sí o No',past:'Escoge hoy o una fecha después',closePast:'Escoge una fecha futura',
+    needAcct:'Necesitas una cuenta gratis',needOffer:'Crea tu cuenta gratis o entra para hacer una oferta en esta casa. Toma como un minuto.',needAppt:'Crea tu cuenta gratis o entra para solicitar una cita y ver esta casa.',create:'Crear cuenta',login:'Entrar',call:'O llámanos'}};
+const px=k=>(POP_TX[S.lang==='es'?'es':'en'][k]||k);
+function actionRow(l){return `<div class="lof-act-row"><button type="button" class="btn-card primary" data-offerpop="${esc(l.id)}">💰 ${px('offer')}</button><button type="button" class="btn-card" data-showpop="${esc(l.id)}">📅 ${px('appt')}</button></div>`;}
+function chicagoToday(){try{const p=new Intl.DateTimeFormat('en-CA',{timeZone:'America/Chicago',year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(new Date());const g={};p.forEach(x=>g[x.type]=x.value);return `${g.year}-${g.month}-${g.day}`;}catch(e){return new Date().toISOString().slice(0,10);}}
+function closePop(){const o=document.querySelector('.lof-pop-bg');if(o)o.remove();document.removeEventListener('keydown',popKey);}
+function popKey(e){if(e.key==='Escape')closePop();}
+function openPop(kind,inner){
+  closePop();
+  const bg=document.createElement('div');bg.className='lof-pop-bg';bg.dataset.pop=kind;
+  bg.innerHTML=`<div class="lof-pop" role="dialog" aria-modal="true" aria-labelledby="lofPopT">${inner}</div>`;
+  bg.addEventListener('click',e=>{if(e.target===bg||e.target.closest('[data-popclose]')){e.preventDefault();e.stopPropagation();closePop();}});
+  document.addEventListener('keydown',popKey);document.body.appendChild(bg);
+  setTimeout(()=>{const f=bg.querySelector('input:not([type=checkbox]):not([readonly]),select,button.primary');if(f)try{f.focus({preventScroll:true});}catch(_){}},60);
+  return bg;
+}
+const popHead=(t,sub)=>`<div class="lof-pop-head"><h3 id="lofPopT">${t}</h3><button type="button" class="lof-pop-x" data-popclose="1" aria-label="${px('close')}">✕</button></div>${sub?`<p class="lof-pop-sub">${sub}</p>`:''}`;
+const fld=(name,label,input)=>`<label class="lof-fld" data-f="${name}"><span>${label}</span>${input}<small class="lof-err" aria-live="polite"></small></label>`;
+function popDone(bg,title,body){
+  bg.querySelector('.lof-pop').innerHTML=`${popHead('✅ '+title,'')}<p class="lof-pop-sub">${body}</p><div class="lof-pop-foot"><button type="button" class="btn-card primary" data-popdone="1">${px('close')}</button></div>`;
+  const b=bg.querySelector('[data-popdone]');b.onclick=()=>{closePop();const d=document.querySelector('.modal-backdrop');if(d)d.remove();render();};try{b.focus();}catch(_){}
+}
+function popErr(f,name,msg){const w=f.querySelector(`[data-f="${name}"]`);if(!w)return;w.classList.toggle('bad',!!msg);w.querySelector('.lof-err').textContent=msg||'';}
+function openAuthPop(kind){
+  if(S.user){const es=S.lang==='es';openPop('auth',`${popHead('⏳ '+(es?'Cuenta pendiente':'Account pending'),es?'Tu cuenta está pendiente de aprobación. Te avisaremos cuando esté aprobada.':'Your account is pending approval. We will let you know once it is approved.')}<div class="lof-pop-foot lof-pop-stack"><a class="btn-card primary lof-pop-call" href="tel:${CONTACT_TEL}">📞 ${px('call')} ${CONTACT_SHOW}</a><button type="button" class="btn-card" data-popclose="1">${px('close')}</button></div>`);return;}
+  const bg=openPop('auth',`${popHead('🔒 '+px('needAcct'),kind==='offer'?px('needOffer'):px('needAppt'))}
+    <div class="lof-pop-foot lof-pop-stack"><button type="button" class="btn-card primary" data-popreg="1">${px('create')}</button><button type="button" class="btn-card" data-poplogin="1">${px('login')}</button>
+    <a class="lof-pop-call" href="tel:${CONTACT_TEL}">📞 ${px('call')} ${CONTACT_SHOW}</a></div>`);
+  const to=(sel)=>{closePop();const d=document.querySelector('.modal-backdrop');if(d)d.remove();go('auth',sel);};
+  bg.querySelector('[data-popreg]').onclick=()=>to('#regF [name="name"]');
+  bg.querySelector('[data-poplogin]').onclick=()=>to('#loginF [name="email"]');
+}
+function openOfferPop(id){
+  const l=S.listing(id);if(!l)return;
+  if(limited())return openAuthPop('offer');
+  const d=v=>Math.round((+v||0)/100),hint=v=>v?`<em>${px('asking')}: ${S.money(v)}</em>`:'';
+  const money=(n,v)=>`<div class="lof-money"><b>$</b><input name="${n}" type="number" inputmode="decimal" min="0" step="1" autocomplete="off"></div>${hint(v)}`;
+  const bg=openPop('offer',`${popHead('💰 '+px('offer'),`<b>${title(l)}</b><br>${px('offerSub')}`)}
+   <form id="offerPopF" novalidate>
+    <label class="lof-check"><input type="checkbox" id="popAllAsk"> ${px('allAsk')}</label>
+    ${fld('offerPrice',px('price'),money('offerPrice',l.askingPrice))}
+    <div class="lof-two">${fld('downPayment',px('down'),money('downPayment',l.downPayment))}${fld('monthlyPayment',px('monthly'),money('monthlyPayment',l.monthlyPayment))}</div>
+    ${fld('inspections',px('insp'),`<div class="lof-seg"><label><input type="radio" name="inspections" value="YES"><span>${px('yes')}</span></label><label><input type="radio" name="inspections" value="NO"><span>${px('no')}</span></label></div>`)}
+    ${fld('closingDate',px('closing'),`<input name="closingDate" type="date" min="${chicagoToday()}">`)}
+    ${fld('notes',px('notes'),`<textarea name="notes" rows="3" maxlength="1000"></textarea>`)}
+    <div class="lof-pop-foot"><button type="button" class="btn-card" data-popclose="1">${px('cancel')}</button><button class="btn-card primary">${px('send')}</button></div>
+   </form>`);
+  const f=bg.querySelector('#offerPopF'),aa=bg.querySelector('#popAllAsk');
+  aa.onchange=()=>{const v={offerPrice:l.askingPrice,downPayment:l.downPayment,monthlyPayment:l.monthlyPayment};Object.keys(v).forEach(k=>{const i=f.elements[k];if(aa.checked){i.value=d(v[k]);i.readOnly=true;popErr(f,k,'');}else i.readOnly=false;});};
+  f.onsubmit=e=>{e.preventDefault();const v=fd(f);let ok=true;const bad=(k,m)=>{popErr(f,k,m);if(m&&ok){ok=false;const el=f.elements[k];try{(el.length?el[0]:el).focus();}catch(_){}}};
+    ['offerPrice','downPayment','monthlyPayment','inspections','closingDate'].forEach(k=>popErr(f,k,''));
+    if(!(+v.offerPrice>0))bad('offerPrice',v.offerPrice===''?px('req'):px('num'));
+    if(v.downPayment===''||!(+v.downPayment>=0))bad('downPayment',px('req'));else if(+v.offerPrice>0&&+v.downPayment>+v.offerPrice)bad('downPayment',px('downBig'));
+    if(v.monthlyPayment===''||!(+v.monthlyPayment>=0))bad('monthlyPayment',px('req'));
+    if(!v.inspections)bad('inspections',px('pickInsp'));
+    if(v.closingDate&&v.closingDate<chicagoToday())bad('closingDate',px('closePast'));
+    if(!ok)return;
+    const parts=[];if(aa.checked)parts.push(tr('allAskingNote'));if(String(v.notes||'').trim())parts.push(String(v.notes).trim());
+    if(v.closingDate)parts.push(`${S.lang==='es'?'Cierre propuesto':'Proposed closing'}: ${v.closingDate}`);
+    try{S.submitOffer({listingId:id,offerPrice:v.offerPrice,downPayment:v.downPayment,monthlyPayment:v.monthlyPayment,inspections:v.inspections,notes:parts.join(' - ')});}
+    catch(err){return bad('notes',err.message||String(err));}
+    popDone(bg,px('sentOffer'),px('sentOfferB'));};
+}
+function openApptPop(id){
+  const l=S.listing(id);if(!l)return;
+  if(limited())return openAuthPop('appt');
+  const slots=[];for(let h=9;h<=19;h++)for(const m of ['00','30']){if(h===19&&m==='30')continue;const hh=h%12||12;slots.push([`${String(h).padStart(2,'0')}:${m}`,`${hh}:${m} ${h>=12?'PM':'AM'}`]);}
+  const u=S.user||{},hasPhone=String(u.phone||'').trim();
+  const bg=openPop('appt',`${popHead('📅 '+px('appt'),`<b>${title(l)}</b><br>${px('apptSub')}`)}
+   <form id="apptPopF" novalidate>
+    <div class="lof-two">${fld('date',px('date'),`<input name="date" type="date" min="${chicagoToday()}">`)}${fld('time',px('time'),`<select name="time"><option value="">—</option>${slots.map(([v,t])=>`<option value="${v}">${t}</option>`).join('')}</select>`)}</div>
+    ${fld('alt',px('alt'),`<select name="alt"><option value="">${px('altNone')}</option><option value="altAM">${px('altAM')}</option><option value="altPM">${px('altPM')}</option><option value="altEve">${px('altEve')}</option><option value="altAny">${px('altAny')}</option></select>`)}
+    ${hasPhone?`<p class="lof-pop-me">👤 ${px('contactAs')}: <b>${esc(u.name||'')}</b> · ${esc(hasPhone)}</p>`:fld('phone',px('phone'),`<input name="phone" type="tel" inputmode="tel" autocomplete="tel" maxlength="20">`)}
+    ${fld('notes',px('notes'),`<textarea name="notes" rows="3" maxlength="1000"></textarea>`)}
+    <div class="lof-pop-foot"><button type="button" class="btn-card" data-popclose="1">${px('cancel')}</button><button class="btn-card primary">${px('sendAppt')}</button></div>
+   </form>`);
+  const f=bg.querySelector('#apptPopF');
+  f.onsubmit=e=>{e.preventDefault();const v=fd(f);let ok=true;const bad=(k,m)=>{popErr(f,k,m);if(m&&ok){ok=false;try{f.elements[k].focus();}catch(_){}}};
+    ['date','time','phone'].forEach(k=>popErr(f,k,''));
+    if(!v.date)bad('date',px('req'));else if(v.date<chicagoToday())bad('date',px('past'));
+    if(!v.time)bad('time',px('req'));
+    if(!hasPhone&&String(v.phone||'').replace(/\D/g,'').length<10)bad('phone',px('req'));
+    if(!ok)return;
+    const parts=[];if(String(v.notes||'').trim())parts.push(String(v.notes).trim());
+    if(v.alt)parts.push(`${S.lang==='es'?'También puede':'Also available'}: ${px(v.alt)}`);
+    if(!hasPhone&&v.phone)parts.push(`Tel: ${String(v.phone).trim()}`);
+    try{S.requestShowing({listingId:id,preferredAt:`${v.date}T${v.time}`,notes:parts.join(' - ')});}
+    catch(err){return bad('notes',err.message||String(err));}
+    popDone(bg,px('sentAppt'),`${px('sentApptB')} <a href="tel:${CONTACT_TEL}">${CONTACT_SHOW}</a>.`);};
+}
+document.addEventListener('click',e=>{const t=e.target.closest&&e.target.closest('[data-offerpop],[data-showpop]');if(!t)return;e.preventDefault();e.stopPropagation();
+  if(t.dataset.offerpop)return openOfferPop(t.dataset.offerpop);return openApptPop(t.dataset.showpop);});
 function galStep(g,dir){const t=g&&g.querySelector('.lof-gal-track');if(t)t.scrollBy({left:dir*t.clientWidth,behavior:'smooth'});}
 function galSync(t){const g=t.closest('.lof-gal');if(!g)return;const n=t.children.length,i=Math.min(n-1,Math.max(0,Math.round(t.scrollLeft/Math.max(1,t.clientWidth))));const b=g.querySelector('.lof-gal-count b');if(b)b.textContent=String(i+1);}
 function scrollToResults(){const el=document.querySelector('.cards-toolbar');if(el)el.scrollIntoView({behavior:'smooth',block:'start'});}
@@ -1360,6 +1464,7 @@ function guestShare(l){
     <article class="card share-card">
       ${galleryHtml(ph,alt)}
       <div class="share-head"><h2 class="share-addr">📍 ${alt}</h2></div>${factChips(l)}${hookHtml(l)}
+      ${actionRow(l)}
       <div class="share-cta">
         <h3>${tr('guestModalTitle')}</h3>
         <p>${tr('guestModalBody')}</p>
@@ -1470,6 +1575,7 @@ function openListing(id){const l=S.listing(id);if(!l)return;if(!(S.isInvestor()&
   if(limited()){
     const m=modal(`<h2>📍 ${partialAddr(l)}</h2>${factChips(l)}${hookHtml(l)}
       ${galleryHtml(ph,partialAddr(l))}
+      ${actionRow(l)}
       <div style="background:#f8fafc;border:2px solid #d4af37;border-radius:12px;padding:16px;margin-top:12px;text-align:center">
         <h3 style="margin:0 0 8px 0;color:#0f172a">${tr('guestModalTitle')}</h3>
         <p style="margin:0 0 14px 0;font-size:14px;color:#334155">${tr('guestModalBody')}</p>
@@ -1490,12 +1596,9 @@ function openListing(id){const l=S.listing(id);if(!l)return;if(!(S.isInvestor()&
    <p>${tr('price')} <b>${S.money(l.askingPrice)}</b> · ${tr('down')} <b>${S.money(l.downPayment)}</b> · ${tr('monthly')} <b>${S.money(l.monthlyPayment)}</b> · ${l.termYears||'—'} ${tr('yrs')}</p>
    <p style="font-size:14px;color:#475569">${l.beds??'—'} ${tr('bdShort')} · ${l.baths??'—'} ${tr('baShort')} · ${l.sqft?l.sqft+' '+tr('sqftUnit'):''}</p>
    <p>${esc(l.description)}</p>
-   <h3>${tr('makeOffer')}</h3><form id="offerF"><label style="display:flex;gap:8px;align-items:center;font-weight:600;margin-bottom:6px"><input type="checkbox" id="allAsk" style="width:auto"> ${tr('allAsking')}</label><input name="offerPrice" type="number" placeholder="${tr('offerPrice')}" required><input name="downPayment" type="number" placeholder="${tr('downPayment')}" required><input name="monthlyPayment" type="number" placeholder="${tr('monthlyPayment')}" required><label style="font-weight:600">${S.lang==='es'?'¿Piensas hacer inspecciones?':'Do you plan to do inspections?'}</label><select name="inspections" required><option value="">—</option><option value="YES">${S.lang==='es'?'Sí':'Yes'}</option><option value="NO">No</option></select><textarea name="notes" placeholder="${tr('notes')}"></textarea><button>${tr('submitOffer')}</button></form>
-   <h3>${tr('requestShowing')}</h3><form id="showF"><input name="preferredAt" type="datetime-local" required><input name="notes" placeholder="${tr('notes')}"><button>${tr('requestShowingBtn')}</button></form>
+   ${actionRow(l)}
    ${ag?`<h3>${tr('shareHouse')}</h3><form id="shareF"><textarea name="body" placeholder="${tr('msgToAgent')}">${tr('defaultShareMsg')}</textarea><button>${tr('shareHouse')}</button> <button type="button" id="reqAcc">${tr('requestAccess')}</button></form>`:''}${contactBar(l)}`);
-  const aa=m.querySelector('#allAsk');if(aa)aa.onchange=()=>{const f=m.querySelector('#offerF');const v={offerPrice:l.askingPrice,downPayment:l.downPayment,monthlyPayment:l.monthlyPayment};['offerPrice','downPayment','monthlyPayment'].forEach(k=>{const i=f.elements[k];if(aa.checked){i.value=Math.round((v[k]||0)/100);i.readOnly=true;}else{i.readOnly=false;}});const n=f.elements.notes;if(aa.checked&&!startsWithAsk(n.value))n.value=tr('allAskingNote')+(n.value?' - '+n.value:'');if(!aa.checked)n.value=stripAllAsk(n.value);};
   const on=(s,f)=>{const el=m.querySelector(s);if(el)el.onsubmit=wrap(()=>{f(fd(el));alert(tr('sentAlert'));m.remove();render();});};
-  on('#offerF',v=>S.submitOffer({...v,listingId:id}));on('#showF',v=>S.requestShowing({...v,listingId:id}));
   on('#shareF',v=>S.sendMessage({toUserId:ag.id,listingId:id,kind:'SHARE_HOUSE',body:v.body}));
   const ra=m.querySelector('#reqAcc');if(ra)ra.onclick=wrap(()=>{S.sendMessage({toUserId:ag.id,listingId:id,kind:'REQUEST_ACCESS',body:tr('requestAccess')});alert(tr('requestedAlert'));});}
 
