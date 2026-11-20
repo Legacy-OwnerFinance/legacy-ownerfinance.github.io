@@ -1,0 +1,9 @@
+{
+  "id": "thanksgiving-2026",
+  "start": "2026-11-20",
+  "end": "2026-11-30",
+  "simple": "auto",
+  "animated": "auto",
+  "loading": "auto",
+  "_help": "Look-and-feel only. simple = warm colors, greeting banner, and still leaf accents. animated = a few leaves falling across the top. loading = leaves drifting around the splash logo. Each value is independent: auto follows start/end (inclusive, US Central calendar dates), true forces that piece on, false forces it off. A visit can preview without editing this file: ?theme=thanksgiving-simple, ?theme=thanksgiving-animated, ?theme=thanksgiving-loading, ?theme=thanksgiving (all three), or ?theme=off. Add &splash=preview to hold the loading screen until it is tapped."
+}

@@ -1,0 +1,210 @@
+/* Thanksgiving look. Active only while html has season-simple / season-loading / when #season-fall exists. */
+
+html.season-simple {
+  --bg: #fbf6ef;
+  --surface: #ffffff;
+  --surface-2: #f8f1e6;
+  --accent: #9a3412;
+  --accent-hover: #7c2d12;
+  --accent-soft: rgba(154, 52, 18, 0.14);
+  --gold: #e0a23a;
+  --gold-soft: #f6d7a1;
+  --border: #eadccb;
+}
+
+html.season-simple body {
+  background: var(--bg);
+}
+
+html.season-simple .app-header {
+  background: #fffaf4;
+  border-bottom-color: #e4d2bc;
+  box-shadow: 0 2px 10px rgba(92, 40, 16, 0.06);
+}
+
+html.season-simple .guide-banner {
+  background-color: #f6efe4;
+  border-bottom-color: #e7d3b8;
+  color: #6b4a32;
+  background-image: var(--season-leaf-rust), var(--season-leaf-brown);
+  background-repeat: no-repeat;
+  background-position: left 12px center, right 14px center;
+  background-size: 15px 15px, 12px 12px;
+  padding-left: 34px;
+  padding-right: 34px;
+}
+
+html.season-simple .hero-banner {
+  box-shadow: inset 0 -3px 0 #c2410c;
+}
+
+html.season-simple .prop-card:hover {
+  box-shadow: 0 16px 32px -12px rgba(124, 45, 18, 0.28);
+}
+
+.season-banner {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 8px 4px 12px;
+  background: #7f1d1d;
+  color: #fff7ed;
+  font-family: var(--font-body, 'Plus Jakarta Sans', sans-serif);
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 1.3;
+  letter-spacing: 0.01em;
+}
+
+.season-banner-leaves {
+  width: 36px;
+  height: 28px;
+  flex: 0 0 auto;
+  background-image: var(--season-leaf-gold), var(--season-leaf-cream);
+  background-repeat: no-repeat;
+  background-position: left center, right 2px center;
+  background-size: 18px 18px, 13px 13px;
+  transform: rotate(-8deg);
+}
+
+.season-banner-text {
+  margin: 0;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.season-banner-x {
+  flex: 0 0 auto;
+  width: 44px;
+  height: 44px;
+  margin: 0;
+  padding: 0;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 247, 237, 0.55);
+  background: rgba(255, 247, 237, 0.1);
+  color: #fff7ed;
+  font-size: 22px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.season-banner-x:hover {
+  background: rgba(255, 247, 237, 0.22);
+}
+
+.season-banner-x:focus-visible {
+  outline: 3px solid #fde68a;
+  outline-offset: 2px;
+}
+
+@media (forced-colors: active) {
+  .season-banner {
+    background: Canvas;
+    color: CanvasText;
+    border-bottom: 1px solid CanvasText;
+  }
+  .season-banner-x {
+    border-color: CanvasText;
+    background: Canvas;
+    color: CanvasText;
+  }
+}
+
+html.season-loading #lof-splash::before {
+  content: "";
+  position: absolute;
+  width: min(86vw, 440px);
+  height: min(86vw, 440px);
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(234, 88, 12, 0.34), rgba(127, 29, 29, 0.08) 46%, transparent 70%);
+  pointer-events: none;
+}
+
+#lof-splash .season-splash-leaves {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+#lof-splash .season-splash-leaves i {
+  position: absolute;
+  left: var(--x);
+  top: var(--y);
+  width: var(--size);
+  height: var(--size);
+  background-position: center;
+  background-repeat: no-repeat;
+  background-size: contain;
+  transform: rotate(var(--rot));
+}
+
+#season-fall {
+  position: fixed;
+  left: 0;
+  right: 0;
+  height: min(28vh, 220px);
+  overflow: hidden;
+  pointer-events: none;
+  z-index: 2358;
+}
+
+#season-fall,
+#season-fall * {
+  pointer-events: none !important;
+}
+
+#season-fall i {
+  position: absolute;
+  top: 0;
+  left: var(--x);
+  width: var(--size);
+  height: var(--size);
+  opacity: 0;
+  background-position: center;
+  background-repeat: no-repeat;
+  background-size: contain;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  #lof-splash .season-splash-leaves i {
+    animation: season-drift var(--dur) ease-in-out var(--delay) infinite;
+  }
+  #season-fall i {
+    animation: season-fall var(--dur) linear var(--delay) infinite;
+  }
+}
+
+@keyframes season-drift {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0) rotate(var(--rot));
+  }
+  50% {
+    transform: translate3d(var(--dx), var(--dy), 0) rotate(calc(var(--rot) + 22deg));
+  }
+}
+
+@keyframes season-fall {
+  0% {
+    transform: translate3d(0, -28px, 0) rotate(var(--rot));
+    opacity: 0;
+  }
+  14% {
+    opacity: 0.82;
+  }
+  100% {
+    transform: translate3d(var(--dx), 230px, 0) rotate(calc(var(--rot) + 130deg));
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #season-fall {
+    display: none !important;
+  }
+  #lof-splash .season-splash-leaves i,
+  #season-fall i {
+    animation: none !important;
+  }
+}
