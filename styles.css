@@ -1681,6 +1681,37 @@ html.lof-map-on .app-footer, html.lof-map-on .guide-banner { display: none !impo
 .lof-mappop-acts .btn-card { min-height: 42px; flex: 1 1 auto; font-size: 14px; }
 .lof-mappop-x { position: absolute; top: 8px; right: 8px; width: 34px; height: 34px; border-radius: 999px; border: 1px solid var(--border); background: rgba(255, 255, 255, 0.96); color: #0f172a; font-size: 14px; cursor: pointer; padding: 0; z-index: 2; }
 .lof-mapview .leaflet-marker-icon.lof-pin-on { filter: hue-rotate(150deg) saturate(1.6) drop-shadow(0 0 4px rgba(0, 0, 0, 0.35)); z-index: 999 !important; }
+
+/* Map filters: panel lives inside .lof-mapview (already sized above the tab bar).
+   z-index stays within the map stacking context (20), so the menu drawer (2400+) stays on top.
+   No transform/will-change/filter/contain here — those trap fixed descendants (#32, #34). */
+.lof-mapview { overflow: hidden; }
+html.lof-map-on:has(.lof-mf-sheet) .lof-mapview { z-index: 2000; }
+.lof-map-top { flex-wrap: wrap; }
+.lof-map-filt { position: relative; min-height: 38px; display: inline-flex; align-items: center; gap: 6px; padding: 0 12px; border-radius: 999px; background: rgba(255, 255, 255, 0.96); color: #0f172a; font: inherit; font-size: 13px; font-weight: 700; box-shadow: 0 2px 10px rgba(15, 23, 42, 0.18); border: 1px solid var(--border); cursor: pointer; }
+.lof-map-filt[aria-expanded="true"] { background: var(--primary, #0f172a); color: #fff; border-color: var(--primary, #0f172a); }
+.lof-mf-badge { min-width: 18px; height: 18px; padding: 0 5px; border-radius: 999px; background: #dc2626; color: #fff; font-size: 11px; font-weight: 800; line-height: 18px; text-align: center; }
+.lof-map-filt[aria-expanded="true"] .lof-mf-badge { background: #fff; color: #b91c1c; }
+.lof-mf-bg { position: absolute; inset: 0; z-index: 1002; background: rgba(15, 23, 42, 0.4); }
+.lof-mf-sheet { position: absolute; left: 0; right: 0; bottom: 0; z-index: 1003; display: flex; flex-direction: column; background: var(--surface, #fff); color: var(--text); border-radius: 16px 16px 0 0; box-shadow: 0 -10px 32px rgba(15, 23, 42, 0.22); padding: 12px 14px 12px; max-height: min(85%, 620px); overflow-x: hidden; overflow-y: auto; }
+.lof-mf-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 10px; }
+.lof-mf-head b { font-family: var(--font-serif, inherit); font-size: 20px; color: var(--primary); }
+.lof-mf-x { width: 36px; height: 36px; border-radius: 999px; border: 1px solid var(--border); background: var(--surface); color: #0f172a; font-size: 16px; cursor: pointer; padding: 0; }
+.lof-mf-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 10px; overflow-x: hidden; overflow-y: auto; min-height: 0; }
+.lof-mf-field { display: flex; flex-direction: column; gap: 4px; font-size: 12px; font-weight: 700; color: var(--muted); min-width: 0; }
+.lof-mf-field select, .lof-mf-field input[type="range"] { font: inherit; font-weight: 600; color: var(--text); }
+.lof-mf-field select { min-height: 42px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); padding: 0 10px; width: 100%; }
+.lof-mf-span { grid-column: 1 / -1; }
+.lof-mf-field input[type="range"] { width: 100%; min-height: 32px; margin: 0; }
+.lof-mf-acts { display: flex; gap: 8px; margin-top: 12px; flex-shrink: 0; position: sticky; bottom: 0; background: var(--surface, #fff); padding-top: 8px; }
+.lof-mf-acts .btn-card { flex: 1 1 auto; min-height: 44px; }
+.lof-map-empty { position: absolute; left: 12px; right: 12px; top: 58px; z-index: 1001; display: flex; justify-content: center; pointer-events: none; }
+.lof-map-empty[hidden] { display: none !important; }
+.lof-map-empty-card { pointer-events: auto; max-width: 360px; width: 100%; background: rgba(255, 255, 255, 0.96); color: var(--text); border-radius: 14px; box-shadow: 0 10px 28px rgba(15, 23, 42, 0.2); border: 1px solid var(--border); padding: 14px 16px; text-align: center; }
+.lof-map-empty-card p { margin: 0 0 10px; font-size: 14px; font-weight: 600; }
+@media (min-width: 641px) {
+  .lof-mf-sheet { left: auto; right: 12px; top: 56px; bottom: auto; width: min(400px, calc(100% - 24px)); border-radius: 16px; max-height: calc(100% - 68px); box-shadow: 0 14px 36px rgba(15, 23, 42, 0.28); }
+}
 @media (max-width: 640px) {
   .lof-mappop { left: 8px; right: 8px; bottom: 10px; }
   .lof-mappop-img { flex-basis: 112px; width: 112px; }
