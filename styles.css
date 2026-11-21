@@ -1717,3 +1717,34 @@ html.lof-map-on .app-footer, html.lof-map-on .guide-banner { display: none !impo
 
 /* Menu open: lift the header's stacking context so the drawer and its backdrop cover the tab bar (header z 2360 < tab bar 2390) */
 .app-header:has(.nav-drawer.open) { z-index: 2401; }
+
+/* Mapa + open menu: a sticky header can become the containing block for the fixed
+   drawer (Safari/iOS; same class of bug as #32 with transform). Leaflet panes then
+   paint over the part of the drawer that extends below the header. Take the header
+   out of sticky and size the drawer and backdrop to the viewport. */
+html.lof-map-on .app-header:has(.nav-drawer.open) {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  width: 100%;
+  z-index: 2401;
+  transform: none !important;
+  filter: none !important;
+  will-change: auto !important;
+  contain: none !important;
+  overflow: visible;
+}
+html.lof-map-on .app-header:has(.nav-drawer.open) .nav-drawer,
+html.lof-map-on .app-header:has(.nav-drawer.open) .nav-drawer-bg {
+  top: 0;
+  bottom: auto;
+  height: 100dvh;
+  max-height: none;
+}
+html.lof-map-on .app-header:has(.nav-drawer.open) .nav-drawer-bg {
+  left: 0;
+  right: 0;
+  width: 100%;
+}
+html.lof-map-on:has(.nav-drawer.open) .lof-mapview { z-index: 1; }
