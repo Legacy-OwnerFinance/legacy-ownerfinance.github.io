@@ -56,7 +56,7 @@ const initTab=()=>{
   return 'inventory';
 };
 let PIDX={},CMP=new Set(),CHIP='AVAILABLE',MARK={};
-let tab=initTab(),F={q:'',area:'',beds:'',baths:'',maxDown:'',maxMonthly:'',maxPrice:'',status:'',sort:'newest'},map=null,CAL={mode:'week',anchor:null},sharedDetailFor='',alertOpen=false;
+let tab=initTab(),F={q:'',city:'',area:'',beds:'',baths:'',maxDown:'',maxMonthly:'',maxPrice:'',status:'',sort:'newest'},map=null,CAL={mode:'week',anchor:null},sharedDetailFor='',alertOpen=false;
 let msgOpen=false,msgPeer=null,msgNew=false,msgStickBottom=false,msgScroll=null;
 
 const L10N={
@@ -722,7 +722,7 @@ const narrowMQ=window.matchMedia?matchMedia('(max-width: 960px)'):{matches:false
 const phoneMQ=window.matchMedia?matchMedia('(max-width: 640px)'):{matches:false};
 let MAPOPEN=false;
 // Full-screen Mapa view + Favoritas view (UI only): remembered map position, open pin popup and favorites layout.
-let MAPPOP='',MAPVIEW=null,MAPRO=null;
+let MAPPOP='',MAPVIEW=null,MAPRO=null,MAPFILT=false;
 let FAVMODE=(()=>{try{const v=localStorage.getItem('lof-fav-view');return ['list','g2','g1'].indexOf(v)>=0?v:'g2';}catch(e){return 'g2';}})();
 // Smaller Google photo size for card thumbnails on phones (detail gallery keeps the full size).
 const cardImg=u=>{const v=String(u||'');if(!phoneMQ.matches||!/googleusercontent\.com\/d\//.test(v))return v;return v.replace(/=w\d+(-h\d+)?$/,'=w800');};
@@ -1369,13 +1369,15 @@ function guides(){
 function filtered(){let L=S.data.listings.filter(l=>{const q=F.q.toLowerCase();
   const searchable=!limited()?(l.address+' '+(l.publicTitle||'')+' '+l.city+' '+l.zip):(partialAddr(l)+' '+l.city);
   if(q&&!searchable.toLowerCase().includes(q))return false;
+  if(F.city&&String(l.city||'')!==F.city)return false;
   if(F.area&&!(l.areas||[]).includes(F.area))return false;
   if(CHIP==='AVAILABLE'&&l.status!=='AVAILABLE')return false;if(CHIP==='COMING_SOON'&&l.status!=='COMING_SOON')return false;
+  if(F.beds&&(l.beds||0)<+F.beds)return false;if(F.baths&&(l.baths||0)<+F.baths)return false;
+  if(F.status&&l.status!==F.status)return false;
   if(!limited()){
     if(CHIP==='LOW_DOWN'&&(l.downPayment||1e9)>1000000)return false;if(CHIP==='LOW_MONTHLY'&&(l.monthlyPayment||1e9)>150000)return false;if(CHIP==='BEDS_3'&&(l.beds||0)<3)return false;
-    if(F.beds&&(l.beds||0)<+F.beds)return false;if(F.baths&&(l.baths||0)<+F.baths)return false;
     if(F.maxDown&&l.downPayment>F.maxDown*100)return false;if(F.maxMonthly&&l.monthlyPayment>F.maxMonthly*100)return false;
-    if(F.maxPrice&&l.askingPrice>F.maxPrice*100)return false;if(F.status&&l.status!==F.status)return false;
+    if(F.maxPrice&&l.askingPrice>F.maxPrice*100)return false;
   }
   return true;});
   const PRIV=['priceAsc','priceDesc','downAsc','monthlyAsc','bedsDesc'];let so=F.sort||'newest';if(limited()&&PRIV.includes(so))so='newest';
@@ -1589,11 +1591,92 @@ function favoritesView(){
 }
 
 /* ---- Mapa view: full-screen map only; tapping a pin opens a small card over the map (UI only) ---- */
+function activeFilterCount(){
+  let n=0;
+  if(F.q)n++;if(F.city)n++;if(F.area)n++;if(F.beds)n++;if(F.baths)n++;if(F.status)n++;
+  if(!limited()){if(F.maxDown)n++;if(F.maxMonthly)n++;if(F.maxPrice)n++;if(CHIP==='LOW_DOWN'||CHIP==='LOW_MONTHLY'||CHIP==='BEDS_3')n++;}
+  if(!F.status&&CHIP&&CHIP!=='AVAILABLE'&&CHIP!=='LOW_DOWN'&&CHIP!=='LOW_MONTHLY'&&CHIP!=='BEDS_3')n++;
+  return n;
+}
+function listingCities(){const s=new Set();(S.data.listings||[]).forEach(l=>{const c=String(l.city||'').trim();if(c)s.add(c);});return[...s].sort((a,b)=>a.localeCompare(b,'es'));}
+function listingAreas(){
+  const known=['N','S','E','W'],have=new Set();
+  (S.data.listings||[]).forEach(l=>(l.areas||[]).forEach(a=>{if(a)have.add(String(a));}));
+  const fromData=known.filter(a=>have.has(a)).concat([...have].filter(a=>!known.includes(a)).sort((a,b)=>a.localeCompare(b,'es')));
+  return fromData.length?fromData:known;
+}
+function areaLabel(a){return tr('area.'+String(a).toLowerCase())!==('area.'+String(a).toLowerCase())?tr('area.'+String(a).toLowerCase()):a;}
+function mapFiltStatusValue(){if(F.status)return F.status;if(CHIP==='AVAILABLE'||CHIP==='COMING_SOON')return CHIP;return '';}
+function clearMapFilters(){F.q='';F.city='';F.area='';F.beds='';F.baths='';F.maxDown='';F.maxMonthly='';F.maxPrice='';F.status='';CHIP='AVAILABLE';}
+function applyMapFiltForm(form){
+  if(!form)return;
+  const v=fd(form);
+  if('maxDownR' in v){v.maxDown=+v.maxDownR>=40000?'':v.maxDownR;delete v.maxDownR;}
+  if('maxMonthlyR' in v){v.maxMonthly=+v.maxMonthlyR>=3000?'':v.maxMonthlyR;delete v.maxMonthlyR;}
+  if('maxPriceR' in v){v.maxPrice=+v.maxPriceR>=500000?'':v.maxPriceR;delete v.maxPriceR;}
+  if('status' in v){
+    if(v.status==='AVAILABLE'){F.status='';CHIP='AVAILABLE';}
+    else if(v.status==='COMING_SOON'){F.status='';CHIP='COMING_SOON';}
+    else if(v.status){F.status=v.status;CHIP='ALL';}
+    else{F.status='';CHIP='ALL';}
+  }
+  ['city','area','beds','baths','maxDown','maxMonthly','maxPrice'].forEach(k=>{if(k in v)F[k]=v[k];});
+}
+function updateMapChrome(){
+  const n=filtered().length,nFilt=activeFilterCount(),es=S.lang==='es';
+  const count=document.querySelector('.lof-map-count');if(count)count.textContent='🏠 '+n+' '+tr('homesCount');
+  const btn=document.querySelector('.lof-map-filt');
+  if(btn){let b=btn.querySelector('.lof-mf-badge');if(nFilt){if(!b){b=document.createElement('span');b.className='lof-mf-badge';btn.appendChild(b);}b.textContent=nFilt>9?'9+':String(nFilt);}else if(b)b.remove();}
+  const empty=document.querySelector('.lof-map-empty');if(empty)empty.hidden=n>0;
+}
+function refreshFullMapPins(fit){
+  closeMapPop();
+  if(!map||tab!=='map'){updateMapChrome();return;}
+  const prev=window.__lofFullMarks||{};
+  Object.values(prev).forEach(m=>{try{map.removeLayer(m);}catch(_){}});
+  const pts=[],marks={};
+  filtered().forEach(l=>{const a=l.approxLocation||{},ex=!limited()&&l.latitude!=null&&l.longitude!=null;const lat=ex?l.latitude:a.lat,lng=ex?l.longitude:a.lng;if(lat==null||lng==null)return;
+    pts.push([lat,lng]);const m=L.marker([lat,lng],{keyboard:true}).addTo(map);marks[l.id]=m;m.on('click',()=>showMapPop(l.id));});
+  window.__lofFullMarks=marks;
+  if(fit&&pts.length)map.fitBounds(pts,{padding:[40,40],animate:false});
+  if(typeof keepMapView==='function')keepMapView();
+  else if(map){const c=map.getCenter();MAPVIEW={c:[c.lat,c.lng],z:map.getZoom()};}
+  updateMapChrome();
+}
+function mapFiltPanel(){
+  const es=S.lang==='es',sel=(n,opts,cur,lab)=>`<label class="lof-mf-field"><span>${lab}</span><select name="${n}">${opts.map(o=>`<option value="${esc(o[0])}" ${String(cur)===String(o[0])?'selected':''}>${esc(o[1])}</option>`).join('')}</select></label>`;
+  const any=tr('filter.any');
+  const cities=[['',tr('filter.allCities')]].concat(listingCities().map(c=>[c,c]));
+  const areas=[['',tr('filter.allAreas')]].concat(listingAreas().map(a=>[a,areaLabel(a)]));
+  const beds=[['',any]].concat([1,2,3,4,5].map(n=>[n,n+tr('bedsPlus')]));
+  const baths=[['',any]].concat([[1,'1'+tr('bathsPlus')],[1.5,'1.5'+tr('bathsPlus')],[2,'2'+tr('bathsPlus')],[3,'3'+tr('bathsPlus')]]);
+  const guest=limited();
+  const statuses=[['',tr('filter.allStatuses')]].concat((guest?['AVAILABLE','COMING_SOON']:S.STATUSES).map(s=>[s,S.statusText(s)]));
+  let money='';
+  if(!guest){
+    const pv=F.maxPrice||500000,dv=F.maxDown||40000,mv=F.maxMonthly||3000;
+    const lab=(kind,v,cap,esAny=es?'Cualquiera':'Any')=>`${kind}: <b>${+v>=cap?esAny:'$'+(+v).toLocaleString()}</b>`;
+    money=`<label class="lof-mf-field lof-mf-span">${lab(tr('maxPrice').replace(' $',''),pv,500000)}<input type="range" name="maxPriceR" min="25000" max="500000" step="5000" value="${pv}"></label>
+      <label class="lof-mf-field lof-mf-span">${lab(tr('maxDown').replace(' $',''),dv,40000)}<input type="range" name="maxDownR" min="3000" max="40000" step="500" value="${dv}"></label>
+      <label class="lof-mf-field lof-mf-span">${lab(tr('maxMonthly').replace(' $',''),mv,3000)}<input type="range" name="maxMonthlyR" min="800" max="3000" step="50" value="${mv}"></label>`;
+  }
+  return `<div class="lof-mf-bg" data-mapfiltclose="1"></div>
+    <form id="mapFilt" class="lof-mf-sheet" onsubmit="return false" aria-label="${esc(tr('filter.filters'))}">
+      <div class="lof-mf-head"><b>${tr('filter.filters')}</b><button type="button" class="lof-mf-x" data-mapfiltclose="1" aria-label="${esc(tr('menu.close'))}">✕</button></div>
+      <div class="lof-mf-grid">${sel('city',cities,F.city,tr('city'))}${sel('area',areas,F.area,tr('area'))}${sel('beds',beds,F.beds,tr('beds'))}${sel('baths',baths,F.baths,tr('baths'))}${sel('status',statuses,mapFiltStatusValue(),tr('status'))}${money}</div>
+      <div class="lof-mf-acts"><button type="button" class="btn-card" data-mapfiltclear="1">${tr('filter.clear')}</button><button type="submit" class="btn-card primary" data-mapfiltapply="1">${tr('filter.apply')}</button></div>
+    </form>`;
+}
+function mapEmptyNote(){
+  const es=S.lang==='es';
+  return `<div class="lof-map-empty" ${filtered().length?'hidden':''}><div class="lof-map-empty-card"><p>${tr('filter.noMatch')}</p><button type="button" class="btn-card primary" data-mapfiltclear="1">${tr('filter.clear')}</button></div></div>`;
+}
 function mapView(){
-  const es=S.lang==='es',n=filtered().length;
+  const es=S.lang==='es',n=filtered().length,nFilt=activeFilterCount();
+  const badge=nFilt?`<span class="lof-mf-badge">${nFilt>9?'9+':nFilt}</span>`:'';
   return `<section class="lof-mapview" aria-label="${es?'Mapa de casas':'Homes map'}"><div id="full-map"></div>
-   <div class="lof-map-top"><span class="lof-map-count">🏠 ${n} ${tr('homesCount')}</span><button type="button" class="lof-map-list" data-tabbar="home">☰ ${es?'Ver lista':'List view'}</button></div>
-   <div class="lof-mappop" aria-live="polite"></div></section>`;
+   <div class="lof-map-top"><span class="lof-map-count">🏠 ${n} ${tr('homesCount')}</span><button type="button" class="lof-map-filt" data-mapfilt="1" aria-expanded="${MAPFILT?'true':'false'}" aria-controls="mapFilt">${tr('filter.filters')}${badge}</button><button type="button" class="lof-map-list" data-tabbar="home">☰ ${es?'Ver lista':'List view'}</button></div>
+   <div class="lof-mappop" aria-live="polite"></div>${mapEmptyNote()}${MAPFILT?mapFiltPanel():''}</section>`;
 }
 function mapPopHtml(l){
   const es=S.lang==='es',lim=limited(),ph=(l.photoUrls&&l.photoUrls.length)?l.photoUrls[0]:(l.photoUrl||'listing-placeholder.svg');
@@ -1635,7 +1718,7 @@ function drawFullMap(){
 (function(){
   if(window.__lofMapViewInit)return;window.__lofMapViewInit=true;
   window.addEventListener('resize',()=>{if(tab==='map')sizeMapView();});
-  document.addEventListener('keydown',e=>{if(e.key==='Escape'&&tab==='map'&&MAPPOP&&!document.querySelector('.modal-backdrop,.lof-pop-bg,.lof-sheet-bg'))closeMapPop();});
+  document.addEventListener('keydown',e=>{if(e.key!=='Escape'||tab!=='map')return;if(MAPFILT){MAPFILT=false;render();return;}if(MAPPOP&&!document.querySelector('.modal-backdrop,.lof-pop-bg,.lof-sheet-bg'))closeMapPop();});
   document.addEventListener('keydown',e=>{const t=e.target;if((e.key==='Enter'||e.key===' ')&&t&&t.classList&&t.classList.contains('fav-info')){e.preventDefault();t.click();}});
 })();
 
@@ -2099,6 +2182,10 @@ function bind(){const r=$('#app-root');
    const tb=e.target.closest('[data-tabbar]');if(tb){e.preventDefault();return tabBarGo(tb.dataset.tabbar);}
    const fm=e.target.closest('[data-favmode]');if(fm){e.preventDefault();FAVMODE=fm.dataset.favmode;try{localStorage.setItem('lof-fav-view',FAVMODE);}catch(_){}return render();}
    if(e.target.closest('[data-mappopclose]')){e.preventDefault();return closeMapPop();}
+   if(e.target.closest('[data-mapfiltapply]')){e.preventDefault();const mf=$('#mapFilt');if(mf)applyMapFiltForm(mf);MAPFILT=false;if(tab==='map'&&map)refreshFullMapPins(true);return render();}
+   if(e.target.closest('[data-mapfiltclear]')){e.preventDefault();closeMapPop();clearMapFilters();if(tab==='map'&&map){refreshFullMapPins(false);if(MAPFILT)return render();return;}return render();}
+   if(e.target.closest('[data-mapfiltclose]')){e.preventDefault();MAPFILT=false;return render();}
+   if(e.target.closest('[data-mapfilt]')){e.preventDefault();MAPFILT=!MAPFILT;if(MAPFILT)closeMapPop();return render();}
    const mt=e.target.closest('[data-maptoggle]');
    if(mt){e.preventDefault();MAPOPEN=!MAPOPEN;const ws=r.querySelector('.workspace-split');if(ws)ws.classList.toggle('map-open',MAPOPEN);const es=S.lang==='es';mt.setAttribute('aria-expanded',MAPOPEN?'true':'false');mt.textContent='🗺️ '+(MAPOPEN?(es?'Ocultar mapa':'Hide map'):(es?'Ver mapa':'Show map'));
      if(MAPOPEN){if(!map)drawMap();else setTimeout(()=>map&&map.invalidateSize(),60);const mp=r.querySelector('.map-pane');if(mp)mp.scrollIntoView({behavior:'smooth',block:'start'});}return;}
@@ -2192,6 +2279,7 @@ function bind(){const r=$('#app-root');
      if(d.client){const c=S.data.users.find(u=>u.id===d.client);const of=S.data.offers.filter(o=>o.userId===c.id);modal(`<h2>${esc(c.name)}</h2><p>${esc(c.email)} · ${esc(c.phone)}</p><h3>🏡 ${st('clientCrit')}</h3>${critSummary(critOf(c))}<h3>${tr('favorites')}</h3><ul>${S.data.favorites.filter(f=>f.userId===c.id).map(f=>`<li>${esc((S.listing(f.listingId)||{}).address)}</li>`).join('')}</ul><h3>${tr('myOffers')}</h3><ul>${of.map(o=>`<li>${esc((S.listing(o.listingId)||{}).address)} ${S.money(o.offerPrice)} ${offerBadge(o.status)}</li>`).join('')}</ul>`);}
    }catch(err){alert(err.message);}
   };
+  const mf=$('#mapFilt');if(mf){mf.oninput=mf.onchange=e=>{if(e.type==='input'&&e.target.type==='range'){const b=e.target.parentNode.querySelector('b');if(b){const cap=+e.target.max;const v=+e.target.value;b.textContent=v>=cap?(S.lang==='es'?'Cualquiera':'Any'):'$'+v.toLocaleString();}applyMapFiltForm(mf);refreshFullMapPins(false);return;}applyMapFiltForm(mf);refreshFullMapPins(false);};mf.onsubmit=e=>{e.preventDefault();applyMapFiltForm(mf);MAPFILT=false;refreshFullMapPins(true);render();};}
   const f=$('#filters');if(f){f.oninput=f.onchange=e=>{const v=fd(f);if('maxDownR' in v){v.maxDown=+v.maxDownR>=40000?'':v.maxDownR;delete v.maxDownR;}if('maxMonthlyR' in v){v.maxMonthly=+v.maxMonthlyR>=3000?'':v.maxMonthlyR;delete v.maxMonthlyR;}
     if(e.type==='input'&&e.target.type==='range'){const b=e.target.parentNode.querySelector('b');if(b)b.textContent='$'+(+e.target.value).toLocaleString();return;}
     F=Object.assign(F,v);if(e.target.name==='status'&&v.status)CHIP='ALL';const pos=(e.type==='input'&&e.target.name==='q')?e.target.selectionStart:null;render();if(pos!=null){const q=$('#filters [name=q]');q.focus();q.setSelectionRange(pos,pos);}};f.onsubmit=e=>e.preventDefault();
