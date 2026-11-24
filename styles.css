@@ -1829,3 +1829,13 @@ html.lof-map-on:has(.nav-drawer.open) .lof-mapview { z-index: 1; }
 .tour-sell{border-top:1px solid #e2e8f0;padding-top:10px;margin-top:10px}
 .tour-askw textarea{width:100%}
 .tour-offer h4{margin:10px 0 4px}
+.tour-step-body{margin-top:6px;display:grid;gap:6px}
+.tour-check-i>div{width:100%}
+.tour-inline{display:flex;flex-wrap:wrap;gap:6px;align-items:flex-end}
+.tour-inline label{flex:1 1 120px}
+.tour-approvals{display:flex;gap:10px;flex-wrap:wrap;font-size:14px}
+.tour-approvals .ok{color:#15803d;font-weight:600}
+.tour-check-i.s-locked{opacity:.75}
+.tour-check-i.s-agreed,.tour-check-i.s-accepted,.tour-check-i.s-waived{background:#f0fdf4;border-color:#bbf7d0}
+.tour-check-i.s-review,.tour-check-i.s-proposed,.tour-check-i.s-scheduled,.tour-check-i.s-countered{background:#eff6ff;border-color:#bfdbfe}
+.tour-check-i.s-rejected{background:#fef2f2;border-color:#fecaca}

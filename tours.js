@@ -11,7 +11,9 @@ const MAX=5,MAX_DIRECT=30;
 const L=(es,en)=>S.lang==='es'?es:en;
 const esc=v=>String(v==null?'':v).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const UI=()=>window.LegacyUI;
-const rerender=()=>{const u=UI();if(u)u.render();};
+let scrolledTo='';
+const focusOffer=id=>(location.hash||'').includes('offer='+encodeURIComponent(id))?' tour-focus':'';
+const rerender=()=>{const u=UI();if(u)u.render();const m=/offer=([^&]+)/.exec(location.hash);const id=m&&decodeURIComponent(m[1]);if(id){setTimeout(()=>{const el=document.getElementById('offer-'+id);if(el){el.classList.add('tour-focus');if(scrolledTo!==id){scrolledTo=id;el.scrollIntoView({behavior:'smooth',block:'start'});}}},150);}};
 const DEMO=(()=>{try{return new URLSearchParams(location.search).get('demo')==='tours';}catch(e){return false;}})();
 const isClient=()=>!!(S.user&&S.user.role==='BUYER'&&!S.isAdmin());
 const isAgent=()=>!!(S.user&&S.isAgent&&S.isAgent()&&!S.isAdmin());
@@ -220,14 +222,66 @@ function openPropose(t){
 }
 /* ---------- offers: confirmation card + next-steps checklist ---------- */
 const STEP_LABEL={DOCS:['Entregar documentación','Deliver the documents'],DEPOSIT:['Depósito de garantía $1,000.00','$1,000.00 earnest deposit'],INSPECTIONS:['Coordinar inspecciones (si se elige)','Schedule inspections (if chosen)'],TRR:['Negociar TRR (opcional)','Negotiate TRR (optional)'],CLOSING:['Coordinar cierre','Coordinate closing'],OPTION_FEE:['Depositar option fee / down payment','Pay the option fee / down payment'],PAID:['Get paid','Get paid']};
-const STATUS_LABEL={PENDING:['Pendiente','Pending','⏳'],SUBMITTED:['Enviado — esperando al vendedor','Sent — waiting for the seller','📤'],APPROVED:['Aprobado por el vendedor','Approved by the seller','✅'],LATE:['Vencido','Overdue','⚠️'],INVALIDATED:['Invalidada','Invalidated','❌'],DONE:['Hecho','Done','✅'],NA:['No aplica','Not needed','➖']};
+const STATUS_LABEL={PENDING:['Pendiente','Pending','⏳'],SUBMITTED:['Enviado — esperando al vendedor','Sent — waiting for the seller','📤'],APPROVED:['Aprobado por el vendedor','Approved by the seller','✅'],LATE:['Vencido','Overdue','⚠️'],INVALIDATED:['Invalidada','Invalidated','❌'],DONE:['Hecho','Done','✅'],NA:['No aplica','Not needed','➖'],
+  LOCKED:['Todavía no','Not yet','🔒'],TO_SCHEDULE:['Por agendar','To schedule','📅'],SCHEDULED:['Agendada','Scheduled','📅'],AVAILABLE:['Disponible','Available','🛠️'],REVIEW:['TRR en revisión','TRR in review','🔎'],ACCEPTED:['Aceptado por el vendedor','Accepted by the seller','✅'],REJECTED:['Rechazado por el vendedor','Rejected by the seller','❌'],COUNTERED:['Contraoferta del vendedor','Seller counteroffer','↔️'],WAIVED:['Sin TRR','No TRR','➖'],PROPOSED:['Fecha propuesta — esperando aprobaciones','Date proposed — waiting for approvals','🗓️'],AGREED:['Fecha confirmada por todos','Date confirmed by everyone','✅']};
+const CLOSING_REASONS=[['SCHEDULE','No puedo a esa hora / conflicto de horario','I can’t make that time / schedule conflict'],['FUNDS','Necesito más tiempo para los fondos','I need more time for the funds'],['DOCS','Faltan documentos o firmas','Documents or signatures are missing'],['TITLE','La título / escrow necesita otra fecha','Title / escrow needs another date'],['TRAVEL','Viaje o emergencia personal','Travel or personal emergency'],['OTHER','Otra razón','Other reason']];
+const ROLE_LBL={CLIENT:['Cliente','Client'],AGENT:['Agente','Agent'],SELLER:['Vendedor','Seller']};
+function fileBtn(label,p,docType){return `<label class="btn-card">${label}<input type="file" hidden accept="image/*,application/pdf" data-tupt="${docType}" data-tlid="${esc(p.listingId)}" data-toffer="${esc(p.offerId)}"></label>`;}
+function dtForm(op,p,label,extra){return `<form class="tour-form tour-inline" data-tflowf="${op}" data-toffer="${esc(p.offerId)}"><label>${L('Fecha','Date')}<input type="date" name="date" min="${chicagoDay(new Date())}" required></label><label>${L('Hora','Time')}<select name="time">${timeOptions('10:00')}</select></label>${extra||''}<button type="submit" class="btn-card primary">${label}</button></form>`;}
+function stepBody(p,c,role){
+  const agent=role==='AGENT'||role==='ADMIN',seller=role==='SELLER'||role==='ADMIN',buyer=role==='AGENT'||role==='CLIENT',me=role==='ADMIN'?'SELLER':role;
+  const fb=(op,label,cls)=>`<button type="button" class="btn-card${cls?' '+cls:''}" data-tflow="${op}" data-toffer="${esc(p.offerId)}">${label}</button>`;
+  if(c.key==='INSPECTIONS'){
+    if(c.status==='NA')return agent?`<div class="tour-btns">${fb('inspection_request','🔍 '+L('Pedir inspección','Request inspection'))}</div>`:'';
+    if(c.status==='LOCKED')return `<small>${L('Se abre cuando el vendedor apruebe la oferta, el depósito y los documentos.','Opens once the seller approves the offer, the deposit and the documents.')}</small>`;
+    let h=p.inspectionAt?`<small>📅 ${esc(when(p.inspectionAt))}</small>`:'';
+    if(c.status!=='DONE'&&agent)h+=dtForm('inspection_schedule',p,p.inspectionAt?L('Cambiar','Change'):L('Agendar inspección','Schedule inspection'));
+    if(c.status==='SCHEDULED'&&buyer)h+=`<div class="tour-btns">${fileBtn('📄 '+L('Subir reporte','Upload report'),p,'TOUR_INSPECTION_REPORT')}</div>`;
+    if(c.status==='DONE')h+=`<small>📄 ${L('Reporte subido','Report uploaded')}</small>`;
+    return h;
+  }
+  if(c.key==='TRR'){
+    if(c.status==='NA')return '';
+    if(c.status==='LOCKED')return agent?`<div class="tour-btns"><button type="button" class="btn-card" disabled>🛠️ ${L('Negociar TRR','Negotiate TRR')}</button><small>${L('Se activa al subir el reporte de inspección.','Unlocks when the inspection report is uploaded.')}</small></div>`:'';
+    let h=p.trr.text?`<blockquote class="tour-ask-msg">${esc(p.trr.text)}</blockquote>`:'';
+    if(p.trr.sellerNote)h+=`<small>${L('Vendedor','Seller')}: ${esc(p.trr.sellerNote)}</small>`;
+    if(c.status==='ACCEPTED'&&p.trr.counterText)h+=`<p><b>${L('Acordado (contraoferta del vendedor)','Agreed (seller counteroffer)')}:</b> ${esc(p.trr.counterText)}</p>`;
+    if(c.status==='COUNTERED')h+=`<p><b>${L('Contraoferta del vendedor','Seller counteroffer')}:</b> ${esc(p.trr.counterText)}</p>`;
+    if(agent&&['AVAILABLE','REJECTED','COUNTERED'].includes(c.status))h+=`<div class="tour-btns">${c.status==='COUNTERED'?fb('trr_accept_counter','✅ '+L('Aceptar contraoferta','Accept counteroffer'),'primary'):''}<button type="button" class="btn-card${c.status==='COUNTERED'?'':' primary'}" data-ttrr="${esc(p.offerId)}">🛠️ ${L('Negociar TRR','Negotiate TRR')}</button>${fb('trr_waive',L('No negociar TRR','Don’t negotiate TRR'))}</div>`;
+    if(seller&&c.status==='REVIEW')h+=`${p.inspectionReportDocId?`<small>📄 ${L('Reporte de inspección en los documentos de la oferta.','Inspection report is in the offer documents.')}</small>`:''}<div class="tour-btns"><button type="button" class="btn-card primary" data-ttrrd="${esc(p.offerId)}" data-tdv="accept">✅ ${L('Aceptar','Accept')}</button><button type="button" class="btn-card" data-ttrrd="${esc(p.offerId)}" data-tdv="counter">↔️ ${L('Contraofertar','Counter')}</button><button type="button" class="btn-card btn-del" data-ttrrd="${esc(p.offerId)}" data-tdv="reject">✕ ${L('Rechazar','Reject')}</button></div>`;
+    return h;
+  }
+  if(c.key==='CLOSING'){
+    if(c.status==='LOCKED')return `<small>${L('Se abre con las 3 aprobaciones y, si hubo inspección, con el TRR aceptado o sin TRR.','Opens after the 3 approvals and, if there was an inspection, once the TRR is accepted or skipped.')}</small>`;
+    if(c.status==='TO_SCHEDULE')return role==='CLIENT'?dtForm('closing_propose',p,L('Proponer fecha de cierre','Propose closing date')):`<small>${L('Esperando que el cliente elija día y hora.','Waiting for the client to pick a day and time.')}</small>`;
+    const a=(p.closing&&p.closing.approvals)||{};
+    let h=`<small>🗓️ <b>${esc(when(p.closing.at))}</b></small><div class="tour-approvals">${['CLIENT','AGENT','SELLER'].map(r=>`<span class="${a[r]?'ok':''}">${a[r]?'✅':'⬜'} ${L(...ROLE_LBL[r])}</span>`).join('')}</div>`;
+    if(p.closing.reasonCode){const r=CLOSING_REASONS.find(x=>x[0]===p.closing.reasonCode);h+=`<small>${L('Cambio propuesto por','Change proposed by')} ${L(...ROLE_LBL[p.closing.by]||['',''])}: ${esc(r?L(r[1],r[2]):'')}${p.closing.reasonText?' — '+esc(p.closing.reasonText):''}</small>`;}
+    if(c.status!=='DONE'&&ROLE_LBL[me])h+=`<div class="tour-btns">${!a[me]?fb('closing_approve','✅ '+L('Aprobar fecha','Approve date'),'primary'):''}<button type="button" class="btn-card" data-tclchg="${esc(p.offerId)}">${L('No me queda — proponer otra','Doesn’t work — propose another')}</button></div>`;
+    return h;
+  }
+  if(c.key==='OPTION_FEE'){
+    if(c.status==='LOCKED')return `<small>${L('Se deposita 24 horas antes del cierre, cuando la fecha esté confirmada.','Due 24 hours before closing, once the date is confirmed.')}</small>`;
+    let h=p.fundsDueAt&&!['APPROVED'].includes(c.status)?`<small>${L('Antes del','By')} ${esc(when(p.fundsDueAt))}</small>`:'';
+    if(buyer&&['PENDING','LATE'].includes(c.status))h+=`<div class="tour-btns">${fileBtn('💵 '+L('Subir comprobante','Upload receipt'),p,'FUNDS_RECEIPT')}</div>`;
+    if(seller&&c.status==='SUBMITTED')h+=`<div class="tour-btns">${fb('funds_approve','✅ '+L('Verificar y aprobar','Verify and approve'),'primary')}</div>`;
+    if(c.status==='APPROVED')h+=`<p class="tour-done">🎉 ${L('Todo está completo. ¡Gracias por responder tan rápido en cada paso!','Everything is complete. Thank you for responding so quickly at every step!')}</p>`;
+    return h;
+  }
+  if(c.key==='PAID'){
+    const closed=p.closingAt&&Date.now()>new Date(p.closingAt).getTime();if(!closed)return '';
+    const mine=(p.experience||[]).find(x=>x.role===me);
+    return `${mine?`<p class="tour-done">✅ ${L('Gracias por tus comentarios.','Thank you for your comments.')}</p>`:`<form class="tour-form" data-texp="${esc(p.offerId)}"><label>${L('Tu experiencia, recomendaciones o mejoras','Your experience, recommendations or improvements')}<textarea name="text" rows="3" maxlength="3000" required></textarea></label><button type="submit" class="btn-card primary">${L('Enviar comentarios','Send comments')}</button></form>`}<div class="tour-btns">${fileBtn('📁 '+L('Subir documentos de cierre (para tus registros)','Upload closing documents (for your records)'),p,'CLOSING_DOCS')}</div>`;
+  }
+  return '';
+}
+function checklist(p,role){
+  return `<ol class="tour-check">${p.checklist.map(c=>{const st=STATUS_LABEL[c.status]||STATUS_LABEL.PENDING;const due=c.dueAt&&['DOCS','DEPOSIT'].includes(c.key)&&!['APPROVED','DONE','NA','INVALIDATED'].includes(c.status)?` · ${L('antes del','by')} ${esc(when(c.dueAt))}`:'';
+    const live=!p.invalidatedAt&&p.decision!=='DENIED';
+    return `<li class="tour-check-i s-${c.status.toLowerCase()}"><div><span>${st[2]} <b>${c.n}) ${esc(L(...STEP_LABEL[c.key]))}</b>${c.key==='DOCS'&&c.status==='PENDING'?' '+L('(dentro de 12 horas)','(within 12 hours)'):''}${c.key==='DEPOSIT'&&c.status==='PENDING'?' '+L('(dentro de 72 horas)','(within 72 hours)'):''}<br><small>${esc(L(st[0],st[1]))}${due}</small></span>${live?`<div class="tour-step-body">${stepBody(p,c,role)}</div>`:''}</div></li>`;}).join('')}</ol>`;
+}
 const money=c=>{const v=Number(c)/100;return Number.isFinite(v)&&v>0?'$'+v.toLocaleString('en-US',{maximumFractionDigits:2}):'';};
 function amountLine(p){const a=p&&p.amount;if(!a)return '';return [money(a.price),a.down?L('enganche ','down ')+money(a.down):'',a.monthly?money(a.monthly)+L('/mes','/mo'):''].filter(Boolean).join(' · ');}
-function checklist(p,canSet){
-  return `<ol class="tour-check">${p.checklist.map(c=>{const st=STATUS_LABEL[c.status]||STATUS_LABEL.PENDING;const due=c.dueAt&&!['APPROVED','DONE','NA','INVALIDATED'].includes(c.status)?` · ${L('antes del','by')} ${esc(when(c.dueAt))}`:'';
-    const sel=canSet&&!['DOCS','DEPOSIT'].includes(c.key)?`<select data-tstep="${esc(p.offerId)}" data-tkey="${c.key}" aria-label="${esc(L(...STEP_LABEL[c.key]))}"><option value="PENDING"${c.status==='PENDING'?' selected':''}>${L('Pendiente','Pending')}</option><option value="DONE"${c.status==='DONE'?' selected':''}>${L('Hecho','Done')}</option>${c.optional?`<option value="NA"${c.status==='NA'?' selected':''}>${L('No aplica','Not needed')}</option>`:''}</select>`:'';
-    return `<li class="tour-check-i s-${c.status.toLowerCase()}"><span>${st[2]} <b>${esc(L(...STEP_LABEL[c.key]))}</b>${c.key==='DOCS'&&c.status==='PENDING'?' '+L('(dentro de 12 horas)','(within 12 hours)'):''}${c.key==='DEPOSIT'&&c.status==='PENDING'?' '+L('(dentro de 72 horas)','(within 72 hours)'):''}<br><small>${esc(L(st[0],st[1]))}${due}</small></span>${sel}</li>`;}).join('')}</ol>`;
-}
 function decisionLine(p){
   if(p.invalidatedAt)return `<p class="tour-warn">❌ ${L('Oferta invalidada: no se subieron documentos en 12 horas.','Offer invalidated: no documents within 12 hours.')}</p>`;
   if(p.decision==='DENIED')return `<p class="tour-warn">❌ ${L('El dueño no aceptó la oferta.','The owner did not accept the offer.')}${p.decisionNote?' '+esc(p.decisionNote):''}</p>`;
@@ -240,7 +294,7 @@ function offerCard(t,h,o){
   const head=`<div class="tour-done">✅ <b>${L('Oferta enviada','Offer sent')}</b> · ${esc(when(p?p.offerAt:o.dueAt))}${p&&amountLine(p)?' · '+esc(amountLine(p)):''}</div>`;
   if(!p)return `<div class="tour-offer">${head}</div>`;
   const ups=live&&t.role!=='ADMIN'?`<div class="tour-btns">${!p.docsUploadedAt?`<label class="btn-card">📎 ${L('Subir documentos','Upload documents')}<input type="file" hidden accept="image/*,application/pdf" data-tdoc="${esc(h.id)}" data-toffer="${esc(o.offerId)}"></label>`:''}${!p.depositProofAt?`<label class="btn-card">💵 ${L('Subir comprobante del depósito ($1,000)','Upload deposit proof ($1,000)')}<input type="file" hidden accept="image/*,application/pdf" data-tdep="${esc(h.id)}" data-toffer="${esc(o.offerId)}"></label>`:''}</div>`:'';
-  return `<div class="tour-offer">${head}${decisionLine(p)}<h4>${L('Próximos pasos','Next steps')}</h4>${checklist(p,live&&(t.role==='AGENT'||t.role==='ADMIN'))}${ups}</div>`;
+  return `<div class="tour-offer${focusOffer(o.offerId)}" id="offer-${esc(o.offerId)}">${head}${decisionLine(p)}<h4>${L('Próximos pasos','Next steps')}</h4>${checklist(p,t.role)}${ups}</div>`;
 }
 function sellerSection(){
   const so=(data&&data.sellerOffers)||[];if(!so.length)return '';
@@ -248,12 +302,12 @@ function sellerSection(){
     const btns=p.invalidatedAt||p.decision==='DENIED'?'':!p.decision?`<div class="tour-btns"><button type="button" class="btn-card primary" data-tdecide="${esc(p.offerId)}" data-tdv="approve">✅ ${L('Pre-aprobar','Pre-approve')}</button><button type="button" class="btn-card btn-del" data-tdecide="${esc(p.offerId)}" data-tdv="deny">✕ ${L('Negar','Deny')}</button></div>`
       :p.decision==='PRE_APPROVED'?`<div class="tour-btns">${p.depositProofAt&&!p.depositApprovedAt?`<button type="button" class="btn-card primary" data-tcond="${esc(p.offerId)}" data-tcw="deposit">✅ ${L('Aprobar depósito de $1,000','Approve $1,000 deposit')}</button>`:''}${p.docsUploadedAt&&!p.docsApprovedAt?`<button type="button" class="btn-card primary" data-tcond="${esc(p.offerId)}" data-tcw="docs">✅ ${L('Aprobar documentos','Approve documents')}</button>`:''}${!p.depositProofAt&&!p.docsUploadedAt?`<span class="ops-meta">${L('Esperando el comprobante del depósito o los documentos.','Waiting for the deposit proof or the documents.')}</span>`:''}</div>`:'';
     const docs=(p.documents||[]).length?`<p class="ops-meta">📎 ${(p.documents||[]).map(x=>esc((x.docType==='DEPOSIT_PROOF'?'💵 ':'')+x.name)).join(' · ')}</p>`:'';
-    return `<article class="tour-sell"><h3>${esc(p.address)}${p.city?', '+esc(p.city):''}</h3><p class="ops-meta">${L('Oferta inicial','Initial offer')} · ${esc(when(p.offerAt))}${amountLine(p)?' · <b>'+esc(amountLine(p))+'</b>':''}</p>${decisionLine(p)}${btns}${docs}${checklist(p,S.isAdmin()&&!p.invalidatedAt&&p.decision!=='DENIED')}</article>`;}).join('')}</section>`;
+    return `<article class="tour-sell${focusOffer(p.offerId)}" id="offer-${esc(p.offerId)}"><h3>${esc(p.address)}${p.city?', '+esc(p.city):''}</h3><p class="ops-meta">${L('Oferta inicial','Initial offer')} · ${esc(when(p.offerAt))}${amountLine(p)?' · <b>'+esc(amountLine(p))+'</b>':''}</p>${decisionLine(p)}${btns}${docs}${checklist(p,S.isAdmin()?'ADMIN':'SELLER')}</article>`;}).join('')}</section>`;
 }
 /* ---------- events ---------- */
 async function act(fn){if(busy)return;busy=true;try{await fn();}catch(e){alert(e.message||String(e));}finally{busy=false;}}
 document.addEventListener('click',e=>{
-  const t=e.target.closest&&e.target.closest('[data-tcart],[data-tbook],[data-tcartdel],[data-tgo],[data-taccept],[data-tmove],[data-tauto],[data-tics],[data-tcancel],[data-tchat],[data-tfbopen],[data-tofferfor],[data-tdecline],[data-tmore],[data-task],[data-tprop],[data-tpans],[data-tdecide],[data-tcond]');if(!t)return;
+  const t=e.target.closest&&e.target.closest('[data-tcart],[data-tbook],[data-tcartdel],[data-tgo],[data-taccept],[data-tmove],[data-tauto],[data-tics],[data-tcancel],[data-tchat],[data-tfbopen],[data-tofferfor],[data-tdecline],[data-tmore],[data-task],[data-tprop],[data-tpans],[data-tdecide],[data-tcond],[data-tflow],[data-ttrr],[data-ttrrd],[data-tclchg]');if(!t)return;
   const d=t.dataset;
   if(d.tofferfor){setTimeout(()=>load(true),6000);setTimeout(()=>load(true),15000);return;} // existing offer popup opens; refresh to show the 12-hour clock
   e.preventDefault();e.stopPropagation();
@@ -274,6 +328,14 @@ document.addEventListener('click',e=>{
   if(d.tprop){const tour=data.tours.find(x=>x.id===d.tprop);if(tour)openPropose(tour);return;}
   if(d.tpans)return act(async()=>{try{await call('tour_proposal_answer',{tourId:d.tpans,accept:d.tpv==='1'});}catch(er){if(er.code==='agent_busy')return busySheet(er.message);throw er;}await load(true);alert(d.tpv==='1'?L('¡Listo! Tu cita quedó con el nuevo horario.','Done! Your showing now has the new time.'):L('Le avisamos a tu agente. Puedes llamarle o escribirle para otro horario.','We let your agent know. You can call or message them for another time.'));});
   if(d.tdecide){const ok=d.tdv==='approve';const note=ok?'':prompt(L('¿Por qué la niegas? (opcional; el agente y el cliente lo verán)','Why are you denying it? (optional; the agent and client will see it)'),'');if(note===null)return;if(ok&&!confirm(L('¿Pre-aprobar esta oferta?','Pre-approve this offer?')))return;return act(async()=>{await call('tour_offer_decide',{offerId:d.tdecide,decision:d.tdv,note:note||''});await load(true);});}
+  if(d.tflow){if(d.tflow==='inspection_request'&&!confirm(L('¿Pedir inspección para esta casa?','Request an inspection for this home?')))return;return act(async()=>{await call('tour_offer_flow',{offerId:d.toffer,op:d.tflow});await load(true);});}
+  if(d.ttrr){const m=sheet(`<h3>🛠️ ${L('Negociar TRR','Negotiate TRR')}</h3><p class="ops-meta">${L('Escribe todo lo que el comprador pide al vendedor reparar, reemplazar o tratar.','Write everything the buyer asks the seller to repair, replace or treat.')}</p><form class="tour-form" id="tourTrrF"><textarea name="text" rows="7" maxlength="4000" required placeholder="${esc(L('Ej.: Reparar fuga del baño principal; reemplazar calentador de agua; tratar termitas en la cochera.','E.g.: Fix the main bathroom leak; replace the water heater; treat termites in the garage.'))}"></textarea><div class="tour-btns"><button type="submit" class="btn-card primary">📨 ${L('Enviar al vendedor','Send to the seller')}</button></div></form>`);
+    m.querySelector('#tourTrrF').addEventListener('submit',ev=>{ev.preventDefault();const text=ev.target.text.value.trim();act(async()=>{await call('tour_offer_flow',{offerId:d.ttrr,op:'trr_submit',text});m.remove();await load(true);});});return;}
+  if(d.ttrrd){let text='';if(d.tdv!=='accept'){text=prompt(d.tdv==='counter'?L('Escribe tu contraoferta (qué sí reparas, qué no, o un crédito):','Write your counteroffer (what you will repair, what not, or a credit):'):L('Razón (opcional; el agente y el cliente la verán):','Reason (optional; the agent and client will see it):'),'');if(text===null)return;}
+    return act(async()=>{await call('tour_offer_flow',{offerId:d.ttrrd,op:'trr_decide',decision:d.tdv,text});await load(true);});}
+  if(d.tclchg){const m=sheet(`<h3>📅 ${L('Proponer otra fecha de cierre','Propose another closing date')}</h3><form class="tour-form" id="tourClF"><fieldset class="tour-reasons"><legend><b>${L('¿Por qué no te queda? (obligatorio)','Why doesn’t it work? (required)')}</b></legend>${CLOSING_REASONS.map(r=>`<label class="tour-reason"><input type="radio" name="code" value="${r[0]}" required> ${esc(L(r[1],r[2]))}</label>`).join('')}</fieldset><label class="tour-other" hidden>${L('Escribe la razón','Write the reason')}<textarea name="rtext" rows="2" maxlength="500"></textarea></label><label>${L('Nueva fecha','New date')}<input type="date" name="date" min="${chicagoDay(new Date())}" required></label><label>${L('Hora','Time')}<select name="time">${timeOptions('10:00')}</select></label><p class="ops-meta">${L('Las aprobaciones se reinician hasta que todos estén de acuerdo.','Approvals reset until everyone agrees.')}</p><div class="tour-btns"><button type="submit" class="btn-card primary">📨 ${L('Proponer','Propose')}</button></div></form>`);
+    const f=m.querySelector('#tourClF'),oth=f.querySelector('.tour-other');f.addEventListener('change',()=>{oth.hidden=f.code.value!=='OTHER';f.rtext.required=f.code.value==='OTHER';});
+    f.addEventListener('submit',ev=>{ev.preventDefault();const v=Object.fromEntries(new FormData(f));act(async()=>{await call('tour_offer_flow',{offerId:d.tclchg,op:'closing_propose',when:`${v.date}T${v.time}`,reasonCode:v.code,reasonText:v.code==='OTHER'?(v.rtext||''):''});m.remove();await load(true);});});return;}
   if(d.tcond)return act(async()=>{await call('tour_offer_condition',{offerId:d.tcond,which:d.tcw});await load(true);});
   if(d.tcancel){const tour=data.tours.find(x=>x.id===d.tcancel);if(tour)openCancel(tour);return;}
   if(d.tchat){if(S.msgEnabled&&!S.msgEnabled()){alert(L('Los mensajes no están disponibles ahora.','Messages are not available right now.'));return;}return UI().openChat(d.tchat,d.tname);}
@@ -286,6 +348,8 @@ document.addEventListener('submit',e=>{
     if(!connectedAgent()&&ids.length>MAX)return alert(limitText());
     const at=new Date(`${v.date}T${v.time}:00`);if(isNaN(at.getTime()))return alert(L('Elige fecha y hora.','Pick a date and time.'));
     return act(async()=>{try{await call('tour_request',{listingIds:ids,startsAt:`${v.date}T${v.time}`,notes:v.notes||''});}catch(er){if(er.code==='agent_busy')return busySheet(er.message);throw er;}setCart([]);form={date:'',time:'10:00',notes:''};await load(true);alert(connectedAgent()?L('¡Enviada a tu agente! Te avisamos cuando la apruebe o la rechace.','Sent to your agent! We will let you know when they approve or decline it.'):L('¡Cita solicitada! Les avisamos a los agentes con licencia; te llegará una notificación cuando uno la acepte.','Showing requested! We notified licensed agents; you will get a notification when one accepts.'));});}
+  if(f&&f.dataset&&f.dataset.tflowf){e.preventDefault();const v=Object.fromEntries(new FormData(f));return act(async()=>{await call('tour_offer_flow',{offerId:f.dataset.toffer,op:f.dataset.tflowf,when:`${v.date}T${v.time}`});await load(true);});}
+  if(f&&f.dataset&&f.dataset.texp){e.preventDefault();const v=Object.fromEntries(new FormData(f));return act(async()=>{await call('tour_offer_flow',{offerId:f.dataset.texp,op:'experience',text:v.text||''});await load(true);alert(L('¡Gracias por tus comentarios!','Thank you for your comments!'));});}
   const fb=f&&f.dataset&&f.dataset.tfbform;
   if(fb){e.preventDefault();const [tourId,listingId]=fb.split('|');const v=Object.fromEntries(new FormData(f));
     return act(async()=>{const r=await call('tour_feedback',{tourId,listingId,rating:Number(v.rating)||null,interest:v.interest||'',comments:v.comments||''});delete fbOpen[fb];await load(true);alert(L('¡Gracias! Tus comentarios ya se enviaron.','Thank you! Your feedback was sent.'));});}
@@ -293,7 +357,7 @@ document.addEventListener('submit',e=>{
 document.addEventListener('change',e=>{
   const t=e.target;
   if(t&&t.form&&t.form.id==='tourReqF'){const v=Object.fromEntries(new FormData(t.form));form={date:v.date,time:v.time,notes:v.notes||''};return;}
-  if(t&&t.dataset&&t.dataset.tstep){return act(async()=>{await call('tour_offer_step',{offerId:t.dataset.tstep,key:t.dataset.tkey,status:t.value});await load(true);});}
+  if(t&&t.dataset&&t.dataset.tupt&&t.files&&t.files[0]){act(async()=>{await S.uploadDocument(t.files[0],{docType:t.dataset.tupt,listingId:t.dataset.tlid,offerId:t.dataset.toffer});await load(true);alert(L('Archivo subido.','File uploaded.'));});return;}
   if(t&&t.dataset&&t.dataset.tdep&&t.files&&t.files[0]){act(async()=>{await S.uploadDocument(t.files[0],{docType:'DEPOSIT_PROOF',listingId:t.dataset.tdep,offerId:t.dataset.toffer});await load(true);alert(L('Comprobante subido. El vendedor lo revisará.','Proof uploaded. The seller will review it.'));});return;}
   if(t&&t.dataset&&t.dataset.tdoc&&t.files&&t.files[0]){act(async()=>{await S.uploadDocument(t.files[0],{docType:'OFFER_DOCS',listingId:t.dataset.tdoc,offerId:t.dataset.toffer});await load(true);alert(L('Documento subido.','Document uploaded.'));});}
 },true);
