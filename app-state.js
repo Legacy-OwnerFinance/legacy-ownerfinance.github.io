@@ -1388,7 +1388,7 @@ S.updateListing=(lid,p)=>{if(!S.isAdmin())throw new Error('Admins only');const l
 S.respondOffer=(oid,status,c={})=>{if(!S.isAdmin())throw new Error('Admins only');const o=S.data.offers.find(x=>x.id===oid);
   o.status=status;o.respondedAt=now();o.adminNotes=c.adminNotes||'';
   if(status==='COUNTERED'){o.counterPrice=+c.counterPrice*100;o.counterDown=+c.counterDown*100;o.counterMonthly=+c.counterMonthly*100;}
-  if(status==='ACCEPTED'){const l=S.listing(o.listingId);if(l){l.status='PENDING_NO_EM';sbUpsert('listings',listingToRow(l),'id');}o.docsUnlocked=true;}
+  if(status==='ACCEPTED'){const l=S.listing(o.listingId);const bu=(S.data.users||[]).find(u=>u.id===o.userId)||{};const isTest=/\+legacytest/i.test(String(bu.email||o.buyerEmail||''));/* v39: legacytest offers never move a real home (server enforces it too) */if(l&&!isTest){l.status='PENDING_NO_EM';sbUpsert('listings',listingToRow(l),'id');}if(isTest)o.simulatedHomeStatus='PENDING_NO_EM';o.docsUnlocked=true;}
   S.save();
   sbUpsert('offers',{
     id:o.id,
