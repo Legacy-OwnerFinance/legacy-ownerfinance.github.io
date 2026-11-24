@@ -1848,3 +1848,73 @@ html.lof-map-on:has(.nav-drawer.open) .lof-mapview { z-index: 1; }
 .ma-empty-i{font-size:44px;line-height:1;margin:6px 0}
 .ma-list .tour-cart-item span{flex:1;min-width:0}
 .ma-list .tour-cart-item .btn-card{flex:none}
+
+/* ---------- Agent dashboard (Panel) ---------- */
+.ad-wrap{gap:12px}
+.ad-hero{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;padding:18px 18px 16px;border-radius:var(--card-radius);background:linear-gradient(135deg,#0f172a 0%,#1e293b 70%,#2b2a22 100%);color:#fff;box-shadow:var(--shadow);position:relative;overflow:hidden}
+.ad-hero::after{content:"";position:absolute;right:-40px;top:-40px;width:140px;height:140px;border-radius:50%;background:radial-gradient(circle,rgba(212,175,55,.35),rgba(212,175,55,0) 70%)}
+.ad-hero h2{margin:2px 0 2px;font-size:22px;color:#fff}
+.ad-kicker{margin:0;font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--gold-soft);font-weight:700}
+.ad-date{margin:0;color:#cbd5e1;font-size:13px}
+.ad-refresh{position:relative;z-index:1;border:1px solid rgba(248,213,126,.5);background:rgba(255,255,255,.06);color:var(--gold-soft);width:38px;height:38px;border-radius:50%;font-size:18px;cursor:pointer}
+.ad-refresh.spin{animation:adspin .8s linear infinite}@keyframes adspin{to{transform:rotate(360deg)}}
+.ad-kpis{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+@media(min-width:760px){.ad-kpis{grid-template-columns:repeat(4,minmax(0,1fr))}}
+.ad-kpi{display:flex;flex-direction:column;align-items:flex-start;gap:2px;text-align:left;padding:14px;border-radius:var(--card-radius);background:#fff;border:1px solid #eadfcb;box-shadow:0 6px 18px -12px rgba(15,23,42,.25);cursor:pointer;font:inherit;color:var(--ink);min-height:98px;transition:transform .12s,box-shadow .12s}
+.ad-kpi:hover,.ad-kpi:focus-visible{transform:translateY(-1px);box-shadow:0 10px 24px -12px rgba(15,23,42,.35);outline:none;border-color:var(--gold)}
+.ad-kpi b{font-size:30px;line-height:1.1;font-family:var(--font-heading);color:var(--navy)}
+.ad-kpi-i{font-size:18px}
+.ad-kpi-l{font-weight:700;font-size:13px}
+.ad-kpi small{color:var(--muted);font-size:11.5px;line-height:1.3}
+.ad-kpi.warn{border-color:#f59e0b;background:#fffbeb}.ad-kpi.warn small{color:#b45309;font-weight:600}
+.ad-sec{padding:14px 16px;scroll-margin-top:80px;transition:box-shadow .3s}
+.ad-sec.ad-flash{box-shadow:0 0 0 3px var(--gold)}
+.ad-sec-h{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:6px}
+.ad-sec-h h3{margin:0;font-size:17px}
+.ad-count{min-width:26px;height:26px;padding:0 8px;border-radius:13px;background:#f1ece2;color:var(--navy);font-weight:700;font-size:13px;display:inline-flex;align-items:center;justify-content:center}
+.ad-count.on{background:var(--navy);color:var(--gold-soft)}
+.ad-act{border-left:4px solid var(--gold)}
+.ad-list{list-style:none;margin:0;padding:0;display:grid;gap:0}
+.ad-list>li{display:flex;gap:10px;align-items:flex-start;padding:11px 0;border-top:1px solid #efe7d8}
+.ad-list>li:first-child{border-top:0}
+.ad-body{flex:1;min-width:0;display:flex;flex-direction:column;gap:3px}
+.ad-body b{font-size:14.5px}
+.ad-body small{color:var(--muted);font-size:12.5px;line-height:1.35}
+.ad-ico{width:34px;height:34px;flex:0 0 34px;border-radius:10px;background:#f6f0e4;display:flex;align-items:center;justify-content:center;font-size:17px}
+.ad-item.r1 .ad-ico{background:#e0f2fe}.ad-item.r2 .ad-ico{background:#fef3c7}.ad-item.r3 .ad-ico{background:#fee2e2}
+.ad-btns{margin-top:4px;gap:6px}.ad-btns .btn-card{padding:7px 12px;font-size:13px}
+.ad-cd{align-self:flex-start;font-size:12px;font-weight:700;padding:3px 9px;border-radius:999px;background:#ecfdf5;color:#047857}
+.ad-cd.hot{background:#fef3c7;color:#b45309}.ad-cd.late{background:#fee2e2;color:#b91c1c}
+.ad-empty{margin:4px 0;color:var(--muted);font-size:14px}
+.ad-more{width:100%;margin-top:6px}
+.ad-timeline{list-style:none;margin:0;padding:0 0 0 4px;position:relative}
+.ad-timeline::before{content:"";position:absolute;left:58px;top:8px;bottom:8px;width:2px;background:#eadfcb}
+.ad-timeline li{display:flex;gap:16px;padding:10px 0;position:relative}
+.ad-timeline li::before{content:"";position:absolute;left:53px;top:16px;width:12px;height:12px;border-radius:50%;background:var(--gold);box-shadow:0 0 0 3px #fff}
+.ad-timeline li.past{opacity:.6}.ad-timeline li.past::before{background:#94a3b8}
+.ad-time{width:46px;flex:0 0 46px;font-weight:700;font-size:13px;color:var(--navy);padding-top:2px;text-align:right}
+.ad-timeline .ad-body{padding-left:14px}
+.ad-deal img{width:62px;height:52px;flex:0 0 62px;border-radius:9px;object-fit:cover;background:#f1ece2}
+.ad-deal>.btn-card{align-self:center}
+.ad-prog{display:flex;gap:3px;margin:3px 0 1px}
+.ad-prog span{flex:1;height:6px;border-radius:3px;background:#e9e2d4}
+.ad-prog span.on{background:var(--navy)}.ad-prog span.cur{background:var(--gold)}
+.ad-row>.btn-card{align-self:center}
+.ad-day{width:58px;flex:0 0 58px;font-size:12px;color:var(--muted);line-height:1.3}
+.ad-day b{color:var(--navy);font-size:13px}
+.ad-av{width:36px;height:36px;flex:0 0 36px;border-radius:50%;background:var(--navy);color:var(--gold-soft);display:flex;align-items:center;justify-content:center;font-weight:700}
+.ad-mini{display:flex;gap:4px;align-self:center}.ad-mini .btn-card{padding:6px 9px;min-width:0}
+.ad-new{color:#b45309;font-weight:700}
+.ad-stats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.ad-stats div{background:#fff;border:1px solid #eadfcb;border-radius:12px;padding:10px;text-align:center}
+.ad-stats b{display:block;font-size:20px;color:var(--navy)}
+.ad-stats span{font-size:11.5px;color:var(--muted)}
+.ad-foot{justify-content:center}
+.ad-skel{height:110px;border-radius:var(--card-radius);background:linear-gradient(90deg,#f1ece2,#faf6f0,#f1ece2);background-size:200% 100%;animation:adsk 1.2s infinite}@keyframes adsk{to{background-position:-200% 0}}
+@media(min-width:900px){.ad-wrap{max-width:1040px;grid-template-columns:1fr 1fr;align-items:start}.ad-wrap>.ad-hero,.ad-wrap>.ad-kpis,.ad-wrap>.ad-act,.ad-wrap>.ad-stats,.ad-wrap>.ad-foot,.ad-wrap>.tour-warn{grid-column:1/-1}}
+.ad-date::first-letter,.ad-day::first-letter{text-transform:uppercase}
+@media(min-width:760px){.ad-btns .btn-card{flex:0 0 auto;min-width:140px}}
+.ad-list>li>.btn-card{flex:0 0 auto}
+.ad-mini .btn-card{flex:0 0 auto;text-decoration:none;display:inline-flex;align-items:center;justify-content:center}
+.ad-body .tour-pill{align-self:flex-start}
+.ad-who{display:flex;flex-wrap:wrap;align-items:center;gap:6px}
