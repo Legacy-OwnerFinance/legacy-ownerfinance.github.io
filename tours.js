@@ -111,7 +111,9 @@ function homeRow(t,h,i,n){
     else if(t.role==='AGENT')after=fbOpen[t.id+'|'+h.id]?feedbackForm(t,h):`<div class="tour-btns"><button type="button" class="btn-card" data-tfbopen="${esc(t.id+'|'+h.id)}">📝 ${L('Dejar comentarios','Leave feedback')}</button><span class="ops-meta">${L('o','or')}</span><button type="button" class="btn-card primary" data-offerpop="${esc(h.id)}" data-tofferfor="${esc(t.id)}">💰 ${L('Hacer una oferta','Make an offer')}</button></div><p class="ops-meta">${L('Elige una: comentarios u oferta. Si haces oferta tendrás 12 horas para subir la documentación.','Pick one: feedback or an offer. If you make an offer you will have 12 hours to upload the documents.')}</p>`;
   }
   if(t.role==='ADMIN'){const fbs=(t.feedback||[]).filter(f=>f.listingId===h.id);after=fbs.map(f=>`<div class="tour-done">${f.authorRole==='CLIENT'?'👤':'🧑‍💼'} ${f.rating?'★'.repeat(f.rating)+' ':''}${esc(f.comments||'')}${f.sellerFlag?` <span class="tour-warn">⚠️ ${L('Esta casa no tiene compañía/vendedor ligado; solo te llegó a ti.','No company/seller linked to this home; it only went to you.')}</span>`:''}</div>`).join('')+(offer?`<div class="tour-offer">💰 ${L('Oferta del agente','Agent offer')} · ${offer.invalidatedAt?L('invalidada','invalidated'):offer.docsUploadedAt?L('documentos recibidos','documents received'):L('vence','due')+' '+esc(when(offer.dueAt))}</div>`:'');}
-  return `<li class="tour-stop"><span class="tour-n">${i+1}</span><span class="tour-stop-main"><a href="#" data-open="${esc(h.id)}">${homeLine(h)}</a>${after}</span>${editable&&n>1?`<span class="tour-move"><button type="button" class="btn-card" data-tmove="${esc(t.id)}" data-tidx="${i}" data-tdir="-1" ${i===0?'disabled':''} aria-label="${esc(L('Subir','Move up'))}">↑</button><button type="button" class="btn-card" data-tmove="${esc(t.id)}" data-tidx="${i}" data-tdir="1" ${i===n-1?'disabled':''} aria-label="${esc(L('Bajar','Move down'))}">↓</button></span>`:''}</li>`;
+  // Access: the code shows only to the accepted agent (and Admin). No code yet => "Preguntar" (call or text the Beside line).
+  const access=(t.role==='AGENT'||t.role==='ADMIN')&&t.status==='ACCEPTED'?(h.accessCode?`<div class="tour-code">🔑 ${L('Código de acceso','Access code')}: <b>${esc(h.accessCode)}</b></div>`:`<div class="tour-code">🔑 ${L('Sin código de acceso','No access code')} <button type="button" class="btn-card" data-task="${esc(t.id+'|'+h.id)}">❓ ${L('Preguntar','Ask')}</button></div>`):'';
+  return `<li class="tour-stop"><span class="tour-n">${i+1}</span><span class="tour-stop-main"><a href="#" data-open="${esc(h.id)}">${homeLine(h)}</a>${access}${after}</span>${editable&&n>1?`<span class="tour-move"><button type="button" class="btn-card" data-tmove="${esc(t.id)}" data-tidx="${i}" data-tdir="-1" ${i===0?'disabled':''} aria-label="${esc(L('Subir','Move up'))}">↑</button><button type="button" class="btn-card" data-tmove="${esc(t.id)}" data-tidx="${i}" data-tdir="1" ${i===n-1?'disabled':''} aria-label="${esc(L('Bajar','Move down'))}">↓</button></span>`:''}</li>`;
 }
 function tourCard(t){
   const live=['REQUESTED','ACCEPTED'].includes(t.status);
@@ -152,10 +154,29 @@ function view(){
    (sf.length?`<section class="card tour-card"><h2>💬 ${L('Comentarios de visitas a tus casas','Showing feedback on your homes')}</h2><ul>${sf.map(f=>`<li><b>${esc(f.address||'')}, ${esc(f.city||'')}</b> · ${f.authorRole==='CLIENT'?L('Cliente','Client'):L('Agente','Agent')} ${f.rating?'★'.repeat(f.rating):''} — ${esc(f.comments||'')}</li>`).join('')}</ul></section>`:'')+`</div>`;
 }
 
+const BESIDE_TEL='+14053384124',BESIDE_TXT='(405) 338-4124';
+function askText(t,h){
+  const ap=(S.agentProfile&&S.agentProfile(S.user))||{};const name=(S.user&&S.user.name)||'';const brk=ap.brokerage||S.user&&S.user.brokerage||'';
+  const addr=[h.address,h.city,[h.state||'OK',h.zip].filter(Boolean).join(' ')].filter(Boolean).join(', ');
+  const d=new Date(t.startsAt);const loc=S.lang==='es'?'es-US':'en-US';
+  const day=new Intl.DateTimeFormat(loc,{timeZone:'America/Chicago',weekday:'long',month:'long',day:'numeric'}).format(d);
+  const hr=new Intl.DateTimeFormat(loc,{timeZone:'America/Chicago',hour:'numeric',minute:'2-digit'}).format(d).replace(/\.$/,'');
+  return L(`Hola, soy ${name}${brk?` de ${brk}`:''}. Confirmo la cita para ver ${addr} el ${day} a las ${hr}. ¿Me pueden dar acceso a la propiedad? Gracias.`,`Hi, this is ${name}${brk?` with ${brk}`:''}. I'm confirming the showing at ${addr} on ${day} at ${hr}. Could you please give me access to the property? Thank you.`);
+}
+function openAsk(t,h){
+  document.querySelectorAll('.tour-ask-bg').forEach(x=>x.remove());
+  const txt=askText(t,h);const m=document.createElement('div');m.className='tour-ask-bg';
+  m.innerHTML=`<div class="tour-ask" role="dialog" aria-modal="true" aria-label="${esc(L('Preguntar por el acceso','Ask for access'))}"><button type="button" class="nav-pill tour-ask-x" data-taskclose="1" aria-label="${esc(L('Cerrar','Close'))}">✕</button><h3>❓ ${L('Preguntar por el acceso','Ask for access')}</h3><p class="ops-meta">${esc(homeLine(h).replace(/&amp;/g,'&'))}</p><p>${L(`Esta casa no tiene código. Llama o escribe al ${BESIDE_TXT}. Si ahí no está, agenda una llamada con Fernando lo antes posible.`,`This home has no code. Call or text ${BESIDE_TXT}. If they can’t help, schedule a call with Fernando as soon as possible.`)}</p>
+   <div class="tour-btns"><a class="btn-card primary" href="tel:${BESIDE_TEL}">📞 ${L('Llamar','Call')}</a><a class="btn-card" href="sms:${BESIDE_TEL}?&body=${encodeURIComponent(txt)}">💬 ${L('Escribir','Text')}</a></div>
+   <p class="ops-meta">${L('Mensaje que se va a enviar (lo puedes cambiar antes de mandarlo):','Message to send (you can edit it before sending):')}</p><blockquote class="tour-ask-msg">${esc(txt)}</blockquote></div>`;
+  m.addEventListener('click',e=>{if(e.target===m||e.target.closest('[data-taskclose]'))m.remove();});
+  document.addEventListener('keydown',function k(e){if(e.key==='Escape'){m.remove();document.removeEventListener('keydown',k);}});
+  document.body.appendChild(m);
+}
 /* ---------- events ---------- */
 async function act(fn){if(busy)return;busy=true;try{await fn();}catch(e){alert(e.message||String(e));}finally{busy=false;}}
 document.addEventListener('click',e=>{
-  const t=e.target.closest&&e.target.closest('[data-tcart],[data-tbook],[data-tcartdel],[data-tgo],[data-taccept],[data-tmove],[data-tauto],[data-tics],[data-tcancel],[data-tchat],[data-tfbopen],[data-tofferfor],[data-tdecline],[data-tmore]');if(!t)return;
+  const t=e.target.closest&&e.target.closest('[data-tcart],[data-tbook],[data-tcartdel],[data-tgo],[data-taccept],[data-tmove],[data-tauto],[data-tics],[data-tcancel],[data-tchat],[data-tfbopen],[data-tofferfor],[data-tdecline],[data-tmore],[data-task]');if(!t)return;
   const d=t.dataset;
   if(d.tofferfor){setTimeout(()=>load(true),6000);setTimeout(()=>load(true),15000);return;} // existing offer popup opens; refresh to show the 12-hour clock
   e.preventDefault();e.stopPropagation();
@@ -166,6 +187,7 @@ document.addEventListener('click',e=>{
   if(d.tcartdel){removeFromCart(d.tcartdel);return rerender();}
   if(d.taccept)return act(async()=>{await call('tour_accept',{tourId:d.taccept});await load(true);alert(L('¡Listo! La cita es tuya. Ya puedes ver los datos del cliente, llamarle o escribirle en la app.','Done! The showing is yours. You can now see the client’s info, call or message them in the app.'));});
   if(d.tmove)return act(async()=>{const tour=data.tours.find(x=>x.id===d.tmove);if(!tour)return;const ids=tour.homes.map(h=>h.id),i=+d.tidx,j=i+(+d.tdir);if(j<0||j>=ids.length)return;[ids[i],ids[j]]=[ids[j],ids[i]];await call('tour_route_save',{tourId:tour.id,order:ids});await load(true);});
+  if(d.task){const [tid,lid]=d.task.split('|');const tour=data.tours.find(x=>x.id===tid);const h=tour&&tour.homes.find(x=>x.id===lid);if(tour&&h)openAsk(tour,h);return;}
   if(d.tdecline){const reason=prompt(L('¿Por qué no puedes? (opcional; el cliente lo verá)','Why can’t you? (optional; the client will see it)'),'');if(reason===null)return;return act(async()=>{await call('tour_decline',{tourId:d.tdecline,reason});await load(true);});}
   if(d.tmore){const tour=data.tours.find(x=>x.id===d.tmore);if(!tour)return;const end=new Date(tour.endsAt||tour.startsAt);const p=new Intl.DateTimeFormat('en-CA',{timeZone:'America/Chicago',year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',hourCycle:'h23'}).formatToParts(end);const g={};p.forEach(x=>g[x.type]=x.value);let mins=Math.ceil((+g.hour*60+(+g.minute))/30)*30;mins=Math.min(Math.max(mins,9*60),19*60);form.date=`${g.year}-${g.month}-${g.day}`;form.time=String(Math.floor(mins/60)).padStart(2,'0')+':'+String(mins%60).padStart(2,'0');
     if(!cart().length){alert(L('Agrega al carrito las casas extra y luego toca “Enviar a mi agente”. Ya dejamos lista la fecha de ese día.','Add the extra homes to your cart, then tap “Send to my agent”. The date for that day is already filled in.'));return UI().go('inventory');}

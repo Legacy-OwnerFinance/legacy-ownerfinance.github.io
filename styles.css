@@ -1810,3 +1810,9 @@ html.lof-map-on:has(.nav-drawer.open) .lof-mapview { z-index: 1; }
 .tour-cart-btn{position:relative;background:none;border:0;font-size:22px;cursor:pointer;padding:4px 8px}
 .tour-note{font-size:12px;margin:4px 0 0}
 @media (max-width:600px){.tour-form,.tour-fb{grid-template-columns:1fr}.tour-wrap{padding:10px}}
+.tour-code{font-size:14px;margin-top:4px;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.tour-ask-bg{position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:10050;display:flex;align-items:flex-end;justify-content:center}
+.tour-ask{background:#fff;color:#111;border-radius:16px 16px 0 0;padding:18px;max-width:520px;width:100%;max-height:85vh;overflow:auto;position:relative}
+.tour-ask-x{position:absolute;right:12px;top:12px}
+.tour-ask-msg{background:#f1f5f9;border-radius:8px;padding:10px;margin:6px 0;font-size:14px}
+@media (min-width:700px){.tour-ask-bg{align-items:center}.tour-ask{border-radius:16px}}
