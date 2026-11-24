@@ -1839,3 +1839,12 @@ html.lof-map-on:has(.nav-drawer.open) .lof-mapview { z-index: 1; }
 .tour-check-i.s-agreed,.tour-check-i.s-accepted,.tour-check-i.s-waived{background:#f0fdf4;border-color:#bbf7d0}
 .tour-check-i.s-review,.tour-check-i.s-proposed,.tour-check-i.s-scheduled,.tour-check-i.s-countered{background:#eff6ff;border-color:#bfdbfe}
 .tour-check-i.s-rejected{background:#fef2f2;border-color:#fecaca}
+/* v39: Mi agente (client) */
+.ma-title{margin:18px 18px 0;font-size:22px}
+.ma-agent .ma-avatar{width:84px;height:84px}
+.ma-agent .ma-name{font-size:18px}
+.ma-empty{text-align:center}
+.ma-empty .tour-btns{justify-content:center}
+.ma-empty-i{font-size:44px;line-height:1;margin:6px 0}
+.ma-list .tour-cart-item span{flex:1;min-width:0}
+.ma-list .tour-cart-item .btn-card{flex:none}

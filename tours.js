@@ -64,7 +64,7 @@ async function load(force){
   if(!S.user||loading)return;if(!force&&data&&Date.now()-loadedAt<20000)return;
   loading=true;try{data=await call('tour_list');lastErr='';(data.tours||[]).forEach(t=>{const p=t.role==='CLIENT'?t.agent:t.client;if(p&&p.id&&p.name){S.tourPeerNames=S.tourPeerNames||{};S.tourPeerNames[p.id]=p.name;}});}
   catch(e){lastErr=e.message||String(e);}finally{loading=false;loadedAt=Date.now();}
-  if(UI()&&UI().tab()==='tours')rerender();
+  if(UI()&&['tours','myagent'].includes(UI().tab()))rerender();
 }
 
 /* ---------- small helpers ---------- */
@@ -326,7 +326,7 @@ function sellerSection(){
 /* ---------- events ---------- */
 async function act(fn){if(busy)return;busy=true;try{await fn();}catch(e){alert(e.message||String(e));}finally{busy=false;}}
 document.addEventListener('click',e=>{
-  const t=e.target.closest&&e.target.closest('[data-tcart],[data-tbook],[data-tcartdel],[data-tgo],[data-taccept],[data-tmove],[data-tauto],[data-tics],[data-tcancel],[data-tchat],[data-tfbopen],[data-tofferfor],[data-tdecline],[data-tmore],[data-task],[data-tprop],[data-tpans],[data-tdecide],[data-tcond],[data-tflow],[data-ttrr],[data-ttrrd],[data-tclchg],[data-tresume],[data-tarch]');if(!t)return;
+  const t=e.target.closest&&e.target.closest('[data-tgooffer],[data-tcart],[data-tbook],[data-tcartdel],[data-tgo],[data-taccept],[data-tmove],[data-tauto],[data-tics],[data-tcancel],[data-tchat],[data-tfbopen],[data-tofferfor],[data-tdecline],[data-tmore],[data-task],[data-tprop],[data-tpans],[data-tdecide],[data-tcond],[data-tflow],[data-ttrr],[data-ttrrd],[data-tclchg],[data-tresume],[data-tarch]');if(!t)return;
   const d=t.dataset;
   if(d.tresume){openResume(d.tresume);return;}
   if(d.tarch){if(!confirm(L('¿Eliminar esta oferta? Se quita de tu lista (queda en el historial).','Delete this offer? It is removed from your list (it stays in the history).')))return;act(async()=>{await call('tour_offer_archive',{offerId:d.tarch});await load(true);});return;}
@@ -335,6 +335,7 @@ document.addEventListener('click',e=>{
   if((d.tcart||d.tbook)&&!S.user){document.querySelectorAll('.modal-backdrop,.lof-pop-bg').forEach(x=>x.remove());return UI().go('auth');}
   if(d.tcart){if(inCart(d.tcart)){removeFromCart(d.tcart);}else addToCart(d.tcart);return rerender();}
   if(d.tbook){if(addToCart(d.tbook)){document.querySelectorAll('.modal-backdrop,.drawer-bg,.lof-pop-bg').forEach(x=>x.remove());UI().go('tours');setTimeout(()=>{const f=document.querySelector('#tourReqF [name=date]');if(f){f.scrollIntoView({behavior:'smooth',block:'center'});f.focus();}},120);}return;}
+  if(d.tgooffer){scrolledTo='';location.hash='tours&offer='+encodeURIComponent(d.tgooffer);return;}
   if(d.tgo){document.querySelectorAll('.modal-backdrop').forEach(x=>x.remove());return UI().go('tours');}
   if(d.tcartdel){removeFromCart(d.tcartdel);return rerender();}
   if(d.taccept)return act(async()=>{const r=await call('tour_accept',{tourId:d.taccept});await load(true);if(r&&r.merged){location.hash='tours&tour='+r.mergedInto;return alert(L('¡Aprobada! Las casas se agregaron a la ruta que ya tenían ese día y se reordenó por distancia. Pueden editar el orden.','Approved! The homes were added to your existing route that day and re-sorted by distance. You can both edit the order.'));}alert(L('¡Listo! La cita es tuya. Ya puedes ver los datos del cliente, llamarle o escribirle en la app.','Done! The showing is yours. You can now see the client’s info, call or message them in the app.'));});
@@ -383,6 +384,53 @@ document.addEventListener('change',e=>{
   if(t&&t.dataset&&t.dataset.tdoc&&t.files&&t.files[0]){act(async()=>{await S.uploadDocument(t.files[0],{docType:'OFFER_DOCS',listingId:t.dataset.tdoc,offerId:t.dataset.toffer});await load(true);alert(L('Documento subido.','Document uploaded.'));});}
 },true);
 
+/* ---------- "Mi agente" (client account): connected agent card + homes seen together + homes under contract ---------- */
+const DONE_ST=['APPROVED','DONE','NA'];
+function offerStep(p){
+  if(!p)return L('Oferta enviada','Offer sent');
+  if(p.completeAt||(p.checklist||[]).every(c=>DONE_ST.includes(c.status)))return '🎉 '+L('Cerrada','Closed');
+  if(!p.decision)return '⏳ '+L('Oferta enviada — esperando la pre-aprobación del dueño','Offer sent — waiting for the owner’s pre-approval');
+  const c=(p.checklist||[]).find(x=>!DONE_ST.includes(x.status));if(!c)return '';
+  const st=STATUS_LABEL[c.status]||STATUS_LABEL.PENDING;
+  return `${st[2]} ${L('Paso','Step')} ${c.n}/7: ${L(...STEP_LABEL[c.key])} — ${L(st[0],st[1])}`;
+}
+const fmtPhone=v=>{const d=String(v||'').replace(/\D/g,'').replace(/^1(?=\d{10}$)/,'');return d.length===10?`(${d.slice(0,3)}) ${d.slice(3,6)}-${d.slice(6)}`:String(v||'');};
+function agentContact(a){const tel=String(a.phone||'').replace(/[^\d+]/g,'');
+  return `<div class="tour-btns">${tel?`<a class="btn-card primary" href="tel:${esc(tel)}">📞 ${L('Llamar','Call')}</a><a class="btn-card" href="sms:${esc(tel)}">💬 ${L('Escribir (SMS)','Text (SMS)')}</a>`:''}${a.id?`<button type="button" class="btn-card" data-tchat="${esc(a.id)}" data-tname="${esc(a.name||'')}">✉️ ${L('Escribir en la app','Message in app')}</button>`:''}</div>`;}
+function agentView(){
+  if(!S.user)return `<section class="card tour-card"><p>${L('Inicia sesión para ver a tu agente.','Sign in to see your agent.')}</p></section>`;
+  load(false);
+  const head=`<div class="tour-wrap"><h2 class="ma-title">🤝 ${L('Mi agente','My agent')}</h2>`;
+  if(!data&&!lastErr)return head+`<p style="padding:18px">${L('Cargando…','Loading…')}</p></div>`;
+  const a=(data&&data.connectedAgent)||connectedAgent();
+  if(!a)return head+`<section class="card tour-card ma-empty"><div class="ma-empty-i" aria-hidden="true">🤝</div><h3>${L('Aún no tienes un agente','You don’t have an agent yet')}</h3>
+   <p>${L('Agrega las casas que te gustan a tu carrito y pide una cita: el primer agente con licencia que la acepte será tu agente y te acompañará a verlas, en español o en inglés.','Add the homes you like to your cart and request a showing: the first licensed agent who accepts it becomes your agent and shows you the homes, in English or Spanish.')}</p>
+   <div class="tour-btns"><button type="button" class="btn-card primary" data-tab="tours">📅 ${L('Pedir una cita / conectar con un agente','Request a showing / connect with an agent')}</button><button type="button" class="btn-card" data-tab="inventory">🏠 ${L('Ver casas','See homes')}</button></div>
+   <p class="ops-meta">${L('¿Preguntas? Llama o escribe al (405) 338-4124.','Questions? Call or text (405) 338-4124.')}</p></section></div>`;
+  const nowMs=Date.now();
+  const mine=((data&&data.tours)||[]).filter(t=>t.role==='CLIENT'&&t.agent&&t.agent.id===a.id);
+  const seen=new Map();
+  // Seen together = homes of a completed/accepted showing whose time has passed, or a home that already has feedback or an offer from that showing.
+  mine.filter(t=>['ACCEPTED','COMPLETED'].includes(t.status)).forEach(t=>{const past=t.status==='COMPLETED'||new Date(t.startsAt).getTime()<=nowMs;(t.homes||[]).forEach(h=>{if(h.missing)return;if(!past&&!(t.offers||[]).some(o=>o.listingId===h.id)&&!(t.feedback||[]).some(f=>f.listingId===h.id))return;const o=seen.get(h.id);if(!o||o.at<t.startsAt)seen.set(h.id,{h,at:t.startsAt,tourId:t.id});});});
+  const seenL=[...seen.values()].sort((x,y)=>String(y.at).localeCompare(String(x.at)));
+  const next=mine.filter(t=>['REQUESTED','ACCEPTED'].includes(t.status)&&new Date(t.startsAt).getTime()>nowMs).sort((x,y)=>String(x.startsAt).localeCompare(String(y.startsAt)))[0];
+  const deals=[];mine.forEach(t=>(t.offers||[]).forEach(o=>{const p=o.pipeline;if(o.invalidatedAt||(p&&(p.invalidatedAt||p.decision==='DENIED'||p.archivedAt)))return;const h=(t.homes||[]).find(x=>x.id===o.listingId)||{id:o.listingId};deals.push({h,o,p});}));
+  const isClosed=x=>offerStep(x.p).startsWith('🎉');const closed=deals.filter(isClosed);deals.splice(0,deals.length,...deals.filter(x=>!isClosed(x)));
+  const homeTxt=h=>`${esc(h.address||'')}${h.city?', '+esc(h.city):''}`;
+  const img=h=>`<img src="${esc(h.photo||'listing-placeholder.svg')}" alt="">`;
+  const day=iso=>{try{return new Intl.DateTimeFormat(S.lang==='es'?'es-US':'en-US',{timeZone:'America/Chicago',month:'short',day:'numeric',year:'numeric'}).format(new Date(iso));}catch(e){return '';}};
+  return head+`<section class="card tour-card ma-agent"><div class="tour-person"><img class="tour-avatar ma-avatar" src="${esc(a.avatarUrl||'legacy-logo.png')}" alt=""><div><b class="ma-name">${esc(a.name||'')}</b>
+    ${a.brokerage?`<div class="ops-meta">🏢 ${esc(a.brokerage)}</div>`:''}${a.licenseNumber?`<div class="ops-meta">🪪 ${L('Licencia OREC','OREC license')} ${esc(a.licenseState||'OK')} #${esc(a.licenseNumber)}</div>`:''}
+    <div class="ops-meta">${a.phone?`📞 ${esc(fmtPhone(a.phone))}`:''}${a.email?` · ✉️ ${esc(a.email)}`:''}</div></div></div>
+    ${a.bio?`<p class="tour-bio">${esc(a.bio)}</p>`:''}${agentContact(a)}
+    ${next?`<p class="tour-done">📅 ${L('Próxima cita','Next showing')}: <b>${esc(when(next.startsAt))}</b> · ${next.homes.length} ${next.homes.length===1?L('casa','home'):L('casas','homes')} <button type="button" class="btn-card" data-tab="tours">${L('Ver','View')}</button></p>`:''}</section>
+   <section class="card tour-card"><h3>👀 ${L('Casas vistas juntos','Homes we saw together')} <small>(${seenL.length})</small></h3>
+    ${seenL.length?`<ul class="tour-cart ma-list">${seenL.map(x=>`<li class="tour-cart-item">${img(x.h)}<span><a href="#" data-open="${esc(x.h.id)}"><b>${homeTxt(x.h)}</b></a><br><small>📅 ${esc(day(x.at))}</small></span></li>`).join('')}</ul>`:`<p class="ops-meta">${L('Todavía no han visto casas juntos. Cuando tengas una cita con tu agente, las casas aparecen aquí.','You haven’t seen homes together yet. After a showing with your agent, the homes show up here.')}</p><button type="button" class="btn-card primary" data-tab="tours">🛒 ${L('Pedir una cita','Request a showing')}</button>`}</section>
+   <section class="card tour-card"><h3>📝 ${L('Casas bajo contrato','Homes under contract')} <small>(${deals.length})</small></h3>
+    ${deals.length?`<ul class="tour-cart ma-list">${deals.map(x=>`<li class="tour-cart-item">${img(x.h)}<span><a href="#" data-open="${esc(x.h.id)}"><b>${homeTxt(x.h)}</b></a><br><small>${esc(offerStep(x.p))}</small>${x.p&&amountLine(x.p)?`<br><small>${esc(amountLine(x.p))}</small>`:''}</span><button type="button" class="btn-card" data-tgooffer="${esc(x.o.offerId)}">${L('Ver pasos','See steps')}</button></li>`).join('')}</ul>`:`<p class="ops-meta">${L('No tienes ofertas activas con tu agente. Cuando tu agente haga una oferta por ti, verás aquí en qué paso va hasta el cierre.','No active offers with your agent. When your agent makes an offer for you, you’ll see its step here until closing.')}</p>`}
+    ${closed.length?`<h4>🎉 ${L('Cerradas con tu agente','Closed with your agent')} (${closed.length})</h4><ul class="tour-cart ma-list">${closed.map(x=>`<li class="tour-cart-item">${img(x.h)}<span><a href="#" data-open="${esc(x.h.id)}"><b>${homeTxt(x.h)}</b></a><br><small>${esc(offerStep(x.p))}</small></span><button type="button" class="btn-card" data-tgooffer="${esc(x.o.offerId)}">${L('Ver','View')}</button></li>`).join('')}</ul>`:''}</section></div>`;
+}
+
 window.LegacyTours={
   clientMode:()=>isClient()||!S.user,
   navVisible:()=>!!S.user&&(isClient()||isAgent()||S.isAdmin()||(S.isInvestor&&S.isInvestor()&&!S.isPendingApproval(S.user))),
@@ -391,6 +439,7 @@ window.LegacyTours={
   clientActionRow:l=>{if(S.user)load(false);const c=inCart(l.id),conn=connectedAgent();return `<div class="lof-act-row"><button type="button" class="btn-card${c?'':' primary'}" data-tcart="${esc(l.id)}">${c?'✓ '+L('En tu carrito (quitar)','In your cart (remove)'):'🛒 '+L('Agregar al carrito','Add to cart')}</button><button type="button" class="btn-card" data-tbook="${esc(l.id)}">📅 ${L('Solicitar cita','Request showing')}</button></div><p class="ops-meta tour-note">${conn?L('Junta las casas en tu carrito y envíalas a tu agente. Las ofertas las hace tu agente después de la visita.','Collect homes in your cart and send them to your agent. Your agent makes offers after the visit.'):L(`Junta hasta ${MAX} casas en tu carrito y pide una sola cita. Las ofertas las hace tu agente después de la visita.`,`Collect up to ${MAX} homes in your cart and request one showing. Your agent makes offers after the visit.`)}</p>`;},
   offerSentCard:l=>{if(!S.user||!S.data)return '';const T=['REJECTED','WITHDRAWN','INVALIDATED','FELL_THROUGH','CANCELLED','DECLINED'];const o=(S.data.offers||[]).filter(x=>x&&x.listingId===l.id&&x.userId===S.user.id&&!T.includes(String(x.status||'').toUpperCase())).sort((a,b)=>String(b.createdAt||'').localeCompare(String(a.createdAt||'')))[0];
     if(!o)return '';return `<div class="tour-done">✅ <b>${L('Oferta enviada','Offer sent')}</b>${o.createdAt?' · '+esc(when(o.createdAt)):''}${money(o.offerPrice)?' · '+esc(money(o.offerPrice)):''} <button type="button" class="btn-card" data-tgo="1">${L('Ver próximos pasos','See next steps')}</button></div>`;},
+  agentNavVisible:()=>isClient(),agentNavLabel:()=>'🤝 '+L('Mi agente','My agent'),agentView,
   view,refresh:()=>load(true),cart
 };
 })();
