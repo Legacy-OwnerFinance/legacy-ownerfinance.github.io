@@ -49,10 +49,12 @@ async function call(action,body){
     if(action==='tour_list')return d;
     if(action==='tour_request'){const conn=connectedAgent();if(!conn&&(body.listingIds||[]).length>MAX)throw new Error(limitText());const homes=(body.listingIds||[]).map(id=>{const l=S.listing(id)||{};return {id,address:l.address,city:l.city,status:l.status};});d.tours.unshift({...d.tours[0]||{},id:'demo-'+Date.now(),status:'REQUESTED',direct:!!conn,startsAt:new Date(body.startsAt).toISOString(),homes,agent:conn||null,feedbackDue:false,feedback:[],offers:[],role:'CLIENT'});return {ok:true};}
     if(action==='tour_decline'){const t=d.tours.find(x=>x.id===body.tourId);if(t){t.status='DECLINED';t.declineReason=body.reason||'';}return {ok:true};}
-    if(action==='tour_accept'){const o=d.open.find(x=>x.id===body.tourId);if(o){d.open=d.open.filter(x=>x!==o);d.tours.unshift({...d.tours[0],id:o.id,status:'ACCEPTED',startsAt:o.startsAt,homes:o.homes,feedbackDue:false});}else{const t=d.tours.find(x=>x.id===body.tourId);if(t)t.status='ACCEPTED';}return {ok:true};}
+    if(action==='tour_accept'){const rq=d.tours.find(x=>x.id===body.tourId&&x.direct&&x.status==='REQUESTED');const base=rq&&d.tours.find(x=>x!==rq&&x.status==='ACCEPTED'&&dayOf(x.startsAt)===dayOf(rq.startsAt));
+      if(base){const seen=new Set(base.homes.map(h=>h.id));rq.homes.forEach(h=>{if(!seen.has(h.id))base.homes.push(h);});d.tours=d.tours.filter(x=>x!==rq);return {ok:true,merged:true,mergedInto:base.id};}
+      const o=d.open.find(x=>x.id===body.tourId);if(o){d.open=d.open.filter(x=>x!==o);d.tours.unshift({...d.tours[0],id:o.id,status:'ACCEPTED',startsAt:o.startsAt,homes:o.homes,feedbackDue:false});}else{const t=d.tours.find(x=>x.id===body.tourId);if(t)t.status='ACCEPTED';}return {ok:true};}
     if(action==='tour_route_save'){const t=d.tours.find(x=>x.id===body.tourId);if(t&&body.order)t.homes=body.order.map(id=>t.homes.find(h=>h.id===id));return {ok:true};}
     if(action==='tour_feedback'){const t=d.tours.find(x=>x.id===body.tourId);if(t)t.feedback.push({listingId:body.listingId,authorRole:t.role,rating:body.rating,comments:body.comments});return {ok:true};}
-    if(action==='tour_cancel'){const t=d.tours.find(x=>x.id===body.tourId);if(t)t.status='CANCELLED';return {ok:true};}
+    if(action==='tour_cancel'){const t=d.tours.find(x=>x.id===body.tourId);if(!body.reasonCode)throw new Error(L('Elige la razón de la cancelación.','Choose the reason for cancelling.'));if(body.reasonCode==='OTHER'&&String(body.reasonText||'').trim().length<3)throw new Error(L('Escribe la razón de la cancelación.','Write the reason for cancelling.'));const r=CANCEL_REASONS.find(x=>x[0]===body.reasonCode);if(t){t.status='CANCELLED';t.cancelReason={code:body.reasonCode,text:body.reasonText||'',labelEs:r[1],labelEn:r[2]};}return {ok:true};}
     return {ok:true};}
   return S.api(action,body||{});
 }
@@ -119,11 +121,15 @@ function tourCard(t){
   const live=['REQUESTED','ACCEPTED'].includes(t.status);
   const wait=t.status==='REQUESTED'?(t.direct?`<p class="ops-meta">⏳ ${L('Enviada a tu agente. Te llegará una notificación cuando la apruebe o la rechace.','Sent to your agent. You will get a notification when they approve or decline it.')}</p>`:`<p class="ops-meta">⏳ ${L('Les avisamos a los agentes con licencia. Te llegará una notificación cuando uno acepte tu cita.','We notified licensed agents. You will get a notification when one accepts your showing.')}</p>`):'';
   const declined=t.status==='DECLINED'?`<p class="tour-warn">${L('Tu agente no puede en ese horario.','Your agent can’t make that time.')}${t.declineReason?' '+esc(t.declineReason):''} ${L('Puedes pedir otra fecha u hora.','You can request another date or time.')}</p>`:'';
-  const more=t.role==='CLIENT'&&t.status==='ACCEPTED'&&Date.now()<new Date(t.startsAt).getTime()?`<div class="tour-btns"><button type="button" class="btn-card" data-tmore="${esc(t.id)}">➕ ${L('¿Más casas ese mismo día? Enviar al agente','More homes that same day? Send to the agent')}</button></div>`:'';
+  const cr=t.status==='CANCELLED'&&t.cancelReason?`<p class="ops-meta">❌ ${L('Razón de la cancelación','Cancellation reason')}: <b>${esc(L(t.cancelReason.labelEs,t.cancelReason.labelEn))}</b>${t.cancelReason.text?' — '+esc(t.cancelReason.text):''}</p>`:'';
+  const merged=t.mergedInto?`<p class="ops-meta">➕ ${L('Estas casas se agregaron a la ruta del mismo día.','These homes were added to the same-day route.')}</p>`:'';
+  const more=t.role==='CLIENT'&&t.status==='ACCEPTED'&&Date.now()<new Date(t.startsAt).getTime()?`<div class="tour-btns"><button type="button" class="btn-card" data-tmore="${esc(t.id)}">➕ ${L('¿Más casas ese mismo día? Enviar al agente','More homes that same day? Send to the agent')}</button><span class="ops-meta">${L('Si tu agente las aprueba, se agregan a esta misma ruta.','If your agent approves them, they are added to this same route.')}</span></div>`:'';
   const decide=t.role==='AGENT'&&t.status==='REQUESTED'&&t.direct?`<div class="tour-btns"><button type="button" class="btn-card primary" data-taccept="${esc(t.id)}">✅ ${L('Aprobar','Approve')}</button><button type="button" class="btn-card btn-del" data-tdecline="${esc(t.id)}">✕ ${L('Rechazar','Decline')}</button><span class="ops-meta">${L('Según tu agenda, el código de acceso y si la casa está disponible.','Based on your schedule, the access code and whether the home is available.')}</span></div>`:'';
-  const other=t.role==='CLIENT'?(t.agent?`<h3>${L('Tu agente','Your agent')}</h3>${personCard(t.agent,true)}`:'')+wait+declined+more
+  const sameDay=t.status==='REQUESTED'&&t.direct&&data&&data.tours.find(x=>x.id!==t.id&&x.status==='ACCEPTED'&&dayOf(x.startsAt)===dayOf(t.startsAt));
+  const addNote=sameDay?`<p class="ops-meta">➕ ${t.role==='AGENT'?L(`Si apruebas, estas casas se agregan a la ruta que ya tienen ese día (${sameDay.homes.length} + ${t.homes.length}).`,`If you approve, these homes are added to your existing route that day (${sameDay.homes.length} + ${t.homes.length}).`):L(`Si tu agente aprueba, se agregan a tu ruta de ese día (${sameDay.homes.length} + ${t.homes.length}).`,`If your agent approves, they are added to your route that day (${sameDay.homes.length} + ${t.homes.length}).`)}</p>`:'';
+  const other=(t.role==='CLIENT'?(t.agent?`<h3>${L('Tu agente','Your agent')}</h3>${personCard(t.agent,true)}`:'')+wait+declined+more
     :t.role==='AGENT'?`${t.direct&&t.status==='REQUESTED'?`<p class="tour-warn">📨 ${L('Tu cliente te mandó esta solicitud solo a ti.','Your client sent this request only to you.')}</p>`:''}<h3>${L('Tu cliente','Your client')}</h3>${personCard(t.client,false)}${decide}`
-    :`<p class="ops-meta">👤 ${esc(t.client&&t.client.name||'')} ${t.client&&t.client.email?'· '+esc(t.client.email):''} · 🧑‍💼 ${esc(t.agent?t.agent.name:L('sin agente','no agent'))}</p>`;
+    :`<p class="ops-meta">👤 ${esc(t.client&&t.client.name||'')} ${t.client&&t.client.email?'· '+esc(t.client.email):''} · 🧑‍💼 ${esc(t.agent?t.agent.name:L('sin agente','no agent'))}</p>`)+addNote+cr+merged;
   const ml=mapsLink(t.homes);
   return `<article class="card tour-card${location.hash.includes('tour='+t.id)?' tour-focus':''}" id="tour-${esc(t.id)}"><div class="tour-head"><h3>📅 ${esc(when(t.startsAt))}</h3>${statusPill(t.status)}</div>
    <p class="ops-meta">${t.homes.length} ${t.homes.length===1?L('casa','home'):L('casas','homes')}${t.routeKm?` · ${L('ruta aprox.','route approx.')} ${t.routeKm} km`:''}</p>
@@ -154,6 +160,31 @@ function view(){
    (sf.length?`<section class="card tour-card"><h2>💬 ${L('Comentarios de visitas a tus casas','Showing feedback on your homes')}</h2><ul>${sf.map(f=>`<li><b>${esc(f.address||'')}, ${esc(f.city||'')}</b> · ${f.authorRole==='CLIENT'?L('Cliente','Client'):L('Agente','Agent')} ${f.rating?'★'.repeat(f.rating):''} — ${esc(f.comments||'')}</li>`).join('')}</ul></section>`:'')+`</div>`;
 }
 
+const CANCEL_REASONS=[['FOUND_OTHER','Ya encontré otra casa','I already found another home'],['SCHEDULE','Cambio de horario / no puedo a esa hora','Schedule change / I can’t make that time'],['EMERGENCY','Emergencia personal o familiar','Personal or family emergency'],['NOT_INTERESTED','Ya no me interesa la propiedad','I’m no longer interested in the property'],['FINANCING','Problemas de financiamiento / presupuesto','Financing / budget issues'],['OTHER','Otra razón','Other reason']];
+function dayOf(iso){try{return new Intl.DateTimeFormat('en-CA',{timeZone:'America/Chicago',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date(iso));}catch(e){return '';}}
+function sheet(html){document.querySelectorAll('.tour-ask-bg').forEach(x=>x.remove());const m=document.createElement('div');m.className='tour-ask-bg';m.innerHTML=`<div class="tour-ask" role="dialog" aria-modal="true"><button type="button" class="nav-pill tour-ask-x" data-taskclose="1" aria-label="${esc(L('Cerrar','Close'))}">✕</button>${html}</div>`;
+  m.addEventListener('click',e=>{if(e.target===m||e.target.closest('[data-taskclose]'))m.remove();});document.addEventListener('keydown',function k(e){if(e.key==='Escape'){m.remove();document.removeEventListener('keydown',k);}});document.body.appendChild(m);return m;}
+function openCancel(t){
+  const a=t.agent;const tel=a&&a.phone?String(a.phone).replace(/[^\d+]/g,''):'';
+  const step2=()=>{const m=sheet(`<h3>❌ ${L('Cancelar cita','Cancel showing')}</h3><p class="ops-meta">📅 ${esc(when(t.startsAt))} · ${t.homes.length} ${t.homes.length===1?L('casa','home'):L('casas','homes')}</p>
+    <form class="tour-form" id="tourCancelF"><fieldset class="tour-reasons"><legend><b>${L('¿Por qué cancelas? (obligatorio)','Why are you cancelling? (required)')}</b></legend>
+    ${CANCEL_REASONS.map(r=>`<label class="tour-reason"><input type="radio" name="code" value="${r[0]}" required> ${esc(L(r[1],r[2]))}</label>`).join('')}</fieldset>
+    <label class="tour-other" hidden>${L('Escribe la razón','Write the reason')}<textarea name="text" rows="3" maxlength="500" placeholder="${esc(L('Cuéntanos por qué cancelas','Tell us why you are cancelling'))}"></textarea></label>
+    <p class="ops-meta">${L('Tu agente y Legacy - Owner Finance recibirán la razón.','Your agent and Legacy - Owner Finance will receive the reason.')}</p>
+    <div class="tour-btns"><button type="submit" class="btn-card btn-del">${L('Cancelar la cita','Cancel the showing')}</button><button type="button" class="btn-card" data-taskclose="1">${L('No, mantener la cita','No, keep the showing')}</button></div><p class="tour-warn" id="tourCancelErr" hidden></p></form>`);
+    const f=m.querySelector('#tourCancelF'),other=m.querySelector('.tour-other'),ta=other.querySelector('textarea');
+    f.addEventListener('change',()=>{const o=f.code.value==='OTHER';other.hidden=!o;ta.required=o;});
+    f.addEventListener('submit',e=>{e.preventDefault();const code=f.code.value,text=ta.value.trim();const err=m.querySelector('#tourCancelErr');
+      if(!code){err.hidden=false;err.textContent=L('Elige una razón.','Choose a reason.');return;}
+      if(code==='OTHER'&&text.length<3){err.hidden=false;err.textContent=L('Escribe la razón de la cancelación.','Write the reason for cancelling.');ta.focus();return;}
+      act(async()=>{await call('tour_cancel',{tourId:t.id,reasonCode:code,reasonText:code==='OTHER'?text:''});m.remove();await load(true);alert(L('Cita cancelada. Le avisamos a tu agente.','Showing cancelled. We let your agent know.'));});});};
+  if(!a||t.role!=='CLIENT')return step2();
+  const m=sheet(`<h3>❌ ${L('Cancelar cita','Cancel showing')}</h3><p>${L(`Antes de cancelar, ¿quieres hablar con ${esc(a.name||'tu agente')}? A veces se puede cambiar la hora o las casas.`,`Before cancelling, would you like to talk to ${esc(a.name||'your agent')}? Sometimes the time or the homes can be changed.`)}</p>
+   <div class="tour-btns">${tel?`<a class="btn-card primary" href="tel:${esc(tel)}">📞 ${L('Llamar','Call')}</a>`:''}<button type="button" class="btn-card" data-tcchat="1">💬 ${L('Escribir','Message')}</button></div>
+   <div class="tour-btns"><button type="button" class="btn-card btn-del" data-tcnext="1">${L('Continuar con la cancelación','Continue cancelling')}</button><button type="button" class="btn-card" data-taskclose="1">${L('No, mantener la cita','No, keep the showing')}</button></div>`);
+  m.querySelector('[data-tcnext]').addEventListener('click',step2);
+  m.querySelector('[data-tcchat]').addEventListener('click',()=>{m.remove();if(S.msgEnabled&&!S.msgEnabled()){alert(L('Los mensajes no están disponibles ahora.','Messages are not available right now.'));return;}UI().openChat(a.id,a.name);});
+}
 const BESIDE_TEL='+14053384124',BESIDE_TXT='(405) 338-4124';
 function askText(t,h){
   const ap=(S.agentProfile&&S.agentProfile(S.user))||{};const name=(S.user&&S.user.name)||'';const brk=ap.brokerage||S.user&&S.user.brokerage||'';
@@ -185,7 +216,7 @@ document.addEventListener('click',e=>{
   if(d.tbook){if(addToCart(d.tbook)){document.querySelectorAll('.modal-backdrop,.drawer-bg,.lof-pop-bg').forEach(x=>x.remove());UI().go('tours');setTimeout(()=>{const f=document.querySelector('#tourReqF [name=date]');if(f){f.scrollIntoView({behavior:'smooth',block:'center'});f.focus();}},120);}return;}
   if(d.tgo){document.querySelectorAll('.modal-backdrop').forEach(x=>x.remove());return UI().go('tours');}
   if(d.tcartdel){removeFromCart(d.tcartdel);return rerender();}
-  if(d.taccept)return act(async()=>{await call('tour_accept',{tourId:d.taccept});await load(true);alert(L('¡Listo! La cita es tuya. Ya puedes ver los datos del cliente, llamarle o escribirle en la app.','Done! The showing is yours. You can now see the client’s info, call or message them in the app.'));});
+  if(d.taccept)return act(async()=>{const r=await call('tour_accept',{tourId:d.taccept});await load(true);if(r&&r.merged){location.hash='tours&tour='+r.mergedInto;return alert(L('¡Aprobada! Las casas se agregaron a la ruta que ya tenían ese día y se reordenó por distancia. Pueden editar el orden.','Approved! The homes were added to your existing route that day and re-sorted by distance. You can both edit the order.'));}alert(L('¡Listo! La cita es tuya. Ya puedes ver los datos del cliente, llamarle o escribirle en la app.','Done! The showing is yours. You can now see the client’s info, call or message them in the app.'));});
   if(d.tmove)return act(async()=>{const tour=data.tours.find(x=>x.id===d.tmove);if(!tour)return;const ids=tour.homes.map(h=>h.id),i=+d.tidx,j=i+(+d.tdir);if(j<0||j>=ids.length)return;[ids[i],ids[j]]=[ids[j],ids[i]];await call('tour_route_save',{tourId:tour.id,order:ids});await load(true);});
   if(d.task){const [tid,lid]=d.task.split('|');const tour=data.tours.find(x=>x.id===tid);const h=tour&&tour.homes.find(x=>x.id===lid);if(tour&&h)openAsk(tour,h);return;}
   if(d.tdecline){const reason=prompt(L('¿Por qué no puedes? (opcional; el cliente lo verá)','Why can’t you? (optional; the client will see it)'),'');if(reason===null)return;return act(async()=>{await call('tour_decline',{tourId:d.tdecline,reason});await load(true);});}
@@ -194,7 +225,7 @@ document.addEventListener('click',e=>{
     rerender();setTimeout(()=>{const f=document.getElementById('tour-cart');if(f)f.scrollIntoView({behavior:'smooth'});},80);return;}
   if(d.tauto)return act(async()=>{await call('tour_route_save',{tourId:d.tauto,auto:true});await load(true);});
   if(d.tics){const tour=data.tours.find(x=>x.id===d.tics);if(tour)icsFor(tour);return;}
-  if(d.tcancel){if(!confirm(L('¿Cancelar esta cita?','Cancel this showing?')))return;return act(async()=>{await call('tour_cancel',{tourId:d.tcancel});await load(true);});}
+  if(d.tcancel){const tour=data.tours.find(x=>x.id===d.tcancel);if(tour)openCancel(tour);return;}
   if(d.tchat){if(S.msgEnabled&&!S.msgEnabled()){alert(L('Los mensajes no están disponibles ahora.','Messages are not available right now.'));return;}return UI().openChat(d.tchat,d.tname);}
   if(d.tfbopen){fbOpen[d.tfbopen]=true;return rerender();}
 },true);
