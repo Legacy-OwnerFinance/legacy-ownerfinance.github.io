@@ -1918,3 +1918,18 @@ html.lof-map-on:has(.nav-drawer.open) .lof-mapview { z-index: 1; }
 .ad-mini .btn-card{flex:0 0 auto;text-decoration:none;display:inline-flex;align-items:center;justify-content:center}
 .ad-body .tour-pill{align-self:flex-start}
 .ad-who{display:flex;flex-wrap:wrap;align-items:center;gap:6px}
+
+/* ---------- Offer step 1: ID + income slots ---------- */
+.ds-box{display:grid;gap:8px;margin:6px 0}
+.ds-slot{border:1px solid #eadfcb;border-radius:12px;padding:10px 12px;background:#fff}
+.ds-slot.miss{border-style:dashed;background:#fffdf8}
+.ds-slot.ok{border-color:#bbf7d0;background:#f6fef9}
+.ds-h{display:flex;justify-content:space-between;align-items:center;gap:8px}
+.ds-st{font-size:12.5px;font-weight:700;white-space:nowrap}
+.ds-slot.miss .ds-st{color:#b45309}.ds-slot.ok .ds-st{color:#047857}
+.ds-files{display:flex;flex-direction:column;gap:3px;margin-top:5px;font-size:13px}
+.ds-files a{color:var(--navy);text-decoration:underline;word-break:break-all}
+.ds-slot small{display:block;color:var(--muted);margin-top:4px}
+.ds-btns{margin-top:6px}.ds-btns .btn-card{flex:0 1 auto}
+.ds-priv{color:var(--muted)}
+.ds-offer{border-top:1px solid #efe7d8;padding-top:10px;margin-top:10px}.ds-offer h3{margin:0 0 6px;font-size:15px}
