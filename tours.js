@@ -104,7 +104,8 @@ function homeRow(t,h,i,n){
   const myFb=(t.feedback||[]).find(f=>f.listingId===h.id&&(t.role==='ADMIN'||f.authorRole===t.role));
   const offer=(t.offers||[]).find(o=>o.listingId===h.id);
   let after='';
-  if(t.feedbackDue&&t.role!=='ADMIN'){
+  if(offer&&t.role!=='ADMIN')after=offerCard(t,h,offer);
+  else if(t.feedbackDue&&t.role!=='ADMIN'){
     if(offer){const due=new Date(offer.dueAt),left=due.getTime()-Date.now();
       after=`<div class="tour-offer">${offer.invalidatedAt?`❌ ${L('Oferta invalidada: no se subieron documentos en 12 horas.','Offer invalidated: no documents within 12 hours.')}`:offer.docsUploadedAt?`✅ ${L('Documentos recibidos.','Documents received.')}`:`⏰ ${L(`Oferta hecha. Hay hasta el ${when(offer.dueAt)} (${Math.max(0,Math.floor(left/3600e3))} h ${Math.max(0,Math.floor(left%3600e3/60e3))} min) para subir la documentación requerida o la oferta se invalida.`,`Offer made. Upload the required documents before ${when(offer.dueAt)} (${Math.max(0,Math.floor(left/3600e3))} h ${Math.max(0,Math.floor(left%3600e3/60e3))} min left) or the offer is invalidated.`)}`}
        ${offer.invalidatedAt?'':`<label class="btn-card">📎 ${L('Subir documentos de esta casa','Upload documents for this home')}<input type="file" hidden accept="image/*,application/pdf" data-tdoc="${esc(h.id)}" data-toffer="${esc(offer.offerId)}"></label>`}</div>`;}
@@ -112,9 +113,9 @@ function homeRow(t,h,i,n){
     else if(t.role==='CLIENT')after=fbOpen[t.id+'|'+h.id]?feedbackForm(t,h):`<button type="button" class="btn-card primary" data-tfbopen="${esc(t.id+'|'+h.id)}">⭐ ${L('Dar mis comentarios','Give feedback')}</button>`;
     else if(t.role==='AGENT')after=fbOpen[t.id+'|'+h.id]?feedbackForm(t,h):`<div class="tour-btns"><button type="button" class="btn-card" data-tfbopen="${esc(t.id+'|'+h.id)}">📝 ${L('Dejar comentarios','Leave feedback')}</button><span class="ops-meta">${L('o','or')}</span><button type="button" class="btn-card primary" data-offerpop="${esc(h.id)}" data-tofferfor="${esc(t.id)}">💰 ${L('Hacer una oferta','Make an offer')}</button></div><p class="ops-meta">${L('Elige una: comentarios u oferta. Si haces oferta tendrás 12 horas para subir la documentación.','Pick one: feedback or an offer. If you make an offer you will have 12 hours to upload the documents.')}</p>`;
   }
-  if(t.role==='ADMIN'){const fbs=(t.feedback||[]).filter(f=>f.listingId===h.id);after=fbs.map(f=>`<div class="tour-done">${f.authorRole==='CLIENT'?'👤':'🧑‍💼'} ${f.rating?'★'.repeat(f.rating)+' ':''}${esc(f.comments||'')}${f.sellerFlag?` <span class="tour-warn">⚠️ ${L('Esta casa no tiene compañía/vendedor ligado; solo te llegó a ti.','No company/seller linked to this home; it only went to you.')}</span>`:''}</div>`).join('')+(offer?`<div class="tour-offer">💰 ${L('Oferta del agente','Agent offer')} · ${offer.invalidatedAt?L('invalidada','invalidated'):offer.docsUploadedAt?L('documentos recibidos','documents received'):L('vence','due')+' '+esc(when(offer.dueAt))}</div>`:'');}
+  if(t.role==='ADMIN'){const fbs=(t.feedback||[]).filter(f=>f.listingId===h.id);after=fbs.map(f=>`<div class="tour-done">${f.authorRole==='CLIENT'?'👤':'🧑‍💼'} ${f.rating?'★'.repeat(f.rating)+' ':''}${esc(f.comments||'')}${f.sellerFlag?` <span class="tour-warn">⚠️ ${L('Esta casa no tiene compañía/vendedor ligado; solo te llegó a ti.','No company/seller linked to this home; it only went to you.')}</span>`:''}</div>`).join('')+(offer?offerCard(t,h,offer):'');}
   // Access: the code shows only to the accepted agent (and Admin). No code yet => "Preguntar" (call or text the Beside line).
-  const access=(t.role==='AGENT'||t.role==='ADMIN')&&t.status==='ACCEPTED'?(h.accessCode?`<div class="tour-code">🔑 ${L('Código de acceso','Access code')}: <b>${esc(h.accessCode)}</b></div>`:`<div class="tour-code">🔑 ${L('Sin código de acceso','No access code')} <button type="button" class="btn-card" data-task="${esc(t.id+'|'+h.id)}">❓ ${L('Preguntar','Ask')}</button></div>`):'';
+  const access=(t.role==='AGENT'||t.role==='ADMIN')&&t.status==='ACCEPTED'?(h.accessCode?`<div class="tour-code">🔑 ${L('Código de acceso','Access code')}: <b>${esc(h.accessCode)}</b></div>`:`<div class="tour-code"><button type="button" class="btn-card" data-task="${esc(t.id+'|'+h.id)}">❓ ${L('Preguntar','Ask')}</button></div>`):'';
   return `<li class="tour-stop"><span class="tour-n">${i+1}</span><span class="tour-stop-main"><a href="#" data-open="${esc(h.id)}">${homeLine(h)}</a>${access}${after}</span>${editable&&n>1?`<span class="tour-move"><button type="button" class="btn-card" data-tmove="${esc(t.id)}" data-tidx="${i}" data-tdir="-1" ${i===0?'disabled':''} aria-label="${esc(L('Subir','Move up'))}">↑</button><button type="button" class="btn-card" data-tmove="${esc(t.id)}" data-tidx="${i}" data-tdir="1" ${i===n-1?'disabled':''} aria-label="${esc(L('Bajar','Move down'))}">↓</button></span>`:''}</li>`;
 }
 function tourCard(t){
@@ -123,13 +124,17 @@ function tourCard(t){
   const declined=t.status==='DECLINED'?`<p class="tour-warn">${L('Tu agente no puede en ese horario.','Your agent can’t make that time.')}${t.declineReason?' '+esc(t.declineReason):''} ${L('Puedes pedir otra fecha u hora.','You can request another date or time.')}</p>`:'';
   const cr=t.status==='CANCELLED'&&t.cancelReason?`<p class="ops-meta">❌ ${L('Razón de la cancelación','Cancellation reason')}: <b>${esc(L(t.cancelReason.labelEs,t.cancelReason.labelEn))}</b>${t.cancelReason.text?' — '+esc(t.cancelReason.text):''}</p>`:'';
   const merged=t.mergedInto?`<p class="ops-meta">➕ ${L('Estas casas se agregaron a la ruta del mismo día.','These homes were added to the same-day route.')}</p>`:'';
+  const prop=t.proposal?(t.role==='CLIENT'?`<div class="tour-prop"><p>🕒 <b>${L('Cita modificada por el agente','Showing changed by your agent')}</b> — ${L('Fecha y hora recomendadas','Recommended date and time')}: <b>${esc(when(t.proposal.startsAt))}</b>${t.proposal.note?'<br>'+esc(t.proposal.note):''}</p><div class="tour-btns"><button type="button" class="btn-card primary" data-tpans="${esc(t.id)}" data-tpv="1">✅ ${L('Aceptar nuevo horario','Accept new time')}</button><button type="button" class="btn-card" data-tpans="${esc(t.id)}" data-tpv="0">${L('No me queda','Doesn’t work for me')}</button></div>${contactBtns(t.agent)}</div>`
+    :`<p class="tour-prop">🕒 ${L('Nuevo horario enviado','New time sent')}: <b>${esc(when(t.proposal.startsAt))}</b> — ${L('esperando al cliente.','waiting for the client.')}</p>`):'';
+  const canProp=t.role==='AGENT'&&(t.status==='ACCEPTED'||(t.status==='REQUESTED'&&t.direct))&&Date.now()<new Date(t.startsAt).getTime()+30*60e3;
+  const propBtn=canProp?`<div class="tour-btns"><button type="button" class="btn-card" data-tprop="${esc(t.id)}">🕒 ${L('Cambiar fecha y hora','Change date and time')}</button></div>`:'';
   const more=t.role==='CLIENT'&&t.status==='ACCEPTED'&&Date.now()<new Date(t.startsAt).getTime()?`<div class="tour-btns"><button type="button" class="btn-card" data-tmore="${esc(t.id)}">➕ ${L('¿Más casas ese mismo día? Enviar al agente','More homes that same day? Send to the agent')}</button><span class="ops-meta">${L('Si tu agente las aprueba, se agregan a esta misma ruta.','If your agent approves them, they are added to this same route.')}</span></div>`:'';
   const decide=t.role==='AGENT'&&t.status==='REQUESTED'&&t.direct?`<div class="tour-btns"><button type="button" class="btn-card primary" data-taccept="${esc(t.id)}">✅ ${L('Aprobar','Approve')}</button><button type="button" class="btn-card btn-del" data-tdecline="${esc(t.id)}">✕ ${L('Rechazar','Decline')}</button><span class="ops-meta">${L('Según tu agenda, el código de acceso y si la casa está disponible.','Based on your schedule, the access code and whether the home is available.')}</span></div>`:'';
   const sameDay=t.status==='REQUESTED'&&t.direct&&data&&data.tours.find(x=>x.id!==t.id&&x.status==='ACCEPTED'&&dayOf(x.startsAt)===dayOf(t.startsAt));
   const addNote=sameDay?`<p class="ops-meta">➕ ${t.role==='AGENT'?L(`Si apruebas, estas casas se agregan a la ruta que ya tienen ese día (${sameDay.homes.length} + ${t.homes.length}).`,`If you approve, these homes are added to your existing route that day (${sameDay.homes.length} + ${t.homes.length}).`):L(`Si tu agente aprueba, se agregan a tu ruta de ese día (${sameDay.homes.length} + ${t.homes.length}).`,`If your agent approves, they are added to your route that day (${sameDay.homes.length} + ${t.homes.length}).`)}</p>`:'';
   const other=(t.role==='CLIENT'?(t.agent?`<h3>${L('Tu agente','Your agent')}</h3>${personCard(t.agent,true)}`:'')+wait+declined+more
     :t.role==='AGENT'?`${t.direct&&t.status==='REQUESTED'?`<p class="tour-warn">📨 ${L('Tu cliente te mandó esta solicitud solo a ti.','Your client sent this request only to you.')}</p>`:''}<h3>${L('Tu cliente','Your client')}</h3>${personCard(t.client,false)}${decide}`
-    :`<p class="ops-meta">👤 ${esc(t.client&&t.client.name||'')} ${t.client&&t.client.email?'· '+esc(t.client.email):''} · 🧑‍💼 ${esc(t.agent?t.agent.name:L('sin agente','no agent'))}</p>`)+addNote+cr+merged;
+    :`<p class="ops-meta">👤 ${esc(t.client&&t.client.name||'')} ${t.client&&t.client.email?'· '+esc(t.client.email):''} · 🧑‍💼 ${esc(t.agent?t.agent.name:L('sin agente','no agent'))}</p>`)+prop+propBtn+addNote+cr+merged;
   const ml=mapsLink(t.homes);
   return `<article class="card tour-card${location.hash.includes('tour='+t.id)?' tour-focus':''}" id="tour-${esc(t.id)}"><div class="tour-head"><h3>📅 ${esc(when(t.startsAt))}</h3>${statusPill(t.status)}</div>
    <p class="ops-meta">${t.homes.length} ${t.homes.length===1?L('casa','home'):L('casas','homes')}${t.routeKm?` · ${L('ruta aprox.','route approx.')} ${t.routeKm} km`:''}</p>
@@ -154,7 +159,7 @@ function view(){
   if(lastErr&&!data)return head+`<p class="tour-warn" style="margin:18px">${esc(lastErr)}</p></div>`;
   const mine=(data.tours||[]);const live=mine.filter(t=>['REQUESTED','ACCEPTED'].includes(t.status)||t.feedbackDue&&!['CANCELLED','EXPIRED','DECLINED'].includes(t.status));const past=mine.filter(t=>!live.includes(t));
   const sf=(data.sellerFeedback||[]);
-  return head+(isClient()?cartSection():'')+openSection()+
+  return head+(isClient()?cartSection():'')+openSection()+sellerSection()+
    `<section class="tour-list"><h2>${S.isAdmin()?L('Todas las citas con carrito','All cart showings'):L('Mis citas','My showings')}</h2>${live.map(tourCard).join('')||`<p class="ops-meta" style="padding:0 18px">${L('No tienes citas próximas.','No upcoming showings.')}</p>`}
    ${past.length?`<details class="card tour-card"><summary>${L('Citas anteriores','Past showings')} (${past.length})</summary>${past.map(tourCard).join('')}</details>`:''}</section>`+
    (sf.length?`<section class="card tour-card"><h2>💬 ${L('Comentarios de visitas a tus casas','Showing feedback on your homes')}</h2><ul>${sf.map(f=>`<li><b>${esc(f.address||'')}, ${esc(f.city||'')}</b> · ${f.authorRole==='CLIENT'?L('Cliente','Client'):L('Agente','Agent')} ${f.rating?'★'.repeat(f.rating):''} — ${esc(f.comments||'')}</li>`).join('')}</ul></section>`:'')+`</div>`;
@@ -195,19 +200,60 @@ function askText(t,h){
   return L(`Hola, soy ${name}${brk?` de ${brk}`:''}. Confirmo la cita para ver ${addr} el ${day} a las ${hr}. ¿Me pueden dar acceso a la propiedad? Gracias.`,`Hi, this is ${name}${brk?` with ${brk}`:''}. I'm confirming the showing at ${addr} on ${day} at ${hr}. Could you please give me access to the property? Thank you.`);
 }
 function openAsk(t,h){
-  document.querySelectorAll('.tour-ask-bg').forEach(x=>x.remove());
-  const txt=askText(t,h);const m=document.createElement('div');m.className='tour-ask-bg';
-  m.innerHTML=`<div class="tour-ask" role="dialog" aria-modal="true" aria-label="${esc(L('Preguntar por el acceso','Ask for access'))}"><button type="button" class="nav-pill tour-ask-x" data-taskclose="1" aria-label="${esc(L('Cerrar','Close'))}">✕</button><h3>❓ ${L('Preguntar por el acceso','Ask for access')}</h3><p class="ops-meta">${esc(homeLine(h).replace(/&amp;/g,'&'))}</p><p>${L(`Esta casa no tiene código. Llama o escribe al ${BESIDE_TXT}. Si ahí no está, agenda una llamada con Fernando lo antes posible.`,`This home has no code. Call or text ${BESIDE_TXT}. If they can’t help, schedule a call with Fernando as soon as possible.`)}</p>
-   <div class="tour-btns"><a class="btn-card primary" href="tel:${BESIDE_TEL}">📞 ${L('Llamar','Call')}</a><a class="btn-card" href="sms:${BESIDE_TEL}?&body=${encodeURIComponent(txt)}">💬 ${L('Escribir','Text')}</a></div>
-   <p class="ops-meta">${L('Mensaje que se va a enviar (lo puedes cambiar antes de mandarlo):','Message to send (you can edit it before sending):')}</p><blockquote class="tour-ask-msg">${esc(txt)}</blockquote></div>`;
-  m.addEventListener('click',e=>{if(e.target===m||e.target.closest('[data-taskclose]'))m.remove();});
-  document.addEventListener('keydown',function k(e){if(e.key==='Escape'){m.remove();document.removeEventListener('keydown',k);}});
-  document.body.appendChild(m);
+  const txt=askText(t,h);
+  const m=sheet(`<h3>❓ ${L('Preguntar','Ask')}</h3><p class="ops-meta">${esc(homeLine(h).replace(/&amp;/g,'&'))}</p>
+   <div class="tour-btns"><a class="btn-card primary" href="tel:${BESIDE_TEL}">📞 ${L('Llamar','Call')}</a><button type="button" class="btn-card" data-askw="1">💬 ${L('Escribir','Text')}</button></div>
+   <div class="tour-askw" hidden><label>${L('Mensaje','Message')}<textarea rows="5" maxlength="600">${esc(txt)}</textarea></label><div class="tour-btns"><a class="btn-card primary" data-asksend="1" href="#">📤 ${L('Enviar mensaje','Send message')}</a></div></div>`);
+  const w=m.querySelector('.tour-askw'),ta=w.querySelector('textarea'),send=w.querySelector('[data-asksend]');
+  const sync=()=>{send.href=`sms:${BESIDE_TEL}?&body=${encodeURIComponent(ta.value)}`;};sync();ta.addEventListener('input',sync);
+  m.querySelector('[data-askw]').addEventListener('click',()=>{w.hidden=false;ta.focus();ta.setSelectionRange(ta.value.length,ta.value.length);});
+}
+function contactBtns(p){if(!p)return '';const tel=p.phone?String(p.phone).replace(/[^\d+]/g,''):'';return `<div class="tour-btns">${tel?`<a class="btn-card primary" href="tel:${esc(tel)}">📞 ${L('Llamar','Call')}</a>`:''}<button type="button" class="btn-card" data-tchat="${esc(p.id)}" data-tname="${esc(p.name||'')}">💬 ${L('Escribir','Message')}</button></div>`;}
+function busySheet(msg){const a=connectedAgent()||{};const m=sheet(`<h3>📅 ${L('Horario ocupado','Time not available')}</h3><p>${esc(msg||L('Tu agente ya tiene una cita a esa hora. Comunícate con él para coordinar otro horario.','Your agent already has a showing at that time. Contact them to set up another time.'))}</p>${contactBtns(a.id?a:null)}`);m.addEventListener('click',e=>{if(e.target.closest('[data-tchat]'))m.remove();});}
+function openPropose(t){
+  const p=new Intl.DateTimeFormat('en-CA',{timeZone:'America/Chicago',year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',hourCycle:'h23'}).formatToParts(new Date(t.startsAt));const g={};p.forEach(x=>g[x.type]=x.value);
+  const m=sheet(`<h3>🕒 ${L('Cambiar fecha y hora','Change date and time')}</h3><p class="ops-meta">${L('Ahora','Now')}: ${esc(when(t.startsAt))}</p>
+   <form class="tour-form" id="tourPropF"><label>${L('Fecha','Date')}<input type="date" name="date" min="${chicagoDay(new Date())}" value="${g.year}-${g.month}-${g.day}" required></label><label>${L('Hora','Time')}<select name="time">${timeOptions(`${g.hour}:${g.minute}`)}</select></label>
+   <label>${L('Nota para el cliente (opcional)','Note for the client (optional)')}<input name="note" maxlength="300"></label>
+   <div class="tour-btns"><button type="submit" class="btn-card primary">📨 ${L('Enviar nuevo horario al cliente','Send new time to the client')}</button></div><p class="ops-meta">${L('El cliente recibe un aviso y puede aceptarlo, o llamarte o escribirte.','The client gets a notice and can accept it, or call or message you.')}</p></form>`);
+  m.querySelector('#tourPropF').addEventListener('submit',e=>{e.preventDefault();const v=Object.fromEntries(new FormData(e.target));act(async()=>{await call('tour_propose',{tourId:t.id,startsAt:`${v.date}T${v.time}`,note:v.note||''});m.remove();await load(true);alert(L('Listo. Le avisamos al cliente del nuevo horario.','Done. We let the client know about the new time.'));});});
+}
+/* ---------- offers: confirmation card + next-steps checklist ---------- */
+const STEP_LABEL={DOCS:['Entregar documentación','Deliver the documents'],DEPOSIT:['Depósito de garantía $1,000.00','$1,000.00 earnest deposit'],INSPECTIONS:['Coordinar inspecciones (si se elige)','Schedule inspections (if chosen)'],TRR:['Negociar TRR (opcional)','Negotiate TRR (optional)'],CLOSING:['Coordinar cierre','Coordinate closing'],OPTION_FEE:['Depositar option fee / down payment','Pay the option fee / down payment'],PAID:['Get paid','Get paid']};
+const STATUS_LABEL={PENDING:['Pendiente','Pending','⏳'],SUBMITTED:['Enviado — esperando al vendedor','Sent — waiting for the seller','📤'],APPROVED:['Aprobado por el vendedor','Approved by the seller','✅'],LATE:['Vencido','Overdue','⚠️'],INVALIDATED:['Invalidada','Invalidated','❌'],DONE:['Hecho','Done','✅'],NA:['No aplica','Not needed','➖']};
+const money=c=>{const v=Number(c)/100;return Number.isFinite(v)&&v>0?'$'+v.toLocaleString('en-US',{maximumFractionDigits:2}):'';};
+function amountLine(p){const a=p&&p.amount;if(!a)return '';return [money(a.price),a.down?L('enganche ','down ')+money(a.down):'',a.monthly?money(a.monthly)+L('/mes','/mo'):''].filter(Boolean).join(' · ');}
+function checklist(p,canSet){
+  return `<ol class="tour-check">${p.checklist.map(c=>{const st=STATUS_LABEL[c.status]||STATUS_LABEL.PENDING;const due=c.dueAt&&!['APPROVED','DONE','NA','INVALIDATED'].includes(c.status)?` · ${L('antes del','by')} ${esc(when(c.dueAt))}`:'';
+    const sel=canSet&&!['DOCS','DEPOSIT'].includes(c.key)?`<select data-tstep="${esc(p.offerId)}" data-tkey="${c.key}" aria-label="${esc(L(...STEP_LABEL[c.key]))}"><option value="PENDING"${c.status==='PENDING'?' selected':''}>${L('Pendiente','Pending')}</option><option value="DONE"${c.status==='DONE'?' selected':''}>${L('Hecho','Done')}</option>${c.optional?`<option value="NA"${c.status==='NA'?' selected':''}>${L('No aplica','Not needed')}</option>`:''}</select>`:'';
+    return `<li class="tour-check-i s-${c.status.toLowerCase()}"><span>${st[2]} <b>${esc(L(...STEP_LABEL[c.key]))}</b>${c.key==='DOCS'&&c.status==='PENDING'?' '+L('(dentro de 12 horas)','(within 12 hours)'):''}${c.key==='DEPOSIT'&&c.status==='PENDING'?' '+L('(dentro de 72 horas)','(within 72 hours)'):''}<br><small>${esc(L(st[0],st[1]))}${due}</small></span>${sel}</li>`;}).join('')}</ol>`;
+}
+function decisionLine(p){
+  if(p.invalidatedAt)return `<p class="tour-warn">❌ ${L('Oferta invalidada: no se subieron documentos en 12 horas.','Offer invalidated: no documents within 12 hours.')}</p>`;
+  if(p.decision==='DENIED')return `<p class="tour-warn">❌ ${L('El dueño no aceptó la oferta.','The owner did not accept the offer.')}${p.decisionNote?' '+esc(p.decisionNote):''}</p>`;
+  if(p.underContract)return `<p class="tour-done">📝 ${L('Bajo contrato (condición aprobada).','Under contract (condition approved).')}${p.otherDueAt?' '+(p.otherPending==='DOCS'?L('Falta la documentación','Documents still needed'):L('Falta el depósito de $1,000','The $1,000 deposit is still needed'))+` — ${L('antes del','by')} ${esc(when(p.otherDueAt))}`:''}</p>`;
+  if(p.decision==='PRE_APPROVED')return `<p class="tour-done">✅ ${L('El dueño pre-aprobó la oferta. La casa no queda bajo contrato hasta que se suban los documentos y el vendedor los acepte, o se deposite la garantía de $1,000 (con comprobante) y el vendedor la acepte. Tienen 72 horas para cumplir la otra condición.','The owner pre-approved the offer. The home is not under contract until the documents are uploaded and the seller accepts them, or the $1,000 deposit is made (with proof) and the seller accepts it. You then have 72 hours to meet the other condition.')}</p>`;
+  return `<p class="ops-meta">⏳ ${L('Esperando la pre-aprobación del dueño.','Waiting for the owner’s pre-approval.')}</p>`;
+}
+function offerCard(t,h,o){
+  const p=o.pipeline;const live=!o.invalidatedAt&&!(p&&p.decision==='DENIED');
+  const head=`<div class="tour-done">✅ <b>${L('Oferta enviada','Offer sent')}</b> · ${esc(when(p?p.offerAt:o.dueAt))}${p&&amountLine(p)?' · '+esc(amountLine(p)):''}</div>`;
+  if(!p)return `<div class="tour-offer">${head}</div>`;
+  const ups=live&&t.role!=='ADMIN'?`<div class="tour-btns">${!p.docsUploadedAt?`<label class="btn-card">📎 ${L('Subir documentos','Upload documents')}<input type="file" hidden accept="image/*,application/pdf" data-tdoc="${esc(h.id)}" data-toffer="${esc(o.offerId)}"></label>`:''}${!p.depositProofAt?`<label class="btn-card">💵 ${L('Subir comprobante del depósito ($1,000)','Upload deposit proof ($1,000)')}<input type="file" hidden accept="image/*,application/pdf" data-tdep="${esc(h.id)}" data-toffer="${esc(o.offerId)}"></label>`:''}</div>`:'';
+  return `<div class="tour-offer">${head}${decisionLine(p)}<h4>${L('Próximos pasos','Next steps')}</h4>${checklist(p,live&&(t.role==='AGENT'||t.role==='ADMIN'))}${ups}</div>`;
+}
+function sellerSection(){
+  const so=(data&&data.sellerOffers)||[];if(!so.length)return '';
+  return `<section class="card tour-card"><h2>💰 ${S.isAdmin()?L('Ofertas de citas (vendedor / Admin)','Showing offers (seller / Admin)'):L('Ofertas en tus casas','Offers on your homes')}</h2>${so.map(p=>{
+    const btns=p.invalidatedAt||p.decision==='DENIED'?'':!p.decision?`<div class="tour-btns"><button type="button" class="btn-card primary" data-tdecide="${esc(p.offerId)}" data-tdv="approve">✅ ${L('Pre-aprobar','Pre-approve')}</button><button type="button" class="btn-card btn-del" data-tdecide="${esc(p.offerId)}" data-tdv="deny">✕ ${L('Negar','Deny')}</button></div>`
+      :p.decision==='PRE_APPROVED'?`<div class="tour-btns">${p.depositProofAt&&!p.depositApprovedAt?`<button type="button" class="btn-card primary" data-tcond="${esc(p.offerId)}" data-tcw="deposit">✅ ${L('Aprobar depósito de $1,000','Approve $1,000 deposit')}</button>`:''}${p.docsUploadedAt&&!p.docsApprovedAt?`<button type="button" class="btn-card primary" data-tcond="${esc(p.offerId)}" data-tcw="docs">✅ ${L('Aprobar documentos','Approve documents')}</button>`:''}${!p.depositProofAt&&!p.docsUploadedAt?`<span class="ops-meta">${L('Esperando el comprobante del depósito o los documentos.','Waiting for the deposit proof or the documents.')}</span>`:''}</div>`:'';
+    const docs=(p.documents||[]).length?`<p class="ops-meta">📎 ${(p.documents||[]).map(x=>esc((x.docType==='DEPOSIT_PROOF'?'💵 ':'')+x.name)).join(' · ')}</p>`:'';
+    return `<article class="tour-sell"><h3>${esc(p.address)}${p.city?', '+esc(p.city):''}</h3><p class="ops-meta">${L('Oferta inicial','Initial offer')} · ${esc(when(p.offerAt))}${amountLine(p)?' · <b>'+esc(amountLine(p))+'</b>':''}</p>${decisionLine(p)}${btns}${docs}${checklist(p,S.isAdmin()&&!p.invalidatedAt&&p.decision!=='DENIED')}</article>`;}).join('')}</section>`;
 }
 /* ---------- events ---------- */
 async function act(fn){if(busy)return;busy=true;try{await fn();}catch(e){alert(e.message||String(e));}finally{busy=false;}}
 document.addEventListener('click',e=>{
-  const t=e.target.closest&&e.target.closest('[data-tcart],[data-tbook],[data-tcartdel],[data-tgo],[data-taccept],[data-tmove],[data-tauto],[data-tics],[data-tcancel],[data-tchat],[data-tfbopen],[data-tofferfor],[data-tdecline],[data-tmore],[data-task]');if(!t)return;
+  const t=e.target.closest&&e.target.closest('[data-tcart],[data-tbook],[data-tcartdel],[data-tgo],[data-taccept],[data-tmove],[data-tauto],[data-tics],[data-tcancel],[data-tchat],[data-tfbopen],[data-tofferfor],[data-tdecline],[data-tmore],[data-task],[data-tprop],[data-tpans],[data-tdecide],[data-tcond]');if(!t)return;
   const d=t.dataset;
   if(d.tofferfor){setTimeout(()=>load(true),6000);setTimeout(()=>load(true),15000);return;} // existing offer popup opens; refresh to show the 12-hour clock
   e.preventDefault();e.stopPropagation();
@@ -225,6 +271,10 @@ document.addEventListener('click',e=>{
     rerender();setTimeout(()=>{const f=document.getElementById('tour-cart');if(f)f.scrollIntoView({behavior:'smooth'});},80);return;}
   if(d.tauto)return act(async()=>{await call('tour_route_save',{tourId:d.tauto,auto:true});await load(true);});
   if(d.tics){const tour=data.tours.find(x=>x.id===d.tics);if(tour)icsFor(tour);return;}
+  if(d.tprop){const tour=data.tours.find(x=>x.id===d.tprop);if(tour)openPropose(tour);return;}
+  if(d.tpans)return act(async()=>{try{await call('tour_proposal_answer',{tourId:d.tpans,accept:d.tpv==='1'});}catch(er){if(er.code==='agent_busy')return busySheet(er.message);throw er;}await load(true);alert(d.tpv==='1'?L('¡Listo! Tu cita quedó con el nuevo horario.','Done! Your showing now has the new time.'):L('Le avisamos a tu agente. Puedes llamarle o escribirle para otro horario.','We let your agent know. You can call or message them for another time.'));});
+  if(d.tdecide){const ok=d.tdv==='approve';const note=ok?'':prompt(L('¿Por qué la niegas? (opcional; el agente y el cliente lo verán)','Why are you denying it? (optional; the agent and client will see it)'),'');if(note===null)return;if(ok&&!confirm(L('¿Pre-aprobar esta oferta?','Pre-approve this offer?')))return;return act(async()=>{await call('tour_offer_decide',{offerId:d.tdecide,decision:d.tdv,note:note||''});await load(true);});}
+  if(d.tcond)return act(async()=>{await call('tour_offer_condition',{offerId:d.tcond,which:d.tcw});await load(true);});
   if(d.tcancel){const tour=data.tours.find(x=>x.id===d.tcancel);if(tour)openCancel(tour);return;}
   if(d.tchat){if(S.msgEnabled&&!S.msgEnabled()){alert(L('Los mensajes no están disponibles ahora.','Messages are not available right now.'));return;}return UI().openChat(d.tchat,d.tname);}
   if(d.tfbopen){fbOpen[d.tfbopen]=true;return rerender();}
@@ -235,7 +285,7 @@ document.addEventListener('submit',e=>{
     const ids=cart();if(!ids.length)return;
     if(!connectedAgent()&&ids.length>MAX)return alert(limitText());
     const at=new Date(`${v.date}T${v.time}:00`);if(isNaN(at.getTime()))return alert(L('Elige fecha y hora.','Pick a date and time.'));
-    return act(async()=>{await call('tour_request',{listingIds:ids,startsAt:`${v.date}T${v.time}`,notes:v.notes||''});setCart([]);form={date:'',time:'10:00',notes:''};await load(true);alert(connectedAgent()?L('¡Enviada a tu agente! Te avisamos cuando la apruebe o la rechace.','Sent to your agent! We will let you know when they approve or decline it.'):L('¡Cita solicitada! Les avisamos a los agentes con licencia; te llegará una notificación cuando uno la acepte.','Showing requested! We notified licensed agents; you will get a notification when one accepts.'));});}
+    return act(async()=>{try{await call('tour_request',{listingIds:ids,startsAt:`${v.date}T${v.time}`,notes:v.notes||''});}catch(er){if(er.code==='agent_busy')return busySheet(er.message);throw er;}setCart([]);form={date:'',time:'10:00',notes:''};await load(true);alert(connectedAgent()?L('¡Enviada a tu agente! Te avisamos cuando la apruebe o la rechace.','Sent to your agent! We will let you know when they approve or decline it.'):L('¡Cita solicitada! Les avisamos a los agentes con licencia; te llegará una notificación cuando uno la acepte.','Showing requested! We notified licensed agents; you will get a notification when one accepts.'));});}
   const fb=f&&f.dataset&&f.dataset.tfbform;
   if(fb){e.preventDefault();const [tourId,listingId]=fb.split('|');const v=Object.fromEntries(new FormData(f));
     return act(async()=>{const r=await call('tour_feedback',{tourId,listingId,rating:Number(v.rating)||null,interest:v.interest||'',comments:v.comments||''});delete fbOpen[fb];await load(true);alert(L('¡Gracias! Tus comentarios ya se enviaron.','Thank you! Your feedback was sent.'));});}
@@ -243,6 +293,8 @@ document.addEventListener('submit',e=>{
 document.addEventListener('change',e=>{
   const t=e.target;
   if(t&&t.form&&t.form.id==='tourReqF'){const v=Object.fromEntries(new FormData(t.form));form={date:v.date,time:v.time,notes:v.notes||''};return;}
+  if(t&&t.dataset&&t.dataset.tstep){return act(async()=>{await call('tour_offer_step',{offerId:t.dataset.tstep,key:t.dataset.tkey,status:t.value});await load(true);});}
+  if(t&&t.dataset&&t.dataset.tdep&&t.files&&t.files[0]){act(async()=>{await S.uploadDocument(t.files[0],{docType:'DEPOSIT_PROOF',listingId:t.dataset.tdep,offerId:t.dataset.toffer});await load(true);alert(L('Comprobante subido. El vendedor lo revisará.','Proof uploaded. The seller will review it.'));});return;}
   if(t&&t.dataset&&t.dataset.tdoc&&t.files&&t.files[0]){act(async()=>{await S.uploadDocument(t.files[0],{docType:'OFFER_DOCS',listingId:t.dataset.tdoc,offerId:t.dataset.toffer});await load(true);alert(L('Documento subido.','Document uploaded.'));});}
 },true);
 
@@ -252,6 +304,8 @@ window.LegacyTours={
   navLabel:()=>isClient()?'🛒 '+L('Carrito y citas','Cart & showings'):isAgent()?'🔔 '+L('Citas de clientes','Client showings'):S.isAdmin()?'🛒 '+L('Citas con carrito','Cart showings'):'💬 '+L('Comentarios de visitas','Showing feedback'),
   headerButton:()=>{if(!isClient())return '';const n=cart().length;return `<button type="button" class="tour-cart-btn" data-tgo="1" aria-label="${esc(L('Carrito de casas','Home cart'))}">🛒${n?`<span class="menu-badge">${n}</span>`:''}</button>`;},
   clientActionRow:l=>{if(S.user)load(false);const c=inCart(l.id),conn=connectedAgent();return `<div class="lof-act-row"><button type="button" class="btn-card${c?'':' primary'}" data-tcart="${esc(l.id)}">${c?'✓ '+L('En tu carrito (quitar)','In your cart (remove)'):'🛒 '+L('Agregar al carrito','Add to cart')}</button><button type="button" class="btn-card" data-tbook="${esc(l.id)}">📅 ${L('Solicitar cita','Request showing')}</button></div><p class="ops-meta tour-note">${conn?L('Junta las casas en tu carrito y envíalas a tu agente. Las ofertas las hace tu agente después de la visita.','Collect homes in your cart and send them to your agent. Your agent makes offers after the visit.'):L(`Junta hasta ${MAX} casas en tu carrito y pide una sola cita. Las ofertas las hace tu agente después de la visita.`,`Collect up to ${MAX} homes in your cart and request one showing. Your agent makes offers after the visit.`)}</p>`;},
+  offerSentCard:l=>{if(!S.user||!S.data)return '';const T=['REJECTED','WITHDRAWN','INVALIDATED','FELL_THROUGH','CANCELLED','DECLINED'];const o=(S.data.offers||[]).filter(x=>x&&x.listingId===l.id&&x.userId===S.user.id&&!T.includes(String(x.status||'').toUpperCase())).sort((a,b)=>String(b.createdAt||'').localeCompare(String(a.createdAt||'')))[0];
+    if(!o)return '';return `<div class="tour-done">✅ <b>${L('Oferta enviada','Offer sent')}</b>${o.createdAt?' · '+esc(when(o.createdAt)):''}${money(o.offerPrice)?' · '+esc(money(o.offerPrice)):''} <button type="button" class="btn-card" data-tgo="1">${L('Ver próximos pasos','See next steps')}</button></div>`;},
   view,refresh:()=>load(true),cart
 };
 })();
