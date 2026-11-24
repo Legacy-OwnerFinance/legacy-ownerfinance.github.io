@@ -61,6 +61,14 @@ const sbHeaders=(extra={})=>Object.assign({
 },extra);
 
 const getToken=()=>{try{return localStorage.getItem(TOKEN_KEY)||'';}catch(e){return '';}};
+function previewFn(){
+  try{
+    const host=String(location.hostname||'').toLowerCase();
+    const q=new URLSearchParams(location.search).get('api');
+    if(host==='legacy-showings-preview.vercel.app'||(host.startsWith('legacy-showings-preview-')&&host.endsWith('.vercel.app'))||q==='showings')return 'api-preview-showings';
+  }catch(e){}
+  return usePreviewApi()?'api-preview':'api';
+}
 function usePreviewApi(){
   try{
     const host=String(location.hostname||'').toLowerCase();
@@ -72,7 +80,7 @@ function usePreviewApi(){
   return false;
 }
 function apiUrl(){
-  const fn=usePreviewApi()?'api-preview':'api';
+  const fn=previewFn();
   const live=`${SUPABASE_URL}/functions/v1/${fn}`;
   try{
     const host=String(location.hostname||'');
@@ -976,7 +984,7 @@ const hash=pw=>{
 };
 S.register=async f=>{
   if(f.role==='INVESTOR'&&!(S.caps&&S.caps.investor))throw new Error(S.lang==='es'?'El registro de inversionistas todavía no está disponible.':'Investor signup is not available yet.');
-  const fields={name:f.role==='INVESTOR'?(f.representativeName||f.name):f.name,email:f.email,phone:f.phone,password:f.password,role:f.role,inviteCode:f.inviteCode,licenseNumber:f.licenseNumber,brokerage:f.brokerage,businessName:f.businessName,contactMethod:f.contactMethod,contactValue:f.contactValue,representativeName:f.representativeName};
+  const fields={name:f.role==='INVESTOR'?(f.representativeName||f.name):f.name,email:f.email,phone:f.phone,password:f.password,role:f.role,inviteCode:f.inviteCode,licenseNumber:f.licenseNumber,brokerage:f.brokerage,bio:f.role==='AGENT'?String(f.bio||'').slice(0,600):undefined,businessName:f.businessName,contactMethod:f.contactMethod,contactValue:f.contactValue,representativeName:f.representativeName};
   const j=await api('register',{fields});
   if(j.needsVerify)return {needsVerify:true,email:j.email,pendingReview:!!j.pendingReview,role:f.role};
   const u=await adoptSession(j);
@@ -1047,7 +1055,7 @@ S.resetPassword=async(email,codeIn,pw)=>{const j=await api('reset',{email,code:c
 S.changePassword=async(cur,pw)=>{await api('change_password',{current:cur,password:pw});};
 S.adminResetPassword=async(userId,pw)=>{if(!S.isAdmin())throw new Error('Admins only');await api('admin_reset',{userId,password:pw});};
 S.updateProfile=p=>{Object.assign(S.user,p,{updatedAt:now()});const ap=S.agentProfile(S.user);
-  if(ap){if(p.licenseNumber!=null)ap.licenseNumber=p.licenseNumber;if(p.brokerage!=null)ap.brokerage=p.brokerage;}
+  if(ap){if(p.licenseNumber!=null)ap.licenseNumber=p.licenseNumber;if(p.brokerage!=null)ap.brokerage=p.brokerage;if(p.bio!=null){ap.bio=String(p.bio).slice(0,600);delete S.user.bio;}}
   S.save();sbUpsert('app_users',userToRow(S.user),'id');};
 // Investors (and anyone) can change only their own display name and phone. Sends just {id,name,phone};
 // the api's app_users write already limits non-admins to their own row and never lets them change role, email or approval.

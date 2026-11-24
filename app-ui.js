@@ -666,7 +666,7 @@ const go=(t,focusSel)=>{
 };
 const badge=s=>`<span class="badge" style="background:${({AVAILABLE:'#16a34a',COMING_SOON:'#2563eb',CLOSED:'#475569',SOLD:'#475569'})[s]||'#d97706'};color:#fff;padding:2px 8px;border-radius:999px;font-size:12px">${esc(S.statusText?S.statusText(s):(S.STATUS_LABEL[s]||s))}</span>`;
 const offerBadge=s=>{
-  const label=s==='CLOSED'?(S.lang==='es'?'Cerrada':'Closed'):s==='FELL_THROUGH'?(S.lang==='es'?'Se cayó':'Fell through'):s==='COUNTERED'?tr('offerCountered'):s==='ACCEPTED'?tr('offerAccepted'):s==='REJECTED'?tr('offerRejected'):s==='SUBMITTED'?tr('offerSubmitted'):s;
+  const label=s==='INVALIDATED'?(S.lang==='es'?'Invalidada (sin documentos en 12 h)':'Invalidated (no documents in 12 h)'):s==='CLOSED'?(S.lang==='es'?'Cerrada':'Closed'):s==='FELL_THROUGH'?(S.lang==='es'?'Se cayó':'Fell through'):s==='COUNTERED'?tr('offerCountered'):s==='ACCEPTED'?tr('offerAccepted'):s==='REJECTED'?tr('offerRejected'):s==='SUBMITTED'?tr('offerSubmitted'):s;
   return `<span style="background:${S.OFFER_COLOR[s]||'#64748b'};color:#fff;padding:2px 8px;border-radius:6px">${esc(label)}</span>`;
 };
 const partialAddr=l=>{
@@ -774,7 +774,7 @@ const POP_TX={
     req:'Obligatorio',num:'Escribe una cantidad mayor a 0',downBig:'El enganche no puede ser mayor que el precio ofrecido',pickInsp:'Escoge Sí o No',past:'Escoge hoy o una fecha después',closePast:'Escoge una fecha futura',
     needAcct:'Necesitas una cuenta gratis',needOffer:'Crea tu cuenta gratis o entra para hacer una oferta en esta casa. Toma como un minuto.',needAppt:'Crea tu cuenta gratis o entra para solicitar una cita y ver esta casa.',create:'Crear cuenta',login:'Entrar',call:'O llámanos'}};
 const px=k=>(POP_TX[S.lang==='es'?'es':'en'][k]||k);
-function actionRow(l){return `<div class="lof-act-row"><button type="button" class="btn-card primary" data-offerpop="${esc(l.id)}">💰 ${px('offer')}</button><button type="button" class="btn-card" data-showpop="${esc(l.id)}">📅 ${px('appt')}</button></div>`;}
+function actionRow(l){if(window.LegacyTours&&LegacyTours.clientMode())return LegacyTours.clientActionRow(l);return `<div class="lof-act-row"><button type="button" class="btn-card primary" data-offerpop="${esc(l.id)}">💰 ${px('offer')}</button><button type="button" class="btn-card" data-showpop="${esc(l.id)}">📅 ${px('appt')}</button></div>`;}
 function chicagoToday(){try{const p=new Intl.DateTimeFormat('en-CA',{timeZone:'America/Chicago',year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(new Date());const g={};p.forEach(x=>g[x.type]=x.value);return `${g.year}-${g.month}-${g.day}`;}catch(e){return new Date().toISOString().slice(0,10);}}
 function closePop(){const o=document.querySelector('.lof-pop-bg');if(o)o.remove();document.removeEventListener('keydown',popKey);}
 function popKey(e){if(e.key==='Escape')closePop();}
@@ -1065,6 +1065,7 @@ function msgPeerName(peerId){
   if(u&&u.name)return String(u.name);
   const t=(S.msgThreads||[]).find(x=>x&&x.peerId===peerId);
   if(t&&t.peerName)return String(t.peerName);
+  if(S.tourPeerNames&&S.tourPeerNames[peerId])return String(S.tourPeerNames[peerId]);
   return '…';
 }
 function msgUnreadOf(peerId){
@@ -1328,6 +1329,7 @@ function header(){
   const investorHome=S.isInvestor()&&S.caps&&S.caps.investor&&!S.isPendingApproval(S.user);
   const T=investorHome?[['dashboard',tr('navInvestorHome')],['investor-tx',tr('navTransactions')],['inventory',tr('navInventory')],['guides',tr('navGuides')]]:[['inventory',tr('navInventory')],['map','🗺️ '+(S.lang==='es'?'Mapa':'Map')]].concat(S.user?[['favorites','❤️ '+(S.lang==='es'?'Favoritas':'Favorites')]]:[]).concat([['guides',tr('navGuides')],['dashboard',tr('navDashboard')]]);
   if(!investorHome&&S.canSeeShowingCalendar&&S.canSeeShowingCalendar())T.push(['calendar',tr('navCalendar')]);
+  if(S.user&&window.LegacyTours&&LegacyTours.navVisible())T.push(['tours',LegacyTours.navLabel()]);
   if(S.isAdmin())T.push(['admin',tr('navAdmin')]);
   if(!S.user)T.push(['auth',tr('navAuth')]);
   const unread=(S.alerts||[]).filter(a=>!a.readAt).length+(S.digests||[]).filter(d=>!d.readAt).length+(S.msgUnread|0);
@@ -1339,7 +1341,7 @@ function header(){
    <button type="button" class="menu-btn" data-menu="1" aria-haspopup="true" aria-expanded="${menuOpen?'true':'false'}" aria-controls="nav-drawer" aria-label="${esc(tr('menu.label'))}"><span class="menu-bars" aria-hidden="true"></span>${unread?`<span class="menu-badge">${unread>9?'9+':unread}</span>`:''}</button>
    <div class="brand-wrap" data-tab="inventory"><img src="legacy-logo.png" alt="Legacy" class="main-logo"><div class="brand-text"><h1 class="brand-title">Legacy - Owner Finance</h1>
    <div class="brand-sub"><span>Brokerage By: KLC Real Estate, LLC</span><img src="klc-logo.png" alt="KLC"></div></div></div>
-   <div class="header-actions">${bellHtml()}</div>
+   <div class="header-actions">${window.LegacyTours?LegacyTours.headerButton():''}${bellHtml()}</div>
    ${menuOpen?`<div class="nav-drawer-bg" data-menuclose="1"></div>`:''}
    <nav id="nav-drawer" class="nav-drawer${menuOpen?' open':''}" role="menu" aria-label="${esc(tr('menu.label'))}" ${menuOpen?'':'aria-hidden="true" inert'}><div class="nav-drawer-head"><b>${tr('menu.label')}</b><button type="button" class="nav-pill" data-menuclose="1" aria-label="${esc(tr('menu.close'))}">✕</button></div>${menuItems}</nav></header>
    ${thanksBanner()}<div class="guide-banner hide-phone"><span>${tr('newHere')} <a href="#guides" data-tab="guides">${tr('guideLink')}</a></span></div>${alertSheet()}${msgBubble()}${msgPanel()}`;
@@ -1773,7 +1775,7 @@ function auth(){return `<section style="display:grid;grid-template-columns:repea
  <form id="regF" class="card" style="padding:16px"><h2>${tr('registerTitle')}</h2><select name="role" id="roleSel"><option value="BUYER">${tr('roleBuyer')}</option><option value="AGENT">${tr('roleAgent')}</option>${S.caps&&S.caps.investor?`<option value="INVESTOR">${tr('roleInvestor')}</option>`:''}</select>
  <input name="name" placeholder="${tr('fullName')}" required><input name="email" type="email" placeholder="${tr('email')}" required><input name="phone" placeholder="${tr('phone')}"><input name="password" type="password" placeholder="${tr('passwordMin')}" minlength="8" required>
  <div id="buyerFields"><input name="inviteCode" id="inv" placeholder="${tr('inviteCode')}"><label><input type="checkbox" id="noAgent"> ${tr('noAgentYet')}</label></div>
- <div id="agentFields" style="display:none"><input name="licenseNumber" placeholder="${tr('orecLicense')}"><input name="brokerage" placeholder="${tr('brokerage')}"></div>
+ <div id="agentFields" style="display:none"><input name="licenseNumber" placeholder="${tr('orecLicense')}"><input name="brokerage" placeholder="${tr('brokerage')}"><textarea name="bio" maxlength="600" rows="3" placeholder="${S.lang==='es'?'Bio corta (opcional): experiencia, zonas, idiomas…':'Short bio (optional): experience, areas, languages…'}"></textarea></div>
  <div id="investorFields" style="display:none"><input name="businessName" placeholder="${tr('businessName')}"><select name="contactMethod"><option value="">${tr('contactMethod')}</option><option value="PHONE">${tr('contactPhone')}</option><option value="EMAIL">${tr('contactEmail')}</option><option value="WHATSAPP">${tr('contactWhatsApp')}</option><option value="TEXT">${tr('contactText')}</option></select><input name="contactValue" placeholder="${tr('contactValue')}"><input name="representativeName" placeholder="${tr('representativeName')}"></div>
  <button>${tr('createAccount')}</button></form></section>`;}
 
@@ -2023,7 +2025,7 @@ function dashboard(){if(!S.user)return auth();if(S.isInvestor())return investorD
   const li=l=>`<li><a href="#" data-open="${l.id}">${title(l)}</a> ${badge(l.status)}</li>`;
   return `${S.isPendingApproval(u)?`<div style="margin:18px 18px 0;padding:12px;border-radius:10px;background:#fef3c7;border:1px solid #d97706">⏳ ${S.lang==='es'?(u.approvalStatus==='REJECTED'?'Tu cuenta no fue aprobada. Contáctanos para más información.':'Tu cuenta está pendiente de aprobación. Mientras tanto puedes ver casas; podrás hacer ofertas y pedir citas cuando sea aprobada.'):(u.approvalStatus==='REJECTED'?'Your account was not approved. Contact us for more information.':'Your account is pending approval. You can browse homes meanwhile; offers and showings unlock once approved.')}</div>`:''}<section style="display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:16px;padding:18px">${alertsDash()}${showingsDash()}
   <div class="card" style="padding:16px"><h2>${tr('myProfile')}</h2><img src="${esc(u.avatarUrl||'listing-placeholder.svg')}" style="width:90px;height:90px;border-radius:50%;object-fit:cover"><input type="file" id="avatar" accept="image/jpeg,image/png,image/webp,image/heic,image/heif,.jpg,.jpeg,.png,.webp,.heic,.heif">
-   <form id="profF"><input name="name" value="${esc(u.name)}"><input name="phone" value="${esc(u.phone)}">${ap?`<label>${tr('orecLicense')}<input name="licenseNumber" value="${esc(ap.licenseNumber)}"></label><label>${tr('brokerage')}<input name="brokerage" value="${esc(ap.brokerage)}"></label><p>${tr('yourInviteCode')} <b>${esc(ap.inviteCode)}</b></p>`:''}<button>${tr('save')}</button></form>
+   <form id="profF"><input name="name" value="${esc(u.name)}"><input name="phone" value="${esc(u.phone)}">${ap?`<label>${tr('orecLicense')}<input name="licenseNumber" value="${esc(ap.licenseNumber)}"></label><label>${tr('brokerage')}<input name="brokerage" value="${esc(ap.brokerage)}"></label><label>${S.lang==='es'?'Bio corta (la ven tus clientes)':'Short bio (your clients see it)'}<textarea name="bio" maxlength="600" rows="3">${esc(ap.bio||'')}</textarea></label><p>${tr('yourInviteCode')} <b>${esc(ap.inviteCode)}</b></p>`:''}<button>${tr('save')}</button></form>
    ${ag?`<p>${tr('yourAgent')} <b>${esc(ag.name)}</b></p>`:''}<h3>${tr('changePw')}</h3><form id="pwF"><input name="cur" type="password" placeholder="${tr('currentPw')}" required><input name="pw" type="password" placeholder="${tr('newPw')}" minlength="8" required><button>${tr('updatePw')}</button></form>${accountDeleteCard()}</div>
   ${isClient()?`<div class="card" style="padding:16px"><h2>🏡 ${st('mySearch')}</h2>${critSummary(critOf(u))}<button type="button" class="btn-card primary" data-editsearch="1">✏️ ${st('edit')}</button></div>`:''}
   <div class="card" id="my-favs" style="padding:16px"><h2>${tr('favorites')}</h2>${favs.length?`<button type="button" class="btn-card" data-tab="favorites" style="margin:0 0 8px">❤️ ${S.lang==='es'?'Ver mis favoritas':'See my favorites'}</button>`:''}<ul>${favs.map(li).join('')||`<li>${tr('noneYet')}</li>`}</ul><h2>${tr('viewedHomes')}</h2><ul>${views.map(li).join('')||`<li>${tr('noneYet')}</li>`}</ul></div>
@@ -2175,7 +2177,7 @@ function maybeOpenSharedDetail(){
 S.rerender=function(){render();};
 function render(){captureMsgScroll();document.documentElement.lang=S.lang;syncMsgTitle();const root=$('#app-root');if(!S.data)return;if(map){try{map.stop();map.off();map.remove();}catch(e){}map=null;}
   const mapFull=tab==='map';document.documentElement.classList.toggle('lof-map-on',mapFull);if(mapFull){headerCompact=false;if(window.scrollY)window.scrollTo(0,0);}
-  const body={inventory,guides,dashboard,admin,auth,calendar:calendarView,'investor-tx':investorTx,'investor-map':investorMap,favorites:favoritesView,map:mapView}[tab]||inventory;root.innerHTML=header()+`<main>${body()}</main><footer class="app-footer" style="padding:18px;font-size:12px;text-align:center">© Legacy - Owner Finance · Brokerage By: KLC Real Estate, LLC${footerLinks()}</footer>${tabBar()}`;bind();applyMsgScroll();if(tab==='inventory'&&(MAPOPEN||!narrowMQ.matches))drawMap();if(tab==='investor-map')drawInvestorMap();if(mapFull)drawFullMap();maybeOpenSharedDetail();highlightClosedDeal();}
+  const body={inventory,guides,dashboard,admin,auth,calendar:calendarView,'investor-tx':investorTx,'investor-map':investorMap,favorites:favoritesView,map:mapView,tours:()=>window.LegacyTours?LegacyTours.view():''}[tab]||inventory;root.innerHTML=header()+`<main>${body()}</main><footer class="app-footer" style="padding:18px;font-size:12px;text-align:center">© Legacy - Owner Finance · Brokerage By: KLC Real Estate, LLC${footerLinks()}</footer>${tabBar()}`;bind();applyMsgScroll();if(tab==='inventory'&&(MAPOPEN||!narrowMQ.matches))drawMap();if(tab==='investor-map')drawInvestorMap();if(mapFull)drawFullMap();maybeOpenSharedDetail();highlightClosedDeal();}
 function bind(){const r=$('#app-root');
   if(!r.dataset.acctToggle){r.dataset.acctToggle='1';r.addEventListener('toggle',e=>{const el=e.target;if(el&&el.dataset&&el.dataset.acct)ADM_OPEN[el.dataset.acct]=el.open;},true);}
   r.onclick=async e=>{
@@ -2351,6 +2353,7 @@ function checkResetUrlParams(){
 }
 
 document.addEventListener('keydown',e=>{if(e.key!=='Escape'||!msgOpen)return;msgOpen=false;render();});
+window.LegacyUI={render:()=>render(),go:(t)=>go(t),esc:v=>esc(v),openChat:(peerId,name)=>{if(name){S.tourPeerNames=S.tourPeerNames||{};S.tourPeerNames[peerId]=name;}msgOpen=true;alertOpen=false;msgNew=false;msgPeer=peerId;msgStickBottom=true;render();},tab:()=>tab};
 S.on(render);window.addEventListener('hashchange',()=>{const parsed=parseAppHash();if(parsed.deal)rememberDeal(parsed.deal);tab=parsed.tab||'inventory';render();});
 S.load().then(()=>{render();checkResetUrlParams();maybePromptCriteria();}).catch(e=>{document.documentElement.lang=S.lang;$('#app-root').innerHTML='<p style="padding:20px">'+esc(tr('loadFail'))+': '+esc(e.message)+'</p>';}).then(()=>{try{window.legacySplashHide&&window.legacySplashHide()}catch(_){}});
 })();

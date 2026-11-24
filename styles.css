@@ -1779,3 +1779,34 @@ html.lof-map-on .app-header:has(.nav-drawer.open) .nav-drawer-bg {
   width: 100%;
 }
 html.lof-map-on:has(.nav-drawer.open) .lof-mapview { z-index: 1; }
+
+/* ---- v39 showing cart + tours ---- */
+.tour-wrap{padding:12px 18px;display:grid;gap:14px;max-width:900px;margin:0 auto}
+.tour-card{padding:16px}
+.tour-card h2{margin:0 0 6px}.tour-card h3{margin:10px 0 6px;font-size:16px}
+.tour-head{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap}
+.tour-pill{color:#fff;padding:2px 10px;border-radius:999px;font-size:12px;font-weight:600}
+.tour-cart{list-style:none;padding:0;margin:8px 0;display:grid;gap:8px}
+.tour-cart-item{display:grid;grid-template-columns:64px 1fr auto;gap:10px;align-items:center}
+.tour-cart-item img{width:64px;height:48px;object-fit:cover;border-radius:8px}
+.tour-form{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:8px}
+.tour-form .tour-notes,.tour-form .tour-warn,.tour-form button{grid-column:1/-1}
+.tour-form label,.tour-fb label{display:grid;gap:4px;font-size:13px}
+.tour-warn{background:#fef3c7;color:#92400e;border-radius:8px;padding:8px 10px;margin:6px 0}
+.tour-btns{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:8px}
+.tour-btns a.btn-card{text-decoration:none;display:inline-flex;align-items:center}
+.tour-person{display:flex;gap:12px;align-items:flex-start}
+.tour-avatar{width:64px;height:64px;border-radius:50%;object-fit:cover;background:#f1f5f9;flex:none}
+.tour-bio{margin:6px 0;font-size:14px;white-space:pre-line}
+.tour-route{list-style:none;padding:0;margin:0;display:grid;gap:8px}
+.tour-stop{display:grid;grid-template-columns:28px 1fr auto;gap:8px;align-items:start;border-top:1px solid rgba(0,0,0,.08);padding-top:8px}
+.tour-n{width:26px;height:26px;border-radius:50%;background:#0f766e;color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13px}
+.tour-move{display:flex;gap:4px}.tour-move .btn-card{padding:4px 10px;min-width:0}
+.tour-fb{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:6px}.tour-fb .tour-notes,.tour-fb button{grid-column:1/-1}
+.tour-offer{background:#eff6ff;border-radius:8px;padding:8px;margin-top:6px;font-size:14px;display:grid;gap:6px}
+.tour-done{font-size:14px;margin-top:4px}
+.tour-open{border-top:1px solid rgba(0,0,0,.08);padding:10px 0}
+.tour-focus{outline:3px solid #0f766e}
+.tour-cart-btn{position:relative;background:none;border:0;font-size:22px;cursor:pointer;padding:4px 8px}
+.tour-note{font-size:12px;margin:4px 0 0}
+@media (max-width:600px){.tour-form,.tour-fb{grid-template-columns:1fr}.tour-wrap{padding:10px}}
