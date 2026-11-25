@@ -576,6 +576,14 @@ function listingTracker(l){
   return dealTracker(progOfListing(l.id),{date:false});
 }
 function closingPanel(o){
+  const fp=window.LegacyTours&&LegacyTours.tourOfferInfo&&LegacyTours.closingFlowBox?LegacyTours.tourOfferInfo(o.id):null;
+  if(fp&&fp.offerId){ // v39 (8:29 PM): one source of truth = the showing-flow step log
+    if(fp.decision!=='PRE_APPROVED')return '';
+    const role=S.isAdmin()?'ADMIN':(S.isAgent&&S.isAgent())?'AGENT':(S.user&&o.userId===S.user.id)?'CLIENT':'SELLER';
+    const c=(S.closings&&S.closings[o.id])||{},id=esc(o.id);
+    const comm=(role==='ADMIN'||role==='AGENT')&&S.caps&&S.caps.closing?`<div class="cf-row"><span class="cf-l">💲 ${cx('commissionL')}</span><div class="cf-v"><div class="cf-inline"><input type="number" min="0" step="0.01" id="cl-comm-${id}" value="${esc(c.commissionCents!=null?c.commissionCents/100:'')}" aria-label="${esc(cx('commission'))}"><button type="button" class="btn-card" data-clcomm="${id}">${cx('saveComm')}</button></div><small class="ops-meta">🔒 ${cx('onlyPeople')}</small></div></div>`:'';
+    return LegacyTours.closingFlowBox(fp,role,{commission:comm,noHead:S.isAdmin()});
+  }
   if(!closingCan()){
     const bc=S.user&&o.userId===S.user.id&&S.closings&&S.closings[o.id];
     if(!bc||!bc.closingDate||bc.outcome==='FELL_THROUGH'||!['ACCEPTED','CLOSED'].includes(o.status))return '';
@@ -2177,19 +2185,22 @@ function admSec(id,icon,title,count,body,opts={}){
 function admTourLine(o){
   const p=window.LegacyTours&&LegacyTours.tourOfferInfo&&LegacyTours.tourOfferInfo(o.id);if(!p||!p.checklist)return '';
   const c=p.checklist.find(x=>!['APPROVED','DONE','NA'].includes(x.status));
-  const st=p.invalidatedAt?AL('❌ Anulada (plazo vencido)','❌ Voided (deadline passed)'):p.decision==='DENIED'?AL('❌ Negada','❌ Denied'):p.counter&&p.counter.status==='OPEN'&&!p.decision?AL('↩️ Contraoferta enviada — esperando al agente','↩️ Counteroffer sent — waiting for the agent'):!p.decision?AL('🆕 Esperando pre-aprobación','🆕 Waiting for pre-approval'):c?AL(`✅ Pre-aprobada · Paso ${c.n}/7`,`✅ Pre-approved · Step ${c.n}/7`):AL('🎉 Completada','🎉 Completed');
+  const st=p.invalidatedAt?AL('❌ Anulada (plazo vencido)','❌ Voided (deadline passed)'):p.decision==='DENIED'?AL('❌ Negada','❌ Denied'):p.counter&&p.counter.status==='OPEN'&&!p.decision?AL('↩️ Contraoferta enviada — esperando al agente','↩️ Counteroffer sent — waiting for the agent'):!p.decision?AL('🆕 Esperando pre-aprobación','🆕 Waiting for pre-approval'):LegacyTours.stepName?LegacyTours.stepName(p):c?AL(`✅ Pre-aprobada · Paso ${c.n}/7`,`✅ Pre-approved · Step ${c.n}/7`):AL('🎉 Completada','🎉 Completed');
   return `<p class="adm-flow">🛒 ${AL('Oferta de cita con carrito','Showing-cart offer')}: <b>${esc(st)}</b>${p.decision==='PRE_APPROVED'&&!p.docsUploadedAt&&p.docsDueAt?` · 📎 ${AL('docs antes del','docs by')} ${esc(new Date(p.docsDueAt).toLocaleString(S.lang==='es'?'es-US':'en-US',{timeZone:'America/Chicago',weekday:'short',hour:'numeric',minute:'2-digit'}))}`:''} <a href="#tours&offer=${esc(o.id)}">${AL('Ver pasos','See steps')}</a></p>`+((p.depositDocs||[]).length&&LegacyTours.depositFiles?`<div class="adm-flow">💵 ${AL('Depósito de $1,000','$1,000 deposit')}: <b>${p.depositApprovedAt?AL('✅ aprobado','✅ approved'):AL('🔎 por verificar','🔎 to verify')}</b>${LegacyTours.depositFiles(p)}</div>`:'');
 }
 function admOffers(D){
   const list=D.offers.filter(o=>!S.isDeadOffer(o)).reverse();
   if(!list.length)return `<p class="adm-empty">${tr('noOffers')}</p>`;
   return `<div class="adm-grid">${list.map(o=>{const l=S.listing(o.listingId)||{},u=D.users.find(x=>x.id===o.userId)||{};const done=o.status==='CLOSED'||o.status==='FELL_THROUGH';const prog=progOfOffer(o),cp=closingPanel(o);
-    const fk='admo-'+o.id,op=foldOpen(fk)||(o.status==='SUBMITTED'&&!(window.LegacyTours&&LegacyTours.tourOfferInfo&&LegacyTours.tourOfferInfo(o.id)));
-    return `<details class="adm-card adm-offer lf-fold" data-fold="${esc(fk)}"${op?' open':''}><summary class="lf-sum"><span class="lf-main"><b>${esc(String(l.address||'—'))}</b><small>${S.money(o.offerPrice)} · ${esc(u.name||'—')}</small></span>${offerBadge(o.status)}<span class="lf-chev" aria-hidden="true">⌄</span></summary><div class="lf-body">
+    const fp=window.LegacyTours&&LegacyTours.tourOfferInfo?LegacyTours.tourOfferInfo(o.id):null,flow=!!(fp&&fp.offerId);
+    const decided=['ACCEPTED','CLOSED','FELL_THROUGH','INVALIDATED'].includes(String(o.status||'').toUpperCase())||(flow&&!!fp.decision);
+    const addr=String(l.address||(fp&&fp.home&&fp.home.address)||'').split(',')[0].trim()||AL('Sin dirección','No address');
+    const fk='admo-'+o.id,op=foldOpen(fk)||(o.status==='SUBMITTED'&&!flow);
+    return `<details class="adm-card adm-offer lf-fold" data-fold="${esc(fk)}"${op?' open':''}><summary class="lf-sum"><span class="lf-main"><b>${esc(addr)}</b><small>${S.money(o.offerPrice)} · ${esc(u.name||'—')}</small></span>${flow&&LegacyTours.stepChip?LegacyTours.stepChip(fp):offerBadge(o.status)}<span class="lf-chev" aria-hidden="true">⌄</span></summary><div class="lf-body">
       <div class="adm-kv"><span>👤 ${esc(u.name||'—')}</span><span>💲 <b>${S.money(o.offerPrice)}</b> · ${tr('down')} ${S.money(o.downPayment)} · ${S.money(o.monthlyPayment)}${tr('perMo')}</span>${o.status==='COUNTERED'?`<span class="adm-ctr">↩️ ${tr('counterLabel')}: ${S.money(o.counterPrice)} / ${S.money(o.counterDown)} / ${S.money(o.counterMonthly)}</span>`:''}</div>
       ${admTourLine(o)}
-      <div class="adm-acts">${done?'':`<button data-acc="${o.id}" class="adm-b ok">✅ ${tr('accept')}</button><button data-ctr="${o.id}" class="adm-b warn">↩️ ${tr('counterOffer')}</button><button data-rej="${o.id}" class="adm-b no">✕ ${tr('reject')}</button>`}${S.canAdminDelete()?`<button type="button" class="adm-b ghost btn-del" data-offdel="${esc(o.id)}" title="${AL('Eliminar oferta','Delete offer')}">🗑</button>`:''}</div>
-      ${prog||cp?`<details class="adm-sub"${o.status==='ACCEPTED'?' open':''}><summary>🏁 ${AL('Cierre, documentos y avance','Closing, documents and progress')}</summary>${dealTracker(prog)}${cp}</details>`:''}</div></details>`;}).join('')}</div>`;
+      <div class="adm-acts">${done||decided?'':`<button data-acc="${o.id}" class="adm-b ok">✅ ${tr('accept')}</button><button data-ctr="${o.id}" class="adm-b warn">↩️ ${tr('counterOffer')}</button><button data-rej="${o.id}" class="adm-b no">✕ ${tr('reject')}</button>`}${S.canAdminDelete()?`<button type="button" class="adm-b ghost btn-del" data-offdel="${esc(o.id)}" title="${AL('Eliminar oferta','Delete offer')}">🗑</button>`:''}</div>
+      ${flow?(cp?`<details class="adm-sub" data-fold="admcf-${esc(o.id)}"${foldOpen('admcf-'+o.id)?' open':''}><summary>🏁 ${AL('Cierre, documentos y avance','Closing, documents and progress')}</summary>${cp}</details>`:''):prog||cp?`<details class="adm-sub"${o.status==='ACCEPTED'?' open':''}><summary>🏁 ${AL('Cierre, documentos y avance','Closing, documents and progress')}</summary>${dealTracker(prog)}${cp}</details>`:''}</div></details>`;}).join('')}</div>`;
 }
 function admPending(D){
   const pend=D.users.filter(u=>u.approvalStatus==='PENDING');
