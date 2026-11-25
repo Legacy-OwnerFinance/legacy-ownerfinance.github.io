@@ -634,7 +634,7 @@ function closingFlowBox(p,role,opts={}){
   // Inspections (step 3)
   const started=!!(p.inspectionStartedAt||p.inspectionAt||p.inspectionReportAt);
   const inspB=p.inspectionDone?`✅ ${L('Reporte recibido','Report received')}${p.inspectionReportDocId?` · <a href="#" data-opendoc="${esc(p.inspectionReportDocId)}">${L('Ver reporte','View report')}</a>`:''}`
-    :canEdit?`<label class="cf-chk"><input type="checkbox" data-cfwaive="${id}" ${p.inspectionWaived?'checked':''}> ${L('Sin inspecciones (renunciar)','No inspections (waived)')}</label>${p.inspectionWaived?'':`<label class="cf-chk"><input type="checkbox" data-cfstart="${id}" ${started?'checked':''}> ${L('Inspecciones iniciadas','Inspections started')}</label>`}${p.inspectionAt?`<small>🗓️ ${esc(shortDay(p.inspectionAt))} · ${esc(timeOf(p.inspectionAt))}</small>`:''}`
+    :canEdit?`<label class="cf-chk"><input type="checkbox" data-cfwaive="${id}" ${p.inspectionWaived?'checked':''}> ${L('Sin inspecciones (renunciar)','No inspections (waived)')}</label>${p.inspectionWaived?'':`<label class="cf-chk"><input type="checkbox" data-cfstart="${id}" data-cfn="${p.closingUnlocked||n>=4?5:n}" ${started?'checked':''}> ${L('Inspecciones iniciadas','Inspections started')}</label>`}${p.inspectionAt?`<small>🗓️ ${esc(shortDay(p.inspectionAt))} · ${esc(timeOf(p.inspectionAt))}</small>`:''}`
     :`${p.inspectionWaived?L('➖ Sin inspecciones','➖ No inspections'):started?L('🔍 En progreso','🔍 In progress'):L('➖ No pedidas','➖ Not requested')}`;
   // EM receipt = the $1,000 deposit proof (step 2)
   const emB=(p.depositDocs||[]).length?`${p.depositApprovedAt?chip('✅ '+L('Aprobado','Approved'),'ok'):chip('🔎 '+L('Por verificar','To verify'),'warn')}${depositFiles(p,true)}${role==='ADMIN'&&!p.depositApprovedAt&&!p.invalidatedAt?`<button type="button" class="btn-card primary cf-wide" data-tcond="${id}" data-tcw="deposit">✅ ${L('Aprobar depósito de $1,000','Approve $1,000 deposit')}</button>`:''}`:`<small>⏳ ${L('Aún no se sube el comprobante de $1,000','The $1,000 proof is not uploaded yet')}</small>`;
@@ -664,7 +664,7 @@ document.addEventListener('click',e=>{
 document.addEventListener('change',e=>{
   const t=e.target;if(!t||!t.dataset)return;const d=t.dataset;
   if(d.cfwaive)return cfSave(d.cfwaive,{inspectionsWaived:t.checked});
-  if(d.cfstart)return cfSave(d.cfstart,{inspectionsStarted:t.checked});
+  if(d.cfstart){if(t.checked&&+d.cfn>=4&&!confirm(L('Esta oferta ya está en el paso 5 (cierre). Marcar “Inspecciones iniciadas” vuelve a abrir el paso 3: el cierre se bloquea hasta subir el reporte de inspección y resolver el TRR. ¿Continuar?','This offer is already at step 5 (closing). Marking “Inspections started” reopens step 3: closing is locked until the inspection report is uploaded and the TRR is resolved. Continue?'))){t.checked=false;return;}return cfSave(d.cfstart,{inspectionsStarted:t.checked});}
   if(d.cfcontract&&t.files&&t.files[0]){const f=t.files[0];return act(async()=>{await S.uploadDocument(f,{docType:'TOUR_FINAL_CONTRACT',offerId:d.cfcontract,listingId:d.listing});await cfRefresh();});}
 });
 /* ---------- v39 (7:30 PM): client dashboard ("Mi panel"): one big next step, then short cards. Dead items stay hidden. ---------- */
