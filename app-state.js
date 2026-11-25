@@ -61,6 +61,14 @@ const sbHeaders=(extra={})=>Object.assign({
 },extra);
 
 const getToken=()=>{try{return localStorage.getItem(TOKEN_KEY)||'';}catch(e){return '';}};
+function previewFn(){
+  try{
+    const host=String(location.hostname||'').toLowerCase();
+    const q=new URLSearchParams(location.search).get('api');
+    if(host==='legacy-showings-preview.vercel.app'||(host.startsWith('legacy-showings-preview-')&&host.endsWith('.vercel.app'))||q==='showings')return 'api-preview-showings';
+  }catch(e){}
+  return usePreviewApi()?'api-preview':'api';
+}
 function usePreviewApi(){
   try{
     const host=String(location.hostname||'').toLowerCase();
@@ -72,7 +80,7 @@ function usePreviewApi(){
   return false;
 }
 function apiUrl(){
-  const fn=usePreviewApi()?'api-preview':'api';
+  const fn=previewFn();
   const live=`${SUPABASE_URL}/functions/v1/${fn}`;
   try{
     const host=String(location.hostname||'');
@@ -414,7 +422,8 @@ function applyRelationalUsers(stateData,userRows){
 const isTestListingRow=r=>!!r&&(/^legacytest/i.test(String(r.id||''))||/^legacytest/i.test(String(r.slug||'')));
 function applyRelationalListings(stateData,listRows,opts){
   if(!Array.isArray(listRows)||!listRows.length)return false;
-  listRows=listRows.filter(r=>!isTestListingRow(r));
+  const showTest=!!(S._me&&(S._me.role==='ADMIN'||/\+legacytest/i.test(String(S._me.email||'')))); // fake legacytest homes: Admin + legacytest test accounts only
+  if(!showTest)listRows=listRows.filter(r=>!isTestListingRow(r));
   const allowTenure=!!(opts&&opts.allowTenure);
   const byId=new Map((stateData.listings||[]).map(l=>[l.id,l]));
   let tenureChanged=false;
@@ -469,7 +478,7 @@ function applyRelationalListings(stateData,listRows,opts){
     byId.set(r.id,next);
   });
   const live=new Set(listRows.map(r=>r.id));
-  stateData.listings=[...byId.values()].filter(l=>live.has(l.id)&&!isTestListingRow(l));
+  stateData.listings=[...byId.values()].filter(l=>live.has(l.id)&&(showTest||!isTestListingRow(l)));
   return tenureChanged;
 }
 
@@ -979,7 +988,7 @@ const hash=pw=>{
 };
 S.register=async f=>{
   if(f.role==='INVESTOR'&&!(S.caps&&S.caps.investor))throw new Error(S.lang==='es'?'El registro de inversionistas todavía no está disponible.':'Investor signup is not available yet.');
-  const fields={name:f.role==='INVESTOR'?(f.representativeName||f.name):f.name,email:f.email,phone:f.phone,password:f.password,role:f.role,inviteCode:f.inviteCode,licenseNumber:f.licenseNumber,brokerage:f.brokerage,businessName:f.businessName,contactMethod:f.contactMethod,contactValue:f.contactValue,representativeName:f.representativeName};
+  const fields={name:f.role==='INVESTOR'?(f.representativeName||f.name):f.name,email:f.email,phone:f.phone,password:f.password,role:f.role,inviteCode:f.inviteCode,licenseNumber:f.licenseNumber,brokerage:f.brokerage,bio:f.role==='AGENT'?String(f.bio||'').slice(0,600):undefined,businessName:f.businessName,contactMethod:f.contactMethod,contactValue:f.contactValue,representativeName:f.representativeName};
   const j=await api('register',{fields});
   if(j.needsVerify)return {needsVerify:true,email:j.email,pendingReview:!!j.pendingReview,role:f.role};
   const u=await adoptSession(j);
@@ -1050,7 +1059,7 @@ S.resetPassword=async(email,codeIn,pw)=>{const j=await api('reset',{email,code:c
 S.changePassword=async(cur,pw)=>{await api('change_password',{current:cur,password:pw});};
 S.adminResetPassword=async(userId,pw)=>{if(!S.isAdmin())throw new Error('Admins only');await api('admin_reset',{userId,password:pw});};
 S.updateProfile=p=>{Object.assign(S.user,p,{updatedAt:now()});const ap=S.agentProfile(S.user);
-  if(ap){if(p.licenseNumber!=null)ap.licenseNumber=p.licenseNumber;if(p.brokerage!=null)ap.brokerage=p.brokerage;}
+  if(ap){if(p.licenseNumber!=null)ap.licenseNumber=p.licenseNumber;if(p.brokerage!=null)ap.brokerage=p.brokerage;if(p.bio!=null){ap.bio=String(p.bio).slice(0,600);delete S.user.bio;}}
   S.save();sbUpsert('app_users',userToRow(S.user),'id');};
 // Investors (and anyone) can change only their own display name and phone. Sends just {id,name,phone};
 // the api's app_users write already limits non-admins to their own row and never lets them change role, email or approval.
@@ -1126,11 +1135,12 @@ S.sendMessage=({toUserId,listingId,kind,body})=>{if(!S.user)throw new Error(S.la
 S.myMessages=()=>S.user?S.data.messages.filter(m=>m.fromUserId===S.user.id||m.toUserId===S.user.id):[];
 S.submitOffer=f=>{if(!S.user)throw new Error(S.lang==='es'?'Inicia sesión primero':'Please log in');needApproved();
   const o={id:uid(),userId:S.user.id,listingId:f.listingId,offerPrice:+f.offerPrice*100,
-    downPayment:+f.downPayment*100,monthlyPayment:+f.monthlyPayment*100,notes:f.notes||'',inspections:f.inspections==='YES',status:'SUBMITTED',createdAt:now()};
+    downPayment:+f.downPayment*100,monthlyPayment:+f.monthlyPayment*100,notes:f.notes||'',inspections:f.inspections==='YES',status:'SUBMITTED',createdAt:now()};if(f.tourId)o.tourId=String(f.tourId); // v39: which showing this offer comes from
   S.data.offers.push(o);
   S.save();
   sbUpsert('offers',{
     id:o.id,
+    ...(o.tourId?{tour_id:o.tourId}:{}),
     listing_id:o.listingId,
     user_id:o.userId,
     buyer_name:S.user.name||'',
@@ -1330,10 +1340,10 @@ S.uploadProblem=(file,imageOnly)=>{
   if(!file.size||file.size>UPLOAD_MAX)return es?'El archivo debe pesar menos de 15 MB.':'The file must be smaller than 15 MB.';
   return '';
 };
-S.uploadDocument=async(file,{listingId,docType,offerId}={})=>{
+S.uploadDocument=async(file,{listingId,docType,offerId,replace}={})=>{
   if(!S.user)throw new Error(S.lang==='es'?'Inicia sesión primero':'Please log in');
   const bad=S.uploadProblem(file,false);if(bad)throw new Error(bad);
-  const meta={name:file.name,size:file.size,type:S.uploadMime(file),docType:docType||'GENERAL',listingId:listingId||null,offerId:offerId||null};
+  const meta={name:file.name,size:file.size,type:S.uploadMime(file),docType:docType||'GENERAL',listingId:listingId||null,offerId:offerId||null,replace:!!replace};
   const init=await api('document_upload_init',meta);
   if(!init||!init.ok)throw new Error(S.lang==='es'?'La subida de documentos aún no está disponible.':'Document upload is not available yet.');
   const put=await fetch(init.signedUrl,{method:'PUT',headers:{'Content-Type':init.mime||meta.type,'x-upsert':'false'},body:file});
@@ -1383,9 +1393,10 @@ S.updateListing=(lid,p)=>{if(!S.isAdmin())throw new Error('Admins only');const l
 S.respondOffer=(oid,status,c={})=>{if(!S.isAdmin())throw new Error('Admins only');const o=S.data.offers.find(x=>x.id===oid);
   o.status=status;o.respondedAt=now();o.adminNotes=c.adminNotes||'';
   if(status==='COUNTERED'){o.counterPrice=+c.counterPrice*100;o.counterDown=+c.counterDown*100;o.counterMonthly=+c.counterMonthly*100;}
-  if(status==='ACCEPTED'){const l=S.listing(o.listingId);if(l){l.status='PENDING_NO_EM';sbUpsert('listings',listingToRow(l),'id');}o.docsUnlocked=true;}
+  const tourO=window.LegacyTours&&LegacyTours.tourOfferInfo&&LegacyTours.tourOfferInfo(oid);
+  if(status==='ACCEPTED'){const l=S.listing(o.listingId);const bu=(S.data.users||[]).find(u=>u.id===o.userId)||{};const isTest=/\+legacytest/i.test(String(bu.email||o.buyerEmail||''));/* v39: legacytest offers never move a real home (server enforces it too) *//* v39 (6:32 PM): a showing-flow offer only moves the home to Pending when the seller approves all 3 conditions */if(l&&!isTest&&!tourO){l.status='PENDING_NO_EM';sbUpsert('listings',listingToRow(l),'id');}if(isTest)o.simulatedHomeStatus='PENDING_NO_EM';o.docsUnlocked=true;}
   S.save();
-  sbUpsert('offers',{
+  const up=sbUpsert('offers',{
     id:o.id,
     listing_id:o.listingId,
     user_id:o.userId,
@@ -1400,6 +1411,8 @@ S.respondOffer=(oid,status,c={})=>{if(!S.isAdmin())throw new Error('Admins only'
     admin_notes:o.adminNotes||'',
     updated_at:now()
   },'id');
+  // v39 (6:32 PM): Accept / Reject / Counter Offer here also drives the showing-offer flow right away (pre-approve -> 12 h / 72 h clocks, deny, counteroffer, notices).
+  Promise.resolve(up).then(()=>S.api('tour_offer_sync',{offerId:oid})).then(r=>{if(r&&r.tourOffer&&window.LegacyTours&&LegacyTours.refreshAll)LegacyTours.refreshAll();}).catch(()=>{});
 };
 S.TX_DOCS=[
   {type:'CLIENT_ID',label:"1. Client's Form of ID",labelEs:'1. Identificación Oficial del Cliente (ID)'},
