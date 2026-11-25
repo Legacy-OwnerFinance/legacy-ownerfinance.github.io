@@ -2146,3 +2146,12 @@ input[type=file]{max-width:100%}
 .cd-more-steps li{flex-wrap:wrap;min-width:0}
 .cd-more-steps li>.ad-cd{margin-left:auto;flex:0 1 auto;max-width:100%;white-space:nowrap}
 .cd-ms-t{flex:1 1 160px}
+/* nested folds (offer inside a showing card) must not widen the page */
+details.lf-fold{min-width:0;max-width:100%}
+.lf-body{min-width:0;max-width:100%}
+.lf-body>*{min-width:0;max-width:100%}
+.lf-sum{min-width:0;max-width:100%;overflow:hidden}
+.lf-sum .lf-main{min-width:0;flex:1 1 auto;overflow:hidden}
+.lf-sum .lf-main>*{overflow:hidden;text-overflow:ellipsis}
+.tour-route>li,.tour-stop{min-width:0;max-width:100%}
+.tour-stop-main{min-width:0;max-width:100%}
