@@ -1533,6 +1533,10 @@ footer.app-footer a { color: var(--accent); }
     position: absolute; top: 4px; left: calc(50% + 6px); min-width: 17px; height: 17px; padding: 0 4px; border-radius: 999px;
     background: #dc2626; color: #fff; font-size: 10px; font-weight: 800; line-height: 17px; text-align: center;
   }
+  /* iOS 26 Safari can paint a bottom-fixed bar mid-screen after the toolbar collapses (WebKit bugs 297779/312149).
+     Give the bar its own compositing layer, and keep the Thanksgiving leaves layer out of the fixed layers on phones. */
+  .tab-bar { -webkit-transform: translate3d(0, 0, 0); transform: translate3d(0, 0, 0); -webkit-backface-visibility: hidden; backface-visibility: hidden; }
+  #lof-tg-fall { position: absolute; }
   #app-root:has(.tab-bar) { padding-bottom: calc(60px + env(safe-area-inset-bottom, 0px)); }
   #app-root:has(.tab-bar) .msg-bubble { display: none; }
   #app-root:has(.tab-bar) ~ .compare-tray, .compare-tray { bottom: calc(70px + env(safe-area-inset-bottom, 0px)); }
