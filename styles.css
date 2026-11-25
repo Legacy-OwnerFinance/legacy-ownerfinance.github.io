@@ -1533,7 +1533,16 @@ footer.app-footer a { color: var(--accent); }
     position: absolute; top: 4px; left: calc(50% + 6px); min-width: 17px; height: 17px; padding: 0 4px; border-radius: 999px;
     background: #dc2626; color: #fff; font-size: 10px; font-weight: 800; line-height: 17px; text-align: center;
   }
-  #app-root:has(.tab-bar) { padding-bottom: calc(60px + env(safe-area-inset-bottom, 0px)); }
+  /* iOS 26 Safari paints position:fixed;bottom:0 bars mid-screen after the toolbar collapses (WebKit bugs 297779 / 312149:
+     bottom is anchored to the large viewport, not the visible one). Global fix: the bar is the last child of #app-root and
+     uses position:sticky;bottom:0, which follows the scroll position instead of the buggy fixed-viewport anchor.
+     #app-root is at least one screen tall so the bar still sits at the bottom of short pages.
+     The map tab never scrolls the page, so it keeps position:fixed. */
+  #app-root:has(.tab-bar) { display: flex; flex-direction: column; min-height: 100vh; min-height: 100dvh; }
+  #app-root:has(.tab-bar) > main { flex: 1 0 auto; }
+  .tab-bar { position: -webkit-sticky; position: sticky; flex: 0 0 auto; }
+  html.lof-map-on .tab-bar { position: fixed; }
+  #lof-tg-fall { position: absolute; }
   #app-root:has(.tab-bar) .msg-bubble { display: none; }
   #app-root:has(.tab-bar) ~ .compare-tray, .compare-tray { bottom: calc(70px + env(safe-area-inset-bottom, 0px)); }
 }
@@ -2325,3 +2334,11 @@ details.lf-fold{min-width:0;max-width:100%}
 .tour-codef .ops-meta{margin-top:8px}
 .btn-link{background:none;border:0;padding:0;color:#1d4ed8;font-weight:600;text-decoration:underline;cursor:pointer;font:inherit}
 .tour-needcode{font-size:.88rem}
+
+/* Remove-agent warning (always shown in ES and EN) + admin list */
+.tour-rm-warn{background:#fff7ed;border:1px solid #fdba74;border-radius:10px;padding:10px 12px;margin:8px 0 12px}
+.tour-rm-warn p{margin:0 0 8px;color:#9a3412;font-size:.92rem;line-height:1.4}
+.tour-rm-warn p:last-child{margin-bottom:0}
+.tour-rm-list{list-style:none;margin:0;padding:0}
+.tour-rm-item{border-bottom:1px solid #eee;padding:10px 0}
+.tour-rm-reason{margin:6px 0 0;white-space:pre-wrap;color:#334155}

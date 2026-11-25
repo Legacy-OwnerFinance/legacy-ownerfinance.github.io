@@ -181,7 +181,7 @@ const L10N={
     phone:'Phone',
     passwordMin:'Password (8+ characters)',
     inviteCode:'Agent invite code (D2D-XXXXXX)',
-    inviteHint:'Optional. If you already work with an agent, type their code. If not, leave it blank: when you are ready to see homes, you will connect with an agent.',
+    inviteHint:'Optional. If you already work with an agent, type their code. If not, leave it blank: you can still create your account and request showings. Licensed agents are notified, and the first to accept becomes your agent.',
     orecLicense:'OREC license #',
     brokerage:'Brokerage',
     createAccount:'Create account',
@@ -416,7 +416,7 @@ const L10N={
     phone:'Teléfono',
     passwordMin:'Contraseña (mín. 8 caracteres)',
     inviteCode:'Código de invitación de tu agente (D2D-XXXXXX)',
-    inviteHint:'Opcional. Si ya tienes agente, escribe su código. Si no, déjalo en blanco: cuando quieras ver casas, te conectas con un agente.',
+    inviteHint:'Opcional. Si ya tienes agente, escribe su código. Si no, déjalo en blanco: igual puedes crear tu cuenta y pedir citas. Se avisa a los agentes con licencia, y el primero que acepte será tu agente.',
     orecLicense:'Número de licencia OREC #',
     brokerage:'Inmobiliaria (Brokerage)',
     createAccount:'Crear cuenta',
@@ -1428,7 +1428,7 @@ function guides(){
     return `<section class="card" style="padding:20px"><h2>Cómo Funciona</h2>
     <h3>Crear una cuenta de Comprador</h3><ol>
     <li>Haz clic en <b>Iniciar Sesión / Registrarse</b> y elige <b>Comprador (Público General)</b>.</li>
-    <li>Ingresa el código de invitación de tu agente (ej. D2D-XXXXXX). ¿No tienes agente? Marca <b>“Todavía no tengo agente”</b> y se te asignará un agente con licencia automáticamente.</li>
+    <li>El código de tu agente (ej. D2D-XXXXXX) es <b>opcional</b>. Si no tienes agente, déjalo en blanco: igual puedes crear tu cuenta. Cuando pidas ver casas, se avisa a los agentes con licencia en regla y el primero que acepte será tu agente.</li>
     <li>Crea una contraseña (8+ caracteres) y envía el formulario para desbloquear todas las direcciones, precios y detalles.</li></ol>
     <h3>Crear una cuenta de Agente</h3><ol>
     <li>Elige <b>Agente con Licencia</b> e ingresa tu número de licencia OREC y tu inmobiliaria (Brokerage).</li>
@@ -1439,7 +1439,7 @@ function guides(){
     <li><b>Mi Panel / Perfil</b>: consulta tu perfil, favoritos, mensajes privados con tu agente, ofertas y tu carpeta personal de documentos. Cuando tu oferta es aceptada, se desbloquea el recuadro para subir tu Identificación (ID) y Comprobante de Ingresos.</li>
     <li>¿Olvidaste tu contraseña? Usa “¿Olvidaste tu contraseña?” en la pantalla de inicio de sesión y te enviaremos un código por correo para crear una nueva.</li></ol></section>`;
   }
-  return `<section class="card" style="padding:20px"><h2>How It Works</h2><h3>Create a Buyer account</h3><ol><li>Click <b>Login / Register</b> and choose <b>Buyer</b>.</li><li>Enter your agent's invite code (e.g. D2D-XXXXXX). No agent? Choose “I don't have an agent, yet” — a licensed agent will be assigned to you.</li><li>Set a password (8+ characters) and submit to unlock all full addresses, prices, and property details.</li></ol>
+  return `<section class="card" style="padding:20px"><h2>How It Works</h2><h3>Create a Buyer account</h3><ol><li>Click <b>Login / Register</b> and choose <b>Buyer</b>.</li><li>Your agent's invite code (e.g. D2D-XXXXXX) is <b>optional</b>. If you don't have an agent, leave it blank: you can still create your account. When you ask to see homes, licensed agents in good standing are notified and the first to accept becomes your agent.</li><li>Set a password (8+ characters) and submit to unlock all full addresses, prices, and property details.</li></ol>
 <h3>Create an Agent account</h3><ol><li>Choose <b>Agent</b>, enter your OREC license # and brokerage.</li><li>After registering you receive your own invite code to share with clients.</li></ol>
 <h3>Navigating</h3><ol><li><b>Inventory</b>: once signed in, search by address, filter, view the map, and tap ♥ to save homes.</li><li>Open a home to see photos, request a showing, make an offer or share it with your agent.</li><li><b>Dashboard</b>: profile, favorites, messages, offers and your document folder. Once an offer is accepted, upload your ID and Proof of Income there.</li><li>Forgot your password? Click “Forgot password?” on the login screen and we will email you a code to set a new one.</li></ol></section>`;
 }
@@ -1881,7 +1881,7 @@ function openListing(id){const l=S.listing(id);if(!l)return;if(!(S.isInvestor()&
    <p style="font-size:14px;color:#475569">${l.beds??'—'} ${tr('bdShort')} · ${l.baths??'—'} ${tr('baShort')} · ${l.sqft?l.sqft+' '+tr('sqftUnit'):''}</p>
    <p>${esc(l.description)}</p>
    ${actionRow(l)}
-   ${ag?`<h3>${tr('shareHouse')}</h3><form id="shareF"><textarea name="body" placeholder="${tr('msgToAgent')}">${tr('defaultShareMsg')}</textarea><button>${tr('shareHouse')}</button> <button type="button" id="reqAcc">${tr('requestAccess')}</button></form>`:''}${contactBar(l)}`);
+   ${ag&&!isClient()?`<h3>${tr('shareHouse')}</h3><form id="shareF"><textarea name="body" placeholder="${tr('msgToAgent')}">${tr('defaultShareMsg')}</textarea><button>${tr('shareHouse')}</button> <button type="button" id="reqAcc">${tr('requestAccess')}</button></form>`:''}${contactBar(l)}`);
   const on=(s,f)=>{const el=m.querySelector(s);if(el)el.onsubmit=wrap(()=>{f(fd(el));alert(tr('sentAlert'));m.remove();render();});};
   on('#shareF',v=>S.sendMessage({toUserId:ag.id,listingId:id,kind:'SHARE_HOUSE',body:v.body}));
   const ra=m.querySelector('#reqAcc');if(ra)ra.onclick=wrap(()=>{S.sendMessage({toUserId:ag.id,listingId:id,kind:'REQUEST_ACCESS',body:tr('requestAccess')});alert(tr('requestedAlert'));});}
