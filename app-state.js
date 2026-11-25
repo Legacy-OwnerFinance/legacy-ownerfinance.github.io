@@ -491,7 +491,7 @@ function capsFrom(raw){
 }
 function clearMsgUnread(){
   const changed=!!S.msgUnread||(S.msgThreads&&S.msgThreads.length>0);
-  S.msgUnread=0;
+  S.msgUnread=0;S.notif=null;
   S.msgThreads=[];
   return changed;
 }
@@ -562,7 +562,9 @@ async function refreshMsgUnread(){
     const changed=(r.count|0)!==(S.msgUnread|0)||!sameJson(threads,S.msgThreads);
     S.msgUnread=r.count|0;
     S.msgThreads=threads;
-    return changed;
+    const nf=r.notif||null,nfChanged=!sameJson(nf&&nf.items?nf.items.map(i=>i.id):null,S.notif&&S.notif.items?S.notif.items.map(i=>i.id):null);
+    S.notif=nf; // v40: explained badge list (absent on older APIs → old badge behaviour)
+    return changed||nfChanged;
   }catch(e){
     if(e&&e.code==='no_session')return clearMsgUnread();
     return false;
@@ -603,9 +605,19 @@ async function markThreadRead(peerId){
   if(!msgEnabled())return;
   try{
     const r=await api('messages_mark_read',{peerId});
-    if(r&&r.ok){S.msgUnread=r.count|0;S.msgThreads=Array.isArray(r.threads)?r.threads:[];}
+    if(r&&r.ok){S.msgUnread=r.count|0;S.msgThreads=Array.isArray(r.threads)?r.threads:[];if(r.notif)S.notif=r.notif;}
   }catch(e){}
 }
+// v40: mark notices read (ids, or all:true = every unread notice for this account, tests included)
+async function markNotifRead(ids,all){
+  if(!msgEnabled())return false;
+  const list=(ids||[]).filter(Boolean).slice(0,200);
+  if(!all&&!list.length)return false;
+  if(S.notif&&Array.isArray(S.notif.items)){const drop=new Set(list),tv=!!S.notif.testViewer,c=Object.assign({},S.notif.counts),tc=Object.assign({},S.notif.testCounts);S.notif.items.forEach(i=>{if(all||drop.has(i.id)){const m=i.test&&!tv?tc:c;m[i.group]=Math.max(0,(m[i.group]|0)-1);}});if(all){Object.keys(c).forEach(k=>c[k]=0);Object.keys(tc).forEach(k=>tc[k]=0);}S.notif=Object.assign({},S.notif,{items:all?[]:S.notif.items.filter(i=>!drop.has(i.id)),counts:c,testCounts:tc});}
+  try{const r=await api('messages_mark_read',all?{all:true}:{ids:list});if(r&&r.ok){S.msgUnread=r.count|0;S.msgThreads=Array.isArray(r.threads)?r.threads:[];if(r.notif)S.notif=r.notif;}}catch(e){}
+  return true;
+}
+S.markNotifRead=markNotifRead;
 S.msgEnabled=msgEnabled;
 S.refreshMsgUnread=refreshMsgUnread;
 S.markThreadRead=markThreadRead;

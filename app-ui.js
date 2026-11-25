@@ -893,7 +893,7 @@ function scrollToResults(){const el=document.querySelector('.cards-toolbar');if(
 })();
 function tabBar(){
   if(tab==='inventory'&&!S.user&&shareId()&&!resetQueryActive()&&S.listing(shareId()))return '';
-  const es=S.lang==='es',mUnread=S.msgUnread|0;
+  const es=S.lang==='es',mUnread=chatUnreadN();
   const agentDash=!!(S.user&&window.LegacyTours&&LegacyTours.agentDashVisible&&LegacyTours.agentDashVisible());
   const sellerDash=!agentDash&&!!(S.user&&(window.LegacyTours&&LegacyTours.sellerDashVisible&&LegacyTours.sellerDashVisible()&&!S.isAdmin()));
   const act=k=>k==='panel'?(tab==='agenthome'||tab==='sellerhome'):k==='home'?(tab==='inventory'&&!MAPOPEN):k==='map'?(tab==='map'||(tab==='inventory'&&MAPOPEN)):k==='favs'?tab==='favorites':k==='msgs'?msgOpen:k==='acct'?(tab==='dashboard'||tab==='auth'||tab==='myagent'):false;
@@ -1019,9 +1019,71 @@ function readGeo(){
     );
   });
 }
+/* v40 (badges explained): every badge = the same list. Groups Mensajes / Citas / Ofertas / Cierres + home alerts.
+   legacytest notices never count for real accounts; Admin can look at them behind the "Pruebas" filter. */
+let NF_FILTER='ALL';
+const NF_G=[['MSG','✉️','Mensajes','Messages'],['SHOW','📅','Citas','Showings'],['OFFER','💰','Ofertas','Offers'],['CLOSE','🏁','Cierres','Closings']];
+const nfL=(es,en)=>S.lang==='es'?es:en;
+function nfState(){
+  const n=S.notif;if(!n||!Array.isArray(n.items))return null;
+  const tv=!!n.testViewer,vis=n.items.filter(i=>!i.test||tv),test=tv?[]:n.items.filter(i=>i.test);
+  const c={MSG:0,SHOW:0,OFFER:0,CLOSE:0};Object.keys(c).forEach(k=>c[k]=(n.counts&&n.counts[k])|0);
+  const tc={MSG:0,SHOW:0,OFFER:0,CLOSE:0};Object.keys(tc).forEach(k=>tc[k]=(n.testCounts&&n.testCounts[k])|0);
+  return {vis,test,c,tc,total:c.MSG+c.SHOW+c.OFFER+c.CLOSE,testTotal:tc.MSG+tc.SHOW+tc.OFFER+tc.CLOSE};
+}
+function alertsUnreadN(){return (S.alerts||[]).filter(a=>!a.readAt).length+(S.digests||[]).filter(d=>!d.readAt).length;}
+function badgeTotal(){const s=nfState();return s?s.total+alertsUnreadN():alertsUnreadN()+(S.msgUnread|0);}
+function chatUnreadN(){const s=nfState();return s?s.c.MSG:(S.msgUnread|0);}
+function nfMenuBlock(){
+  const s=nfState(),a=alertsUnreadN();if(!S.user||(!s&&!a))return '';
+  const chips=(s?NF_G.filter(([k])=>s.c[k]).map(([k,i,es,en])=>`<button type="button" class="nf-chip" data-nfopen="${k}">${i} ${nfL(es,en)} <b>${s.c[k]}</b></button>`):[]).concat(a?[`<button type="button" class="nf-chip" data-nfopen="ALERT">🏠 ${nfL('Casas','Homes')} <b>${a}</b></button>`]:[]);
+  const tot=badgeTotal();
+  return `<div class="nf-menu"><button type="button" class="nav-pill nf-menu-main" data-nfopen="ALL" role="menuitem">🔔 ${nfL('Notificaciones','Notifications')}${tot?` <b class="nf-n">${tot}</b>`:''}</button>${chips.length?`<div class="nf-chips">${chips.join('')}</div>`:`<p class="nf-none">${nfL('Todo leído ✅','All caught up ✅')}</p>`}</div>`;
+}
+function nfWhen(at){const t=Date.parse(at||'');return t?new Date(t).toLocaleString(S.lang==='es'?'es-US':'en-US',{timeZone:'America/Chicago',month:'short',day:'numeric',hour:'numeric',minute:'2-digit'}):'';}
+function nfLink(i){
+  const lid=i.listingId&&S.listing&&S.listing(i.listingId)?i.listingId:'';
+  const home=lid?`<button type="button" class="nav-pill" data-nfread="${esc(i.id)}" data-open="${esc(lid)}">🏠 ${nfL('Ver casa','See home')}</button>`:'';
+  let main='';
+  if(i.group==='MSG'&&i.peerId)main=`<button type="button" class="nav-pill primary" data-nfread="${esc(i.id)}" data-nfchat="${esc(i.peerId)}" data-nfname="${esc(i.peerName||'')}">💬 ${nfL('Abrir chat','Open chat')}</button>`;
+  else if(i.group==='SHOW')main=`<button type="button" class="nav-pill primary" data-nfread="${esc(i.id)}" data-nfgo="tours">📅 ${nfL('Ver citas','See showings')}</button>`;
+  else if(i.group==='OFFER'||i.group==='CLOSE'){const t=S.isAdmin()?'admin':(window.LegacyTours&&LegacyTours.agentDashVisible&&LegacyTours.agentDashVisible())?'agenthome':(window.LegacyTours&&LegacyTours.sellerDashVisible&&LegacyTours.sellerDashVisible())?'sellerhome':'dashboard';main=`<button type="button" class="nav-pill primary" data-nfread="${esc(i.id)}" data-nfgo="${t}">${i.group==='CLOSE'?'🏁':'💰'} ${nfL('Ver oferta','See offer')}</button>`;}
+  return `<div class="nf-acts">${main}${home}<button type="button" class="nav-pill" data-nfread="${esc(i.id)}" data-nfonly="1">✓ ${nfL('Leído','Read')}</button></div>`;
+}
+function nfItem(i){
+  const g=NF_G.find(x=>x[0]===i.group)||NF_G[0];
+  const title=i.place||i.peerName||nfL(g[2],g[3]);
+  return `<article class="alert-item is-unread nf-item${i.test?' nf-test':''}"><div class="alert-place">${g[1]} ${esc(title)}${i.test?` <span class="nf-tag">🧪 ${nfL('prueba','test')}</span>`:''}</div><div class="alert-meta">${esc(nfL(g[2],g[3]))} · ${esc(nfWhen(i.at))}${i.peerName&&i.place?' · '+esc(i.peerName):''}</div>${i.text?`<p class="nf-text">${esc(i.text)}</p>`:''}${nfLink(i)}</article>`;
+}
+function nfSection(){
+  const s=nfState();if(!s)return '';
+  const f=NF_FILTER,isAdm=S.isAdmin&&S.isAdmin();
+  const tabs=[['ALL','🔔',nfL('Todo','All'),s.total+alertsUnreadN()]].concat(NF_G.map(([k,i,es,en])=>[k,i,nfL(es,en),s.c[k]]),[['ALERT','🏠',nfL('Casas','Homes'),alertsUnreadN()]]);
+  if(isAdm&&s.testTotal)tabs.push(['TEST','🧪',nfL('Pruebas','Tests'),s.testTotal]);
+  const bar=`<div class="nf-tabs" role="tablist">${tabs.filter(t=>t[0]==='ALL'||t[0]==='TEST'||t[3]||t[0]===f).map(([k,i,l,n])=>`<button type="button" role="tab" aria-selected="${f===k}" class="nf-tab${f===k?' on':''}" data-nffilter="${k}">${i} ${l}${n?` <b>${n}</b>`:''}</button>`).join('')}</div>`;
+  if(f==='ALERT')return bar; // home alerts are listed below by the existing alert list
+  const src=f==='TEST'?s.test:s.vis.filter(i=>f==='ALL'||i.group===f);
+  const groups=(f==='ALL'||f==='TEST'?NF_G:NF_G.filter(g=>g[0]===f)).map(([k,ic,es,en])=>{const list=src.filter(i=>i.group===k);if(!list.length)return '';const total=f==='TEST'?s.tc[k]:s.c[k];return `<h4 class="nf-h">${ic} ${nfL(es,en)} <span class="ad-count">${total}</span></h4>${list.map(nfItem).join('')}${total>list.length?`<p class="ops-meta">+${total-list.length} ${nfL('más antiguas','older')}</p>`:''}`;}).join('');
+  const testNote=f==='TEST'?`<p class="ops-meta nf-note">🧪 ${nfL('Avisos de cuentas/casas legacytest. No cuentan en los números rojos.','Notices from legacytest accounts/homes. They are not in the red numbers.')}</p>`:(isAdm&&s.testTotal?`<p class="ops-meta nf-note">🧪 ${s.testTotal} ${nfL('avisos de prueba ocultos (no cuentan).','test notices hidden (not counted).')}</p>`:'');
+  return `${bar}${testNote}${groups||(f==='ALL'?'':`<p class="alert-empty">${nfL('Nada pendiente aquí.','Nothing pending here.')}</p>`)}`;
+}
+document.addEventListener('click',async e=>{
+  const t=e.target.closest&&e.target.closest('[data-nfopen],[data-nffilter],[data-nfread],[data-nfall]');if(!t)return;
+  const d=t.dataset;
+  if(d.nfopen){e.preventDefault();e.stopPropagation();NF_FILTER=d.nfopen;menuOpen=false;msgOpen=false;alertOpen=true;render();S.markAlertsRead&&S.markAlertsRead();const p=document.querySelector('.alert-panel');if(p)p.scrollTop=0;return;}
+  if(d.nffilter){e.preventDefault();e.stopPropagation();NF_FILTER=d.nffilter;return render();}
+  if(d.nfall){e.preventDefault();e.stopPropagation();await S.markNotifRead([],true);if(S.markAlertsRead)await S.markAlertsRead();render();return;}
+  if(d.nfread){ // mark this one read, then follow its link (the normal handlers still run for data-open)
+    S.markNotifRead([d.nfread],false).then(()=>{if(alertOpen)render();else paintMsgBadge();});
+    if(d.nfonly){e.preventDefault();e.stopPropagation();return render();}
+    if(d.nfchat){e.preventDefault();e.stopPropagation();alertOpen=false;window.LegacyUI.openChat(d.nfchat,d.nfname||'');return;}
+    if(d.nfgo){e.preventDefault();e.stopPropagation();alertOpen=false;return go(d.nfgo);}
+    alertOpen=false; // data-open → home detail (main handler)
+  }
+},true);
 function bellHtml(){
   if(!portalReady())return '';
-  const n=(S.alerts||[]).filter(a=>!a.readAt).length+(S.digests||[]).filter(d=>!d.readAt).length;
+  const n=badgeTotal();
   return `<div class="bell-wrap"><button type="button" class="nav-pill bell-btn" data-bell="1" aria-expanded="${alertOpen?'true':'false'}" aria-label="${esc(tr('alerts.bell'))}">🔔${n?`<span class="bell-count">${n>9?'9+':n}</span>`:''}</button></div>`;
 }
 function digestCards(){
@@ -1055,8 +1117,8 @@ function alertSheet(){
   const items=(S.alerts||[]).slice(0,30);
   const anyRead=(S.alerts||[]).some(a=>a.readAt)||(S.digests||[]).some(d=>d.readAt);
   const clearBtn=anyRead&&S.canDeleteAlerts&&S.canDeleteAlerts()?`<button type="button" class="nav-pill alert-clear" data-alertclear="1">🗑 ${S.lang==='es'?'Borrar vistas':'Clear seen'}</button>`:'';
-  return `<section class="alert-panel" role="region" aria-label="${esc(tr('alerts.title'))}"><div class="alert-panel-head"><b>${tr('alerts.title')}</b><span class="alert-head-actions">${clearBtn}<button type="button" class="nav-pill" data-alertclose="1" aria-label="✕">✕</button></span></div>
-    ${pushBox()}${digestCards()}${items.length?items.map(a=>`<article class="alert-item ${a.readAt?'':'is-unread'}">${alertDelBtn(a)}<div class="alert-place">${alertPlace(a)}</div><div class="alert-meta">${a.oldStatus&&a.oldStatus!==a.newStatus?esc(S.statusText(a.oldStatus))+' → ':''}${esc(S.statusText(a.newStatus))} · ${esc(formatInstant(a.changedAt))}</div></article>`).join(''):`<p class="alert-empty">${tr('alerts.empty')}</p>`}
+  return `<section class="alert-panel" role="region" aria-label="${esc(tr('alerts.title'))}"><div class="alert-panel-head"><b>${nfState()?nfL('Notificaciones','Notifications'):tr('alerts.title')}</b><span class="alert-head-actions">${clearBtn}<button type="button" class="nav-pill" data-alertclose="1" aria-label="✕">✕</button></span></div>
+    ${nfState()?`<div class="nf-head-acts">${badgeTotal()||(nfState().test.length)?`<button type="button" class="nav-pill" data-nfall="1">✓ ${nfL('Marcar todo como leído','Mark all as read')}</button>`:''}</div>`:''}${nfSection()}${NF_FILTER!=='ALL'&&NF_FILTER!=='ALERT'&&nfState()?'':`${NF_FILTER==='ALL'&&nfState()?`<h4 class="nf-h">🏠 ${nfL('Casas (cambios de estado)','Homes (status changes)')} ${alertsUnreadN()?`<span class="ad-count">${alertsUnreadN()}</span>`:''}</h4>`:''}${pushBox()}${digestCards()}${items.length?items.map(a=>`<article class="alert-item ${a.readAt?'':'is-unread'}">${alertDelBtn(a)}<div class="alert-place">${alertPlace(a)}</div><div class="alert-meta">${a.oldStatus&&a.oldStatus!==a.newStatus?esc(S.statusText(a.oldStatus))+' → ':''}${esc(S.statusText(a.newStatus))} · ${esc(formatInstant(a.changedAt))}</div></article>`).join(''):`<p class="alert-empty">${tr('alerts.empty')}</p>`}`}
   </section>`;
 }
 const MSG_SKIP_KIND={OFFER_CONFIRMATION:1,SHOWING_CONFIRMATION:1};
@@ -1140,12 +1202,12 @@ function messageContacts(){
   return out;
 }
 function syncMsgTitle(){
-  const n=S.msgUnread|0;
+  const n=badgeTotal();
   const base='Legacy - Owner Finance';
   document.title=n>0?`(${n}) ${base}`:base;
 }
 function paintMsgBadge(){
-  const n=msgCountLabel(S.msgUnread||0);
+  const n=msgCountLabel(chatUnreadN());
   const btn=document.querySelector('[data-msgbubble]');
   if(btn){
     let badge=btn.querySelector('.msg-count');
@@ -1179,7 +1241,7 @@ function submitMsgComposer(){
 }
 function msgBubble(){
   if(!(S.msgEnabled&&S.msgEnabled()))return '';
-  const n=msgCountLabel(S.msgUnread);
+  const n=msgCountLabel(chatUnreadN());
   return `<button type="button" class="msg-bubble" data-msgbubble="1" aria-expanded="${msgOpen?'true':'false'}" aria-label="${esc(tr('msg.bubble'))}">💬${n?`<span class="msg-count">${esc(n)}</span>`:''}</button>`;
 }
 function msgThreadList(){
@@ -1346,13 +1408,13 @@ function header(){
   if(S.user&&window.LegacyTours&&LegacyTours.agentNavVisible&&LegacyTours.agentNavVisible())T.push(['myagent',LegacyTours.agentNavLabel()]);
   if(S.isAdmin())T.push(['admin',tr('navAdmin')]);
   if(!S.user)T.push(['auth',tr('navAuth')]);
-  const unread=(S.alerts||[]).filter(a=>!a.readAt).length+(S.digests||[]).filter(d=>!d.readAt).length+(S.msgUnread|0);
-  const menuItems=`${T.map(([k,v])=>`<button data-tab="${k}" class="nav-pill ${tab===k?'active':''}" role="menuitem">${v}</button>`).join('')}
+  const unread=badgeTotal();
+  const menuItems=`${nfMenuBlock()}${T.map(([k,v])=>`<button data-tab="${k}" class="nav-pill ${tab===k?'active':''}" role="menuitem">${v}</button>`).join('')}
    ${investorHome?`<button type="button" class="nav-pill" data-openmap="1" role="menuitem">${tr('openMap')}</button>`:''}
    ${S.user?`<button id="logout" class="nav-pill" role="menuitem">${tr('logout')} (${esc(S.user.name)})</button>`:''}
    <div class="nav-drawer-lang"><button data-lang="en" class="nav-pill lang-btn ${S.lang==='en'?'active':''}">EN</button><button data-lang="es" class="nav-pill lang-btn ${S.lang==='es'?'active':''}">ES</button></div>`;
   return `<header class="app-header${headerCompact?' is-compact':''}">
-   <button type="button" class="menu-btn" data-menu="1" aria-haspopup="true" aria-expanded="${menuOpen?'true':'false'}" aria-controls="nav-drawer" aria-label="${esc(tr('menu.label'))}"><span class="menu-bars" aria-hidden="true"></span>${unread?`<span class="menu-badge">${unread>9?'9+':unread}</span>`:''}</button>
+   <button type="button" class="menu-btn" data-menu="1" aria-haspopup="true" aria-expanded="${menuOpen?'true':'false'}" aria-controls="nav-drawer" aria-label="${esc(tr('menu.label'))}"><span class="menu-bars" aria-hidden="true"></span>${unread?`<span class="menu-badge" data-nfopen="ALL" title="${esc(nfL('Ver notificaciones','See notifications'))}">${unread>9?'9+':unread}</span>`:''}</button>
    <div class="brand-wrap" data-tab="inventory"><img src="legacy-logo.png" alt="Legacy" class="main-logo"><div class="brand-text"><h1 class="brand-title">Legacy - Owner Finance</h1>
    <div class="brand-sub"><span>Brokerage By: KLC Real Estate, LLC</span><img src="klc-logo.png" alt="KLC"></div></div></div>
    <div class="header-actions">${window.LegacyTours?LegacyTours.headerButton():''}${bellHtml()}</div>
@@ -2040,32 +2102,84 @@ function investorAdminCard(){
   }).join('');
   return `<div id="investor-admin">${blocks||`<p>${tr('noneYet')}</p>`}</div>`;
 }
-function dashboard(){if(S.user&&isClient()&&window.LegacyTours&&LegacyTours.clientPanel)return LegacyTours.clientPanel(dashboardFull());if(S.user&&!S.isAdmin()&&!S.isInvestor()&&window.LegacyTours&&LegacyTours.agentAccount&&LegacyTours.agentDashVisible&&LegacyTours.agentDashVisible())return LegacyTours.agentAccount(dashboardFull());return dashboardFull();} // v39 (9:58 PM): agent Mi cuenta folded
-function dashboardFull(){if(!S.user)return auth();if(S.isInvestor())return investorDash();const u=S.user,ap=S.agentProfile(u),ag=S.agentFor(u),D=S.data;
+function dashboard(){if(S.user&&isClient()&&window.LegacyTours&&LegacyTours.clientPanel)return LegacyTours.clientPanel(dashboardFull({embed:true}));return dashboardFull();} // v40 (profile redesign): one clean profile page for agents/Admin; clients keep "Mi panel" with the same cards folded inside
+/* v40 (profile redesign): hero + KPI chips, sticky section nav, folded cards. Same fields, forms, ids and handlers as before (UI only). */
+const pfL=(es,en)=>S.lang==='es'?es:en;
+const pfOpen=(k,def)=>{try{const m=JSON.parse(sessionStorage.getItem('lof_fold')||'{}');return k in m?!!m[k]:!!def;}catch(e){return !!def;}};
+function pfUnwrap(html){ // take an old ".card" block, drop its outer box and first heading, keep everything else as-is
+  if(!html)return '';try{const t=document.createElement('template');t.innerHTML=html;const c=t.content.firstElementChild;if(!c)return html;const h=c.querySelector(':scope>h2,:scope>h3');if(h)h.remove();return c.innerHTML;}catch(e){return html;}
+}
+function pfCard(id,icon,title,count,body,opts={}){
+  const key='pf-'+id;
+  return `<details class="card lf-fold pf-card${opts.cls?' '+opts.cls:''}" id="${key}" data-fold="${key}"${pfOpen(key,opts.open)?' open':''}><summary class="lf-sum pf-sum"><span class="lf-ico" aria-hidden="true">${icon}</span><span class="lf-main"><b>${title}</b>${opts.sub?`<small>${opts.sub}</small>`:''}</span>${count!=null?`<span class="ad-count${opts.hot?' on':''}">${count}</span>`:''}<span class="lf-chev" aria-hidden="true">⌄</span></summary><div class="lf-body">${body}</div></details>`;
+}
+function pfMore(items,n,emptyHtml){ // first n rows, the rest behind "Ver más"
+  if(!items.length)return emptyHtml||'';
+  const head=items.slice(0,n).join(''),rest=items.slice(n);
+  return `<ul class="pf-list">${head}</ul>${rest.length?`<details class="pf-morebox"><summary class="btn-card pf-morebtn"><span class="pf-m-o">${pfL('Ver más','See more')} (${rest.length})</span><span class="pf-m-c">${pfL('Ver menos','See less')}</span></summary><ul class="pf-list">${rest.join('')}</ul></details>`:''}`;
+}
+function dashboardFull(opts={}){if(!S.user)return auth();if(S.isInvestor())return investorDash();const u=S.user,ap=S.agentProfile(u),ag=S.agentFor(u),D=S.data;
   const favs=D.favorites.filter(f=>f.userId===u.id).map(f=>S.listing(f.listingId)).filter(Boolean);
   const views=D.propertyViews.filter(v=>v.userId===u.id).slice(-10).reverse().map(v=>S.listing(v.listingId)).filter(Boolean);
   const clientIds=ap?new Set(S.clientsOf(u).map(c=>c.id)):new Set();
   const offers=D.offers.filter(o=>(o.userId===u.id||clientIds.has(o.userId))&&!S.isDeadOffer(o)),docs=D.documents.filter(d=>d.userId===u.id),msgs=S.myMessages().slice().reverse();
-  const contacts=ap?S.clientsOf(u):(ag?[ag]:[]),nm=id=>(D.users.find(x=>x.id===id)||{}).name||'—';
-  const li=l=>`<li><a href="#" data-open="${l.id}">${title(l)}</a> ${badge(l.status)}</li>`;
-  return `${S.isPendingApproval(u)?`<div style="margin:18px 18px 0;padding:12px;border-radius:10px;background:#fef3c7;border:1px solid #d97706">⏳ ${S.lang==='es'?(u.approvalStatus==='REJECTED'?'Tu cuenta no fue aprobada. Contáctanos para más información.':'Tu cuenta está pendiente de aprobación. Mientras tanto puedes ver casas; podrás hacer ofertas y pedir citas cuando sea aprobada.'):(u.approvalStatus==='REJECTED'?'Your account was not approved. Contact us for more information.':'Your account is pending approval. You can browse homes meanwhile; offers and showings unlock once approved.')}</div>`:''}<section style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(320px,100%),1fr));gap:16px;padding:18px">${alertsDash()}${showingsDash()}
-  <div class="card" style="padding:16px"><h2>${tr('myProfile')}</h2><img src="${esc(u.avatarUrl||'listing-placeholder.svg')}" style="width:90px;height:90px;border-radius:50%;object-fit:cover"><input type="file" id="avatar" accept="image/jpeg,image/png,image/webp,image/heic,image/heif,.jpg,.jpeg,.png,.webp,.heic,.heif">
-   <form id="profF"><input name="name" value="${esc(u.name)}"><input name="phone" value="${esc(u.phone)}">${ap?`<label>${tr('orecLicense')}<input name="licenseNumber" value="${esc(ap.licenseNumber)}"></label><label>${tr('brokerage')}<input name="brokerage" value="${esc(ap.brokerage)}"></label><label>${S.lang==='es'?'Bio corta (la ven tus clientes)':'Short bio (your clients see it)'}<textarea name="bio" maxlength="600" rows="3">${esc(ap.bio||'')}</textarea></label><p>${tr('yourInviteCode')} <b>${esc(ap.inviteCode)}</b></p>`:''}<button>${tr('save')}</button></form>
-   ${ag?`<p>${tr('yourAgent')} <b>${esc(ag.name)}</b></p>`:''}${isClient()&&window.LegacyTours&&LegacyTours.agentView?`<button type="button" class="btn-card primary" data-tab="myagent" style="margin:4px 0 10px">🤝 ${S.lang==='es'?'Mi agente':'My agent'}</button>`:''}<h3>${tr('changePw')}</h3><form id="pwF"><input name="cur" type="password" placeholder="${tr('currentPw')}" required><input name="pw" type="password" placeholder="${tr('newPw')}" minlength="8" required><button>${tr('updatePw')}</button></form>${accountDeleteCard()}</div>
-  ${isClient()?`<div class="card" style="padding:16px"><h2>🏡 ${st('mySearch')}</h2>${critSummary(critOf(u))}<button type="button" class="btn-card primary" data-editsearch="1">✏️ ${st('edit')}</button></div>`:''}
-  <div class="card" id="my-favs" style="padding:16px"><h2>${tr('favorites')}</h2>${favs.length?`<button type="button" class="btn-card" data-tab="favorites" style="margin:0 0 8px">❤️ ${S.lang==='es'?'Ver mis favoritas':'See my favorites'}</button>`:''}<ul>${favs.map(li).join('')||`<li>${tr('noneYet')}</li>`}</ul><h2>${tr('viewedHomes')}</h2><ul>${views.map(li).join('')||`<li>${tr('noneYet')}</li>`}</ul></div>
-  <div class="card" style="padding:16px"><h2>${tr('messages')}</h2>${contacts.length?`<form id="msgF"><select name="toUserId">${contacts.map(c=>`<option value="${c.id}">${esc(c.name)}</option>`).join('')}</select>
-   <select name="listingId"><option value="">${tr('propAddress')}</option>${D.listings.map(l=>`<option value="${l.id}">${esc(l.address)}, ${esc(l.city)}</option>`).join('')}</select>
-   <select name="kind"><option value="MESSAGE">${tr('kindMsg')}</option><option value="REQUEST_ACCESS">${tr('requestAccess')}</option><option value="SHARE_HOUSE">${tr('shareHouse')}</option></select><textarea name="body" placeholder="${tr('kindMsg')}" required></textarea><button>${tr('send')}</button></form>`:`<p>${tr('noAgentLinked')}</p>`}
-   <ul>${msgs.map(m=>`<li><b>${esc(nm(m.fromUserId))}</b> → ${esc(nm(m.toUserId))} ${m.listingId?'('+esc((S.listing(m.listingId)||{}).address)+')':''} <i>${esc(kindLabel(m.kind))}</i>: ${esc(m.body)}</li>`).join('')}</ul></div>
-  <div class="card" style="padding:16px"><h2>${tr('myOffers')}</h2><ul>${offers.map(o=>{const l=S.listing(o.listingId)||{};const mine=o.userId===u.id;return `<li class="lf-li"><details class="lf-fold" data-fold="myo-${esc(o.id)}"${foldOpen('myo-'+o.id)?' open':''}><summary class="lf-sum"><span class="lf-main"><b>${esc(l.address)}</b><small>${S.money(o.offerPrice)}</small></span>${offerBadge(o.status)}<span class="lf-chev" aria-hidden="true">⌄</span></summary><div class="lf-body">${mine?'':` <small>· ${cx('clientOffer')}: ${esc(nm(o.userId))}</small>`}
+  const contacts=ap?S.clientsOf(u):(ag?[ag]:[]),nm=id=>id==='legacy-system'?pfL('Avisos de Legacy','Legacy notices'):(D.users.find(x=>x.id===id)||{}).name||((S.msgThreads||[]).find(t=>t&&t.peerId===id)||{}).peerName||'—';
+  const isClosedO=o=>o.status==='CLOSED'||((S.closings&&S.closings[o.id])||{}).outcome==='CLOSED';
+  const activeO=offers.filter(o=>!isClosedO(o)),closedO=offers.filter(isClosedO);
+  const ph=l=>(Array.isArray(l.photoUrls)&&l.photoUrls[0])||l.photoUrl||'listing-placeholder.svg';
+  const homeRow=l=>`<li><button type="button" class="pf-row" data-open="${esc(l.id)}"><img src="${esc(ph(l))}" alt="" loading="lazy" onerror="this.onerror=null;this.src='listing-placeholder.svg'"><span class="lf-main"><b>${title(l)}</b></span>${badge(l.status)}</button></li>`;
+  // ----- offers (same content as before: tx docs, inspections, tracker, closing box with commission/final contract) -----
+  const offerLi=o=>{const l=S.listing(o.listingId)||{};const mine=o.userId===u.id;return `<li class="lf-li"><details class="lf-fold" data-fold="myo-${esc(o.id)}"${foldOpen('myo-'+o.id)?' open':''}><summary class="lf-sum"><span class="lf-main"><b>${esc(l.address||'—')}</b><small>${S.money(o.offerPrice)}${mine?'':` · ${esc(nm(o.userId))}`}</small></span>${offerBadge(o.status)}<span class="lf-chev" aria-hidden="true">⌄</span></summary><div class="lf-body">${mine?'':` <small>· ${cx('clientOffer')}: ${esc(nm(o.userId))}</small>`}
    ${o.status==='COUNTERED'?`<div style="color:#d97706">${tr('counterLabel')}: ${S.money(o.counterPrice)} / ${tr('down')} ${S.money(o.counterDown)} / ${S.money(o.counterMonthly)}${tr('perMo')}. ${esc(o.adminNotes)}</div>`:''}
    ${o.status==='ACCEPTED'&&mine?`<div class="tx-box" style="border:2px solid #16a34a;padding:8px;border-radius:8px;margin:6px 0"><b>${tr('txDocs')}</b>${S.TX_DOCS.map(t=>{const has=docs.find(d=>d.offerId===o.id&&d.docType===t.type);
      const docLabel=S.lang==='es'?(t.labelEs||t.label):t.label;
-     return `<div>${docLabel}: ${has?'✅ '+esc(has.name):`<input type="file" accept="${S.UPLOAD_ACCEPT}" data-txdoc="${t.type}" data-offer="${o.id}" data-listing="${o.listingId}">`}</div>`;}).join('')}${(o.inspections&&!(S.closings[o.id]&&S.closings[o.id].inspectionsWaived))?(()=>{const rep=docs.find(d=>d.offerId===o.id&&d.docType==='INSPECTION_REPORT');return `<div style="margin-top:8px;padding:8px;border:1px dashed #0284c7;border-radius:8px"><b>🔍 ${S.lang==='es'?'Inspecciones':'Inspections'}</b><br>${o.inspectionStatus==='SCHEDULED'?`${S.lang==='es'?'Programada':'Scheduled'}: <b>${esc(new Date(o.inspectionAt).toLocaleString())}</b> <button type="button" data-inspcancel="${o.id}" style="background:#dc2626;color:#fff">${S.lang==='es'?'Cancelar inspección':'Cancel inspection'}</button>`:`${o.inspectionStatus==='CANCELLED'?`<i>${S.lang==='es'?'Inspección cancelada':'Inspection cancelled'}</i><br>`:''}${S.lang==='es'?'Fecha y hora':'Date & time'}: <input type="datetime-local" id="insp-${o.id}"> <button type="button" data-inspsched="${o.id}">${S.lang==='es'?'Programar':'Schedule'}</button>`}<div style="margin-top:6px">${S.lang==='es'?'Reporte de inspección':'Inspection report'}: ${rep?'✅ '+esc(rep.name):`<input type="file" accept="${S.UPLOAD_ACCEPT}" data-txdoc="INSPECTION_REPORT" data-offer="${o.id}" data-listing="${o.listingId}">`}</div></div>`;})():''}</div>`:''}${dealTracker(progOfOffer(o))}${closingPanel(o)}</div></details></li>`;}).join('')||`<li>${tr('noneYet')}</li>`}</ul></div>
-  ${isClient()&&window.LegacyTours&&LegacyTours.clientDocsCard?LegacyTours.clientDocsCard():''}
-  <div class="card" style="padding:16px"><h2>${tr('myDocFolder')}</h2><p style="font-size:12px">${tr('folder')}: ${esc(u.folderSlug)}</p><input type="file" accept="${S.UPLOAD_ACCEPT}" id="docUp"><ul>${docs.map(d=>`<li><a href="#" data-opendoc="${esc(d.id)}">${esc(d.name)}</a> <i>${esc(docTypeLabel(d.docType))}</i></li>`).join('')||`<li>${tr('noDocs')}</li>`}</ul></div>
-  ${ap?`<div class="card" style="padding:16px"><h2>${tr('myClients')}</h2><ul>${S.clientsOf(u).map(c=>`<li><a href="#" data-client="${c.id}">${esc(c.name)}</a> — ${esc(c.email)} ${esc(c.phone)}</li>`).join('')||`<li>${tr('noClients')}</li>`}</ul></div>`:''}</section>`;}
+     return `<div>${docLabel}: ${has?'✅ '+esc(has.name):`<input type="file" accept="${S.UPLOAD_ACCEPT}" data-txdoc="${t.type}" data-offer="${o.id}" data-listing="${o.listingId}">`}</div>`;}).join('')}${(o.inspections&&!(S.closings[o.id]&&S.closings[o.id].inspectionsWaived))?(()=>{const rep=docs.find(d=>d.offerId===o.id&&d.docType==='INSPECTION_REPORT');return `<div style="margin-top:8px;padding:8px;border:1px dashed #0284c7;border-radius:8px"><b>🔍 ${S.lang==='es'?'Inspecciones':'Inspections'}</b><br>${o.inspectionStatus==='SCHEDULED'?`${S.lang==='es'?'Programada':'Scheduled'}: <b>${esc(new Date(o.inspectionAt).toLocaleString())}</b> <button type="button" data-inspcancel="${o.id}" style="background:#dc2626;color:#fff">${S.lang==='es'?'Cancelar inspección':'Cancel inspection'}</button>`:`${o.inspectionStatus==='CANCELLED'?`<i>${S.lang==='es'?'Inspección cancelada':'Inspection cancelled'}</i><br>`:''}${S.lang==='es'?'Fecha y hora':'Date & time'}: <input type="datetime-local" id="insp-${o.id}"> <button type="button" data-inspsched="${o.id}">${S.lang==='es'?'Programar':'Schedule'}</button>`}<div style="margin-top:6px">${S.lang==='es'?'Reporte de inspección':'Inspection report'}: ${rep?'✅ '+esc(rep.name):`<input type="file" accept="${S.UPLOAD_ACCEPT}" data-txdoc="INSPECTION_REPORT" data-offer="${o.id}" data-listing="${o.listingId}">`}</div></div>`;})():''}</div>`:''}${dealTracker(progOfOffer(o))}${closingPanel(o)}</div></details></li>`;};
+  const offB=offers.length?`${activeO.length?`<ul class="pf-offers">${activeO.map(offerLi).join('')}</ul>`:`<p class="ad-empty">${pfL('No tienes ofertas activas.','No active offers.')}</p>`}${closedO.length?`<details class="lf-fold pf-sub" data-fold="pf-offers-closed"${foldOpen('pf-offers-closed')?' open':''}><summary class="lf-sum"><span class="lf-ico" aria-hidden="true">🏁</span><span class="lf-main"><b>${pfL('Cerradas','Closed')}</b></span><span class="ad-count">${closedO.length}</span><span class="lf-chev" aria-hidden="true">⌄</span></summary><div class="lf-body"><ul class="pf-offers">${closedO.map(offerLi).join('')}</ul></div></details>`:''}`:`<p class="ad-empty">${tr('noneYet')}</p>`;
+  // ----- messages: grouped by conversation, newest first; 5 per conversation and 5 conversations, the rest behind "Ver más" -----
+  const conv=new Map();msgs.forEach(m=>{const peer=m.fromUserId===u.id?m.toUserId:m.fromUserId;const k=peer||'—';if(!conv.has(k))conv.set(k,[]);conv.get(k).push(m);});
+  const when=m=>{const t=Date.parse(m.createdAt||'');return t?new Date(t).toLocaleString(S.lang==='es'?'es-US':'en-US',{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'}):'';};
+  const msgLi=m=>`<li class="pf-msg${m.fromUserId===u.id?' me':''}"><div class="pf-msg-h"><b>${esc(nm(m.fromUserId))}</b> → ${esc(nm(m.toUserId))}<small>${esc(when(m))}</small></div>${m.listingId?`<small class="pf-msg-home">🏠 ${esc((S.listing(m.listingId)||{}).address||'')}</small>`:''}<div class="pf-msg-b"><i>${esc(kindLabel(m.kind))}</i>: ${esc(m.body)}</div></li>`;
+  const convItems=[...conv.entries()].map(([peer,list])=>{const last=list[0];return `<li class="lf-li pf-conv"><details class="lf-fold" data-fold="pf-conv-${esc(peer)}"${foldOpen('pf-conv-'+peer)?' open':''}><summary class="lf-sum"><span class="ad-av" aria-hidden="true">${esc(String(nm(peer)).trim().charAt(0).toUpperCase()||'?')}</span><span class="lf-main"><b>${esc(nm(peer))}</b><small>${esc(String(last.body||'').slice(0,90))}</small></span><span class="ad-count">${list.length}</span><span class="lf-chev" aria-hidden="true">⌄</span></summary><div class="lf-body">${pfMore(list.map(msgLi),5,'')}</div></details></li>`;});
+  const msgForm=contacts.length?`<details class="lf-fold pf-sub pf-newmsg" data-fold="pf-newmsg"${pfOpen('pf-newmsg',false)?' open':''}><summary class="lf-sum"><span class="lf-ico" aria-hidden="true">✏️</span><span class="lf-main"><b>${pfL('Escribir mensaje','Write a message')}</b></span><span class="lf-chev" aria-hidden="true">⌄</span></summary><div class="lf-body"><form id="msgF" class="pf-form"><select name="toUserId">${contacts.map(c=>`<option value="${c.id}">${esc(c.name)}</option>`).join('')}</select>
+   <select name="listingId"><option value="">${tr('propAddress')}</option>${D.listings.map(l=>`<option value="${l.id}">${esc(l.address)}, ${esc(l.city)}</option>`).join('')}</select>
+   <select name="kind"><option value="MESSAGE">${tr('kindMsg')}</option><option value="REQUEST_ACCESS">${tr('requestAccess')}</option><option value="SHARE_HOUSE">${tr('shareHouse')}</option></select><textarea name="body" placeholder="${tr('kindMsg')}" required></textarea><button>${tr('send')}</button></form></div></details>`:`<p class="ad-empty">${tr('noAgentLinked')}</p>`;
+  const msgB=`${msgForm}${pfMore(convItems,5,`<p class="ad-empty">${tr('noneYet')}</p>`)}`;
+  // ----- profile edit (same form ids/fields) -----
+  const profB=`<div class="pf-avatar-edit"><img src="${esc(u.avatarUrl||'listing-placeholder.svg')}" alt="" class="pf-av-img"><label class="btn-card pf-upbtn">📷 ${pfL('Cambiar foto','Change photo')}<input type="file" id="avatar" hidden accept="image/jpeg,image/png,image/webp,image/heic,image/heif,.jpg,.jpeg,.png,.webp,.heic,.heif"></label></div>
+   <form id="profF" class="pf-form"><label>${pfL('Nombre','Name')}<input name="name" value="${esc(u.name)}"></label><label>${pfL('Teléfono','Phone')}<input name="phone" value="${esc(u.phone)}"></label>${ap?`<label>${tr('orecLicense')}<input name="licenseNumber" value="${esc(ap.licenseNumber)}"></label><label>${tr('brokerage')}<input name="brokerage" value="${esc(ap.brokerage)}"></label><label>${S.lang==='es'?'Bio corta (la ven tus clientes)':'Short bio (your clients see it)'}<textarea name="bio" maxlength="600" rows="3">${esc(ap.bio||'')}</textarea></label><p>${tr('yourInviteCode')} <b>${esc(ap.inviteCode)}</b></p>`:''}<button>${tr('save')}</button></form>
+   ${ag?`<p>${tr('yourAgent')} <b>${esc(ag.name)}</b></p>`:''}${isClient()&&window.LegacyTours&&LegacyTours.agentView?`<button type="button" class="btn-card primary" data-tab="myagent" style="margin:4px 0 10px">🤝 ${S.lang==='es'?'Mi agente':'My agent'}</button>`:''}
+   <details class="lf-fold pf-sub" data-fold="pf-pw"${foldOpen('pf-pw')?' open':''}><summary class="lf-sum"><span class="lf-ico" aria-hidden="true">🔑</span><span class="lf-main"><b>${tr('changePw')}</b></span><span class="lf-chev" aria-hidden="true">⌄</span></summary><div class="lf-body"><form id="pwF" class="pf-form"><input name="cur" type="password" placeholder="${tr('currentPw')}" required><input name="pw" type="password" placeholder="${tr('newPw')}" minlength="8" required><button>${tr('updatePw')}</button></form></div></details>${accountDeleteCard()}`;
+  const docsB=`${isClient()&&window.LegacyTours&&LegacyTours.clientDocsCard?pfUnwrap(LegacyTours.clientDocsCard()):''}<p class="ops-meta">${tr('folder')}: ${esc(u.folderSlug)}</p><label class="btn-card pf-upbtn">📤 ${pfL('Subir documento','Upload document')}<input type="file" hidden accept="${S.UPLOAD_ACCEPT}" id="docUp"></label>${pfMore(docs.map(d=>`<li class="pf-doc"><a href="#" data-opendoc="${esc(d.id)}">📄 ${esc(d.name)}</a> <i>${esc(docTypeLabel(d.docType))}</i></li>`),5,`<p class="ad-empty">${tr('noDocs')}</p>`)}`;
+  const clients=ap?S.clientsOf(u):[];
+  const clientsB=pfMore(clients.map(c=>`<li class="pf-client"><a href="#" data-client="${c.id}"><b>${esc(c.name)}</b></a><small>${esc(c.email)} ${esc(c.phone)}</small></li>`),5,`<p class="ad-empty">${tr('noClients')}</p>`);
+  const alertsH=alertsDash(),showsH=showingsDash();
+  const unread=chatUnreadN();
+  // ----- sections (order = nav order) -----
+  const secs=[];
+  const add=(id,icon,label,count,body,o)=>secs.push({id,icon,label,html:pfCard(id,icon,label,count,body,o)});
+  add('offers','💰',tr('myOffers'),activeO.length,offB,{open:true,sub:closedO.length?`${closedO.length} ${pfL('cerradas','closed')}`:''});
+  add('msgs','✉️',tr('messages'),conv.size,msgB,{hot:unread>0,sub:unread?`${unread} ${pfL('sin leer','unread')}`:''});
+  if(showsH)add('shows','📅',pfL('Visitas','Showings'),null,pfUnwrap(showsH));
+  if(alertsH)add('alerts','🔔',tr('alerts.dash'),null,pfUnwrap(alertsH));
+  add('favs','❤️',tr('favorites'),favs.length,`${pfMore(favs.map(homeRow),5,`<p class="ad-empty">${tr('noneYet')}</p>`)}${favs.length?`<div class="cd-foot"><button type="button" class="btn-card" data-tab="favorites">❤️ ${S.lang==='es'?'Ver mis favoritas':'See my favorites'}</button></div>`:''}`);
+  add('views','👀',tr('viewedHomes'),views.length,pfMore(views.map(homeRow),5,`<p class="ad-empty">${tr('noneYet')}</p>`));
+  if(isClient())add('search','🏡',st('mySearch'),null,`${critSummary(critOf(u))}<button type="button" class="btn-card primary" data-editsearch="1">✏️ ${st('edit')}</button>`);
+  add('docs','📂',tr('myDocFolder'),docs.length,docsB);
+  if(ap)add('clients','👥',tr('myClients'),clients.length,clientsB);
+  add('profile','⚙️',pfL('Editar perfil','Edit profile'),null,profB,{sub:pfL('Foto, datos y contraseña','Photo, details and password')});
+  const pending=S.isPendingApproval(u)?`<div class="pf-pending">⏳ ${S.lang==='es'?(u.approvalStatus==='REJECTED'?'Tu cuenta no fue aprobada. Contáctanos para más información.':'Tu cuenta está pendiente de aprobación. Mientras tanto puedes ver casas; podrás hacer ofertas y pedir citas cuando sea aprobada.'):(u.approvalStatus==='REJECTED'?'Your account was not approved. Contact us for more information.':'Your account is pending approval. You can browse homes meanwhile; offers and showings unlock once approved.')}</div>`:'';
+  if(opts.embed)return `<div class="pf-embed">${pending}${secs.map(s=>s.html).join('')}</div>`;
+  const role=S.isAdmin()?pfL('Administrador','Admin'):ap?pfL('Agente','Agent'):isClient()?pfL('Cliente','Client'):pfL('Mi cuenta','My account');
+  const nClosed=closedO.length;
+  const kpi=(go,icon,n,label,hot)=>`<button type="button" class="pf-kpi${hot?' on':''}" data-pfgo="pf-${go}"><span aria-hidden="true">${icon}</span><b>${n}</b><small>${label}</small></button>`;
+  const hero=`<header class="ad-hero pf-hero"><div class="pf-id"><img src="${esc(u.avatarUrl||'listing-placeholder.svg')}" alt="" class="pf-hero-av"><div class="pf-id-t"><p class="ad-kicker">👤 ${role}</p><h2>${esc(u.name||'')}</h2><p class="ad-date">${esc(u.email||'')}${ap&&ap.inviteCode?` · ${tr('yourInviteCode')} <b class="pf-code">${esc(ap.inviteCode)}</b>`:''}</p></div></div>
+   <div class="pf-kpis">${kpi('favs','❤️',favs.length,pfL('Favoritas','Favorites'))}${kpi('offers','💰',activeO.length,pfL('Ofertas activas','Active offers'))}${kpi('msgs','✉️',unread,pfL('Sin leer','Unread'),unread>0)}${kpi('offers','🏁',nClosed,pfL('Cierres','Closings'))}</div>
+   ${!S.isAdmin()&&window.LegacyTours&&LegacyTours.agentDashVisible&&LegacyTours.agentDashVisible()?`<div class="cd-btns pf-hero-btns"><button type="button" class="btn-card primary" data-tab="agenthome">📊 ${pfL('Mi panel','My dashboard')}</button></div>`:''}</header>`;
+  const navL={offers:pfL('Ofertas','Offers'),msgs:pfL('Mensajes','Messages'),shows:pfL('Visitas','Showings'),alerts:pfL('Alertas','Alerts'),favs:pfL('Favoritas','Favorites'),views:pfL('Vistas','Viewed'),search:pfL('Búsqueda','Search'),docs:pfL('Documentos','Documents'),clients:pfL('Clientes','Clients'),profile:pfL('Perfil','Profile')};
+  const navOrder=['profile',...secs.map(s=>s.id).filter(x=>x!=='profile')];
+  const nav=`<nav class="pf-nav" aria-label="${pfL('Secciones','Sections')}">${navOrder.map(id=>{const s=secs.find(x=>x.id===id);return `<button type="button" data-pfgo="pf-${id}"><span aria-hidden="true">${s.icon}</span> ${navL[id]||s.label}</button>`;}).join('')}</nav>`;
+  return `<div class="tour-wrap ad-wrap pf-wrap">${pending}${hero}${nav}${secs.map(s=>s.html).join('')}</div>`;}
+document.addEventListener('click',e=>{const b=e.target.closest&&e.target.closest('[data-pfgo]');if(!b)return;e.preventDefault();const d=document.getElementById(b.dataset.pfgo);if(!d)return;if(!d.open)d.open=true;setTimeout(()=>d.scrollIntoView({behavior:'smooth',block:'start'}),20);});
 
 
 function calendarView(){
@@ -2346,7 +2460,7 @@ function bind(){const r=$('#app-root');
        else if(CAL.mode==='week')dt.setDate(dt.getDate()+7*delta);
        else dt.setMonth(dt.getMonth()+delta);
        CAL.anchor=fmt(dt);return render();}
-     if(d.bell){menuOpen=false;alertOpen=!alertOpen;if(alertOpen)msgOpen=false;render();if(alertOpen){S.markAlertsRead();if(S.refreshPush)S.refreshPush().then(ch=>{if(ch&&alertOpen)render();});}return;}
+     if(d.bell){NF_FILTER='ALL';menuOpen=false;alertOpen=!alertOpen;if(alertOpen)msgOpen=false;render();if(alertOpen){S.markAlertsRead();if(S.refreshPush)S.refreshPush().then(ch=>{if(ch&&alertOpen)render();});}return;}
      if(d.menu){menuOpen=!menuOpen;if(menuOpen){alertOpen=false;msgOpen=false;}render();if(menuOpen){const f=document.querySelector('#nav-drawer .nav-pill');if(f)f.focus();}return;}
      if(d.menuclose){menuOpen=false;render();const mb=document.querySelector('.menu-btn');if(mb)mb.focus();return;}
      if(d.alertclose){alertOpen=false;return render();}
