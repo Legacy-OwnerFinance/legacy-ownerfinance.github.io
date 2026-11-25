@@ -1933,3 +1933,18 @@ html.lof-map-on:has(.nav-drawer.open) .lof-mapview { z-index: 1; }
 .ds-btns{margin-top:6px}.ds-btns .btn-card{flex:0 1 auto}
 .ds-priv{color:var(--muted)}
 .ds-offer{border-top:1px solid #efe7d8;padding-top:10px;margin-top:10px}.ds-offer h3{margin:0 0 6px;font-size:15px}
+/* v39 seller / company Panel */
+.sp-co{display:flex;align-items:center;gap:8px;margin:0 0 12px;font-weight:600}
+.sp-co select{flex:1;min-width:0;padding:10px 12px;border-radius:12px;border:1px solid #d6dbe4;font:inherit;background:#fff}
+.sp-kpis{grid-template-columns:repeat(2,minmax(0,1fr))}
+.sp-kpis .ad-kpi:last-child{grid-column:1/-1}
+@media(min-width:900px){.sp-kpis{grid-template-columns:repeat(5,minmax(0,1fr))}.sp-kpis .ad-kpi:last-child{grid-column:auto}}
+.sp-note{margin:0 0 10px}
+.sp-quote{font-style:italic;color:#475569}
+.sp-tl{margin-top:6px}
+.sp-tl summary{cursor:pointer;font-weight:600;font-size:.88rem;color:#0f3d2e}
+.sp-tl ol{list-style:none;margin:6px 0 0;padding:0;display:grid;gap:4px}
+.sp-tl li{display:grid;grid-template-columns:22px 1fr auto;gap:6px;font-size:.84rem;align-items:baseline}
+.sp-tl time,.sp-time{color:#64748b;font-size:.78rem;text-align:right;white-space:nowrap}
+.sp-privacy{margin:14px 4px 4px}
+.tour-counter{border:1px solid #f5d08a;background:#fff8eb;border-radius:12px;padding:10px 12px;margin:8px 0}

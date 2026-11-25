@@ -887,8 +887,9 @@ function tabBar(){
   if(tab==='inventory'&&!S.user&&shareId()&&!resetQueryActive()&&S.listing(shareId()))return '';
   const es=S.lang==='es',mUnread=S.msgUnread|0;
   const agentDash=!!(S.user&&window.LegacyTours&&LegacyTours.agentDashVisible&&LegacyTours.agentDashVisible());
-  const act=k=>k==='panel'?tab==='agenthome':k==='home'?(tab==='inventory'&&!MAPOPEN):k==='map'?(tab==='map'||(tab==='inventory'&&MAPOPEN)):k==='favs'?tab==='favorites':k==='msgs'?msgOpen:k==='acct'?(tab==='dashboard'||tab==='auth'||tab==='myagent'):false;
-  const it=[['home','🏠',es?'Casas':'Homes'],['map','🗺️',es?'Mapa':'Map'],agentDash?['panel','📊',es?'Panel':'Dashboard']:['favs','❤️',es?'Favoritas':'Favorites'],['msgs','💬',es?'Mensajes':'Messages'],['acct','👤',S.user?(es?'Cuenta':'Account'):(es?'Entrar':'Sign in')]];
+  const sellerDash=!agentDash&&!!(S.user&&(window.LegacyTours&&LegacyTours.sellerDashVisible&&LegacyTours.sellerDashVisible()&&!S.isAdmin()));
+  const act=k=>k==='panel'?(tab==='agenthome'||tab==='sellerhome'):k==='home'?(tab==='inventory'&&!MAPOPEN):k==='map'?(tab==='map'||(tab==='inventory'&&MAPOPEN)):k==='favs'?tab==='favorites':k==='msgs'?msgOpen:k==='acct'?(tab==='dashboard'||tab==='auth'||tab==='myagent'):false;
+  const it=[['home','🏠',es?'Casas':'Homes'],['map','🗺️',es?'Mapa':'Map'],(agentDash||sellerDash)?['panel','📊',es?'Panel':'Dashboard']:['favs','❤️',es?'Favoritas':'Favorites'],['msgs','💬',es?'Mensajes':'Messages'],['acct','👤',S.user?(es?'Cuenta':'Account'):(es?'Entrar':'Sign in')]];
   return `<nav class="tab-bar show-phone" aria-label="${es?'Navegación':'Navigation'}">${it.map(([k,i,t])=>`<button type="button" data-tabbar="${k}" class="${act(k)?'active':''}"${act(k)?' aria-current="page"':''}><span class="tb-i" aria-hidden="true">${i}</span><span class="tb-l">${esc(t)}</span>${k==='msgs'&&mUnread?`<span class="tb-badge">${mUnread>9?'9+':mUnread}</span>`:''}</button>`).join('')}</nav>`;
 }
 function tabBarGo(k){
@@ -898,7 +899,7 @@ function tabBarGo(k){
   if(!S.user)return go('auth','#loginF [name="email"]');
   if(k==='msgs'){if(S.msgEnabled&&S.msgEnabled()){msgOpen=!msgOpen;if(msgOpen){alertOpen=false;msgNew=false;if(msgPeer)S.markThreadRead(msgPeer);}return render();}return go('dashboard');}
   if(k==='favs'){msgOpen=false;window.scrollTo(0,0);return go('favorites');}
-  if(k==='panel'){msgOpen=false;window.scrollTo(0,0);return go('agenthome');}
+  if(k==='panel'){msgOpen=false;window.scrollTo(0,0);return go(window.LegacyTours&&LegacyTours.agentDashVisible&&LegacyTours.agentDashVisible()?'agenthome':'sellerhome');}
   if(k==='acct'){msgOpen=false;return go('dashboard');}
 }
 function modal(html){const m=document.createElement('div');m.className='modal-backdrop';m.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.55);display:flex;align-items:center;justify-content:center;z-index:9999';
@@ -1332,6 +1333,7 @@ function header(){
   const T=investorHome?[['dashboard',tr('navInvestorHome')],['investor-tx',tr('navTransactions')],['inventory',tr('navInventory')],['guides',tr('navGuides')]]:[['inventory',tr('navInventory')],['map','🗺️ '+(S.lang==='es'?'Mapa':'Map')]].concat(S.user?[['favorites','❤️ '+(S.lang==='es'?'Favoritas':'Favorites')]]:[]).concat([['guides',tr('navGuides')],['dashboard',tr('navDashboard')]]);
   if(!investorHome&&S.canSeeShowingCalendar&&S.canSeeShowingCalendar())T.push(['calendar',tr('navCalendar')]);
   if(S.user&&window.LegacyTours&&LegacyTours.agentDashVisible&&LegacyTours.agentDashVisible())T.unshift(['agenthome','📊 '+(S.lang==='es'?'Panel':'Dashboard')]);
+  else if(S.user&&window.LegacyTours&&LegacyTours.sellerDashVisible&&LegacyTours.sellerDashVisible())T.unshift(['sellerhome','📊 '+(S.isAdmin()?(S.lang==='es'?'Panel de compañía':'Company dashboard'):(S.lang==='es'?'Panel':'Dashboard'))]);
   if(S.user&&window.LegacyTours&&LegacyTours.navVisible())T.push(['tours',LegacyTours.navLabel()]);
   if(S.user&&window.LegacyTours&&LegacyTours.agentNavVisible&&LegacyTours.agentNavVisible())T.push(['myagent',LegacyTours.agentNavLabel()]);
   if(S.isAdmin())T.push(['admin',tr('navAdmin')]);
@@ -2181,9 +2183,9 @@ function maybeOpenSharedDetail(){
 }
 S.rerender=function(){render();};
 let agentLanded=!parseAppHash().tab&&!/\/(login|register|forgot-password|reset-password|admin|dashboard|calendar|guides)/i.test(location.pathname)?0:1;
-function render(){if(!agentLanded&&S.user){agentLanded=1;if(tab==='inventory'&&!shareId()&&window.LegacyTours&&LegacyTours.agentDashVisible&&LegacyTours.agentDashVisible()){tab='agenthome';try{history.replaceState(null,'',location.pathname+location.search+'#agenthome');}catch(e){}}}captureMsgScroll();document.documentElement.lang=S.lang;syncMsgTitle();const root=$('#app-root');if(!S.data)return;if(map){try{map.stop();map.off();map.remove();}catch(e){}map=null;}
+function render(){if(!agentLanded&&S.user){agentLanded=1;if(tab==='inventory'&&!shareId()&&window.LegacyTours&&LegacyTours.agentDashVisible&&LegacyTours.agentDashVisible()){tab='agenthome';try{history.replaceState(null,'',location.pathname+location.search+'#agenthome');}catch(e){}}else if((tab==='inventory'||tab==='dashboard')&&!shareId()&&(window.LegacyTours&&LegacyTours.sellerDashVisible&&LegacyTours.sellerDashVisible()&&!S.isAdmin())){tab='sellerhome';try{history.replaceState(null,'',location.pathname+location.search+'#sellerhome');}catch(e){}}}captureMsgScroll();document.documentElement.lang=S.lang;syncMsgTitle();const root=$('#app-root');if(!S.data)return;if(map){try{map.stop();map.off();map.remove();}catch(e){}map=null;}
   const mapFull=tab==='map';document.documentElement.classList.toggle('lof-map-on',mapFull);if(mapFull){headerCompact=false;if(window.scrollY)window.scrollTo(0,0);}
-  const body={inventory,guides,dashboard,admin,auth,calendar:calendarView,'investor-tx':investorTx,'investor-map':investorMap,favorites:favoritesView,map:mapView,tours:()=>window.LegacyTours?LegacyTours.view():'',myagent:()=>window.LegacyTours&&LegacyTours.agentView?LegacyTours.agentView():'',agenthome:()=>window.LegacyTours&&LegacyTours.agentDashboard&&LegacyTours.agentDashVisible()?LegacyTours.agentDashboard():inventory()}[tab]||inventory;root.innerHTML=header()+`<main>${body()}</main><footer class="app-footer" style="padding:18px;font-size:12px;text-align:center">© Legacy - Owner Finance · Brokerage By: KLC Real Estate, LLC${footerLinks()}</footer>${tabBar()}`;bind();applyMsgScroll();if(tab==='inventory'&&(MAPOPEN||!narrowMQ.matches))drawMap();if(tab==='investor-map')drawInvestorMap();if(mapFull)drawFullMap();maybeOpenSharedDetail();highlightClosedDeal();}
+  const body={inventory,guides,dashboard,admin,auth,calendar:calendarView,'investor-tx':investorTx,'investor-map':investorMap,favorites:favoritesView,map:mapView,tours:()=>window.LegacyTours?LegacyTours.view():'',myagent:()=>window.LegacyTours&&LegacyTours.agentView?LegacyTours.agentView():'',agenthome:()=>window.LegacyTours&&LegacyTours.agentDashboard&&LegacyTours.agentDashVisible()?LegacyTours.agentDashboard():inventory(),sellerhome:()=>window.LegacyTours&&LegacyTours.sellerPanel&&LegacyTours.sellerDashVisible()?LegacyTours.sellerPanel():inventory()}[tab]||inventory;root.innerHTML=header()+`<main>${body()}</main><footer class="app-footer" style="padding:18px;font-size:12px;text-align:center">© Legacy - Owner Finance · Brokerage By: KLC Real Estate, LLC${footerLinks()}</footer>${tabBar()}`;bind();applyMsgScroll();if(tab==='inventory'&&(MAPOPEN||!narrowMQ.matches))drawMap();if(tab==='investor-map')drawInvestorMap();if(mapFull)drawFullMap();maybeOpenSharedDetail();highlightClosedDeal();}
 function bind(){const r=$('#app-root');
   if(!r.dataset.acctToggle){r.dataset.acctToggle='1';r.addEventListener('toggle',e=>{const el=e.target;if(el&&el.dataset&&el.dataset.acct)ADM_OPEN[el.dataset.acct]=el.open;},true);}
   r.onclick=async e=>{
@@ -2308,7 +2310,7 @@ function bind(){const r=$('#app-root');
    }catch(err){alert(err.message);}
   };
   const sub=(id,fn)=>{const el=$(id);if(el)el.onsubmit=wrap(()=>fn(fd(el)));};
-  sub('#loginF',async v=>{const u=await S.login(v.email,v.password);if(u&&u.needsVerify)return openVerifyEmail(u.email,false);go(u&&u.role==='ADMIN'?'admin':(window.LegacyTours&&LegacyTours.agentDashVisible&&LegacyTours.agentDashVisible()?'agenthome':'dashboard'));maybePromptCriteria();});
+  sub('#loginF',async v=>{const u=await S.login(v.email,v.password);if(u&&u.needsVerify)return openVerifyEmail(u.email,false);go(u&&u.role==='ADMIN'?'admin':(window.LegacyTours&&LegacyTours.agentDashVisible&&LegacyTours.agentDashVisible()?'agenthome':(window.LegacyTours&&LegacyTours.sellerDashVisible&&LegacyTours.sellerDashVisible()&&!S.isAdmin())?'sellerhome':'dashboard'));maybePromptCriteria();});
   sub('#regF',async v=>{if(v.role==='INVESTOR'&&!(v.businessName&&v.contactMethod&&v.contactValue&&v.representativeName))throw new Error(S.lang==='es'?'Ingresa el nombre del negocio, el método de contacto y el nombre del representante.':'Enter the business name, preferred contact method, and the representative\'s name.');const u=await S.register(v);if(u&&u.needsVerify)return openVerifyEmail(u.email,true);go(u&&u.role==='ADMIN'?'admin':'dashboard');maybePromptCriteria();});
   sub('#coNewF',async v=>{await S.companyAction('company_create',{name:v.name,userId:v.userId});render();});
   r.querySelectorAll('form[data-coadd]').forEach(f=>{f.onsubmit=wrap(async()=>{const id=String(new FormData(f).get('userId')||'');if(!id)return;await S.companyAction('company_member_add',{companyId:f.dataset.coadd,userId:id});render();});});
