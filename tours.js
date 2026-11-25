@@ -81,14 +81,15 @@ document.addEventListener('toggle',e=>{const d=e.target;if(!d||!d.dataset||!d.da
 window.LFold=fold;
 const hashHas=id=>!!id&&decodeURIComponent(location.hash||'').includes(id);
 const shortAddr=h=>esc(String((h&&h.address)||'').split(',')[0]);
+const TOT=p=>(p&&p.stepsTotal)||7,DOTS=p=>Array.from({length:TOT(p)},(_,i)=>i+1),DONE_WORD=p=>TOT(p)===6?L('Listo','Done'):L('Cerrada','Closed'); // v39 (9:08 PM): clients see 6 steps (no 'Get paid')
 const chip=(txt,tone)=>`<span class="lf-chip ${tone||''}">${txt}</span>`;
 function offerChip(p,o){
   if(p&&p.invalidatedAt||o&&o.invalidatedAt)return chip('❌ '+L('Anulada','Voided'),'bad');
   if(!p)return chip(L('Enviada','Sent'),'info');
-  if(p.completeAt||(p.checklist||[]).every(c=>DONE_ST.includes(c.status)))return chip('🎉 '+L('Cerrada','Closed'),'ok');
+  if(p.completeAt||(p.checklist||[]).every(c=>DONE_ST.includes(c.status)))return chip('🎉 '+DONE_WORD(p),'ok');
   if(p.counter&&p.counter.status==='OPEN'&&!p.decision)return chip('↩️ '+L('Contraoferta','Counter'),'warn');
   if(!p.decision)return chip('🆕 '+L('Por pre-aprobar','To pre-approve'),'warn');
-  const ns=nextStepOf(p);return chip(ns?`${L('Paso','Step')} ${ns.n}/7`:'✅',p.underContract?'ok':'info');
+  const ns=nextStepOf(p);return chip(ns?`${L('Paso','Step')} ${ns.n}/${TOT(p)}`:'✅ '+DONE_WORD(p),p.underContract?'ok':'info');
 }
 function offerNext(p){if(!p)return '';if(p.invalidatedAt)return p.voidHideAt?L('Se elimina sola ','Auto-removed ')+esc(when(p.voidHideAt)):'';if(!p.decision)return p.counter&&p.counter.status==='OPEN'?L('Esperando respuesta a la contraoferta','Waiting for the counter answer'):L('Esperando al dueño','Waiting for the owner');const ns=nextStepOf(p);return ns?esc(ns.label)+' — '+esc(L(ns.st[0],ns.st[1])):'';}
 function offerDue(p){if(!p||p.invalidatedAt)return '';const c=[];if(p.decision==='PRE_APPROVED'&&!p.docsUploadedAt&&p.docsDueAt)c.push(p.docsDueAt);if(p.decision==='PRE_APPROVED'&&!p.depositProofAt&&p.depositDueAt)c.push(p.depositDueAt);if(p.fundsDueAt&&!p.fundsReceiptAt)c.push(p.fundsDueAt);return c.sort()[0]||'';}
@@ -336,6 +337,7 @@ function stepBody(p,c,role){
     if(c.status==='TO_SCHEDULE')return role==='CLIENT'?dtForm('closing_propose',p,L('Proponer fecha de cierre','Propose closing date')):`<small>${L('Esperando que el cliente elija día y hora.','Waiting for the client to pick a day and time.')}</small>`;
     const a=(p.closing&&p.closing.approvals)||{};
     let h=`<small>🗓️ <b>${esc(when(p.closing.at))}</b></small><div class="tour-approvals">${['CLIENT','AGENT','SELLER'].map(r=>`<span class="${a[r]?'ok':''}">${a[r]?'✅':'⬜'} ${L(...ROLE_LBL[r])}</span>`).join('')}</div>`;
+    if(p.closingAt){h+=`<p class="tour-done">✅ ${L('Fecha confirmada por todos.','Date confirmed by everyone.')}</p>`;if(c.status!=='DONE'&&ROLE_LBL[me])h+=`<button type="button" class="tour-linkbtn" data-tclchg="${esc(p.offerId)}">${L('Cambiar fecha','Change date')}</button>`;return h;} // v39 (9:08 PM): no stale change proposals once confirmed
     if(p.closing.reasonCode){const r=CLOSING_REASONS.find(x=>x[0]===p.closing.reasonCode);h+=`<small>${L('Cambio propuesto por','Change proposed by')} ${L(...ROLE_LBL[p.closing.by]||['',''])}: ${esc(r?L(r[1],r[2]):'')}${p.closing.reasonText?' — '+esc(p.closing.reasonText):''}</small>`;}
     if(c.status!=='DONE'&&ROLE_LBL[me])h+=`<div class="tour-btns">${!a[me]?fb('closing_approve','✅ '+L('Aprobar fecha','Approve date'),'primary'):''}<button type="button" class="btn-card" data-tclchg="${esc(p.offerId)}">${L('No me queda — proponer otra','Doesn’t work — propose another')}</button></div>`;
     return h;
@@ -476,11 +478,11 @@ document.addEventListener('change',e=>{
 const DONE_ST=['APPROVED','DONE','NA'];
 function offerStep(p){
   if(!p)return L('Oferta enviada','Offer sent');
-  if(p.completeAt||(p.checklist||[]).every(c=>DONE_ST.includes(c.status)))return '🎉 '+L('Cerrada','Closed');
+  if(p.completeAt||(p.checklist||[]).every(c=>DONE_ST.includes(c.status)))return '🎉 '+DONE_WORD(p);
   if(!p.decision)return '⏳ '+L('Oferta enviada — esperando la pre-aprobación del dueño','Offer sent — waiting for the owner’s pre-approval');
   const c=(p.checklist||[]).find(x=>!DONE_ST.includes(x.status));if(!c)return '';
   const st=c.key==='DOCS'&&c.status==='SUBMITTED'?DOCS_REVIEW:(STATUS_LABEL[c.status]||STATUS_LABEL.PENDING);
-  return `${st[2]} ${L('Paso','Step')} ${c.n}/7: ${L(...STEP_LABEL[c.key])} — ${L(st[0],st[1])}`;
+  return `${st[2]} ${L('Paso','Step')} ${c.n}/${TOT(p)}: ${L(...STEP_LABEL[c.key])} — ${L(st[0],st[1])}`;
 }
 const fmtPhone=v=>{const d=String(v||'').replace(/\D/g,'').replace(/^1(?=\d{10}$)/,'');return d.length===10?`(${d.slice(0,3)}) ${d.slice(3,6)}-${d.slice(6)}`:String(v||'');};
 function agentContact(a){const tel=String(a.phone||'').replace(/[^\d+]/g,'');
@@ -616,9 +618,9 @@ function stepChip(p){
   if(p.dealClosedAt||p.tableStatus==='CLOSED')return chip('🎉 '+L('Cerrada · Vendida','Closed · Sold'),'ok');
   if(p.invalidatedAt)return chip('❌ '+L('Anulada','Voided'),'bad');
   if(!p.decision)return offerChip(p);
-  const ns=nextStepOf(p);return chip(ns?`${L('Paso','Step')} ${ns.n}/7 · ${ns.label}`:'🎉 '+L('Completa','Complete'),p.underContract?'ok':'info');
+  const ns=nextStepOf(p);return chip(ns?`${L('Paso','Step')} ${ns.n}/${TOT(p)} · ${ns.label}`:'🎉 '+(TOT(p)===6?L('Listo','Done'):L('Completa','Complete')),p.underContract?'ok':'info');
 }
-function stepName(p){const ns=nextStepOf(p);if(!p||!p.decision)return '';if(p.dealClosedAt||p.tableStatus==='CLOSED')return '🎉 '+L('Cerrada · Vendida','Closed · Sold');return ns?`${L('Paso','Step')} ${ns.n}/7 · ${ns.label} — ${L(ns.st[0],ns.st[1])}`:'🎉 '+L('Completa','Complete');}
+function stepName(p){const ns=nextStepOf(p);if(!p||!p.decision)return '';if(p.dealClosedAt||p.tableStatus==='CLOSED')return '🎉 '+L('Cerrada · Vendida','Closed · Sold');return ns?`${L('Paso','Step')} ${ns.n}/${TOT(p)} · ${ns.label} — ${L(ns.st[0],ns.st[1])}`:'🎉 '+L('Completa','Complete');}
 const ctHm=iso=>{try{return new Intl.DateTimeFormat('en-GB',{timeZone:'America/Chicago',hour:'2-digit',minute:'2-digit',hourCycle:'h23'}).format(new Date(iso));}catch(e){return '10:00';}};
 function closingFlowBox(p,role,opts={}){
   if(!p||p.decision!=='PRE_APPROVED'||p.dead)return '';
@@ -645,7 +647,7 @@ function closingFlowBox(p,role,opts={}){
     :canStatus?`<div class="cf-acts"><button type="button" class="btn-card primary" data-cfclose="${id}" ${p.approvalsDone?'':'disabled'}>🏁 ${L('Cerrar trato (Vendida)','Close deal (Sold)')}</button><button type="button" class="btn-card danger" data-cffell="${id}">✕ ${L('Se cayó el trato','Fell through')}</button></div>${p.approvalsDone?'':`<small class="ops-meta">🔒 ${L('Cerrar trato se activa cuando estén aprobados documentos y depósito.','Close deal unlocks once documents and deposit are approved.')}</small>`}`
     :role==='AGENT'?`<small class="ops-meta">🔒 ${L('Solo el dueño (vendedor) o el administrador marcan la casa como vendida o el trato como caído.','Only the owner (seller) or the administrator mark the home sold or the deal as fell through.')}</small>`:'';
   return `<div class="cf-box" data-cf-for="${id}"><div class="cf-h">${opts.noHead?'':`<b>🏁 ${L('Cierre, documentos y avance','Closing, documents and progress')}</b>`}${stepChip(p)}</div>
-    <div class="ad-prog" role="img" aria-label="${esc(L('Paso','Step')+' '+Math.min(n,7)+'/7')}">${[1,2,3,4,5,6,7].map(i=>`<span class="${closed||i<n?'on':i===n?'cur':''}"></span>`).join('')}</div>
+    <div class="ad-prog" role="img" aria-label="${esc(L('Paso','Step')+' '+Math.min(n,TOT(p))+'/'+TOT(p))}">${DOTS(p).map(i=>`<span class="${closed||i<n?'on':i===n?'cur':''}"></span>`).join('')}</div>
     ${ns&&!closed?`<p class="cf-next">${L('Ahora','Now')}: <b>${esc(ns.label)}</b> — ${esc(L(ns.st[0],ns.st[1]))}</p>`:''}
     ${row('📅',L('Fecha de cierre','Closing date'),dateB)}
     ${row('🔍',L('Inspecciones','Inspections'),inspB)}
@@ -702,7 +704,7 @@ function clientPanel(full){
     ${steps.length>1?`<ul class="cd-more-steps">${steps.slice(1,4).map(s=>`<li><span aria-hidden="true">${s.icon}</span><span class="cd-ms-t"><b>${s.title}</b><small>${s.sub||''}</small></span>${s.cd?cdSpan(s.cd):''}</li>`).join('')}</ul>`:''}</header>`;
   const card=(id,icon,title,n,body,btn)=>`<section class="card cd-card" id="${id}"><div class="cd-card-h"><h3><span aria-hidden="true">${icon}</span> ${title}</h3>${n!=null?`<span class="ad-count">${n}</span>`:''}</div>${body}${btn?`<div class="cd-foot">${btn}</div>`:''}</section>`;
   const showsB=upcoming.length?`<ul class="cd-list">${upcoming.slice(0,3).map(t=>`<li><button type="button" class="cd-row" data-adtour="${esc(t.id)}"><span class="cd-date"><b>${esc(shortDay(t.startsAt))}</b><small>${esc(timeOf(t.startsAt))}</small></span><span class="lf-main"><b>${shortAddr(t.homes[0])}${t.homes.length>1?' +'+(t.homes.length-1):''}</b><small>${t.agent?'🤝 '+esc(t.agent.name||''):L('Buscando agente','Finding an agent')}</small></span>${statusPill(t.status)}</button></li>`).join('')}</ul>`:`<p class="ad-empty">${L('No tienes citas próximas.','No upcoming showings.')}</p>`;
-  const offB=offers.length||legacy.length?`<ul class="ad-list">${offers.map(({o,p,h})=>{const dl=offerDue(p),ns=nextStepOf(p);return `<li class="ad-fold">`+fold('cdo-'+o.offerId,`${h.photo?`<img src="${esc(h.photo)}" alt="" loading="lazy" onerror="this.remove()">`:''}<span class="lf-main"><b>${shortAddr(h)}</b><small>${esc(money(p.amount&&p.amount.price))}${ns?' · '+esc(ns.label):''}</small></span><span class="lf-tags">${offerChip(p,o)}${dl?cdSpan(dl):''}</span>`,`<p class="ops-meta">${esc(offerStep(p))}</p>${p.decision==='PRE_APPROVED'&&!p.invalidatedAt?`<div class="ad-prog" role="img" aria-label="${esc(L('Paso','Step')+' '+(ns?ns.n:7)+'/7')}">${[1,2,3,4,5,6,7].map(i=>`<span class="${ns&&i<ns.n||!ns?'on':ns&&i===ns.n?'cur':''}"></span>`).join('')}</div>`:''}<div class="cd-btns">${go(o.offerId)}</div>`,{cls:'ad-deal-f'})+`</li>`;}).join('')}${legacy.map(o=>{const l=(S.listing&&S.listing(o.listingId))||{};return `<li class="ad-fold"><div class="lf-sum cd-static"><span class="lf-main"><b>${shortAddr(l)}</b><small>${S.money?S.money(o.offerPrice):''}</small></span>${chip(esc(String(o.status||'').replace('_',' ').toLowerCase()),'info')}</div></li>`;}).join('')}</ul>`:`<p class="ad-empty">${L('Aún no tienes ofertas. Tu agente hace la oferta después de la cita.','No offers yet. Your agent makes the offer after the showing.')}</p>`;
+  const offB=offers.length||legacy.length?`<ul class="ad-list">${offers.map(({o,p,h})=>{const dl=offerDue(p),ns=nextStepOf(p);return `<li class="ad-fold">`+fold('cdo-'+o.offerId,`${h.photo?`<img src="${esc(h.photo)}" alt="" loading="lazy" onerror="this.remove()">`:''}<span class="lf-main"><b>${shortAddr(h)}</b><small>${esc(money(p.amount&&p.amount.price))}${ns?' · '+esc(ns.label):''}</small></span><span class="lf-tags">${offerChip(p,o)}${dl?cdSpan(dl):''}</span>`,`<p class="ops-meta">${esc(offerStep(p))}</p>${p.decision==='PRE_APPROVED'&&!p.invalidatedAt?`<div class="ad-prog" role="img" aria-label="${esc(L('Paso','Step')+' '+(ns?ns.n:TOT(p))+'/'+TOT(p))}">${DOTS(p).map(i=>`<span class="${ns&&i<ns.n||!ns?'on':ns&&i===ns.n?'cur':''}"></span>`).join('')}</div>`:''}<div class="cd-btns">${go(o.offerId)}</div>`,{cls:'ad-deal-f'})+`</li>`;}).join('')}${legacy.map(o=>{const l=(S.listing&&S.listing(o.listingId))||{};return `<li class="ad-fold"><div class="lf-sum cd-static"><span class="lf-main"><b>${shortAddr(l)}</b><small>${S.money?S.money(o.offerPrice):''}</small></span>${chip(esc(String(o.status||'').replace('_',' ').toLowerCase()),'info')}</div></li>`;}).join('')}</ul>`:`<p class="ad-empty">${L('Aún no tienes ofertas. Tu agente hace la oferta después de la cita.','No offers yet. Your agent makes the offer after the showing.')}</p>`;
   const favs=((S.data&&S.data.favorites)||[]).filter(f=>f.userId===u.id).map(f=>S.listing&&S.listing(f.listingId)).filter(Boolean);
   const ph=l=>(Array.isArray(l.photoUrls)&&l.photoUrls[0])||l.photoUrl||'listing-placeholder.svg';
   const favB=favs.length?`<div class="cd-favs">${favs.slice(0,4).map(l=>`<button type="button" class="cd-fav" data-open="${esc(l.id)}"><img src="${esc(ph(l))}" alt="" loading="lazy" onerror="this.onerror=null;this.src='listing-placeholder.svg'"><span>${esc(String(l.address||'').split(',')[0])}</span></button>`).join('')}</div>`:`<p class="ad-empty">${L('Toca ❤️ en una casa para guardarla aquí.','Tap ❤️ on a home to save it here.')}</p>`;

@@ -2181,3 +2181,4 @@ details.lf-fold{min-width:0;max-width:100%}
 .adm-offer .lf-sum>.lf-chip,.adm-offer .lf-sum>span:not(.lf-main):not(.lf-chev){max-width:48%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .cf-up{flex-direction:row!important;height:auto!important;min-height:44px;max-height:60px;align-self:flex-start;padding:10px 14px!important;width:auto!important}
 .cf-up input{display:none!important}
+.tour-linkbtn{background:none;border:0;padding:6px 0;min-height:36px;color:#1d4ed8;text-decoration:underline;font:inherit;font-size:13.5px;cursor:pointer;align-self:flex-start}
