@@ -2440,15 +2440,6 @@ function render(){if(!agentLanded&&S.user){agentLanded=1;if(tab==='inventory'&&!
   const mapFull=tab==='map';document.documentElement.classList.toggle('lof-map-on',mapFull);if(mapFull){headerCompact=false;if(window.scrollY)window.scrollTo(0,0);}
   const body={inventory,guides,dashboard,admin,auth,calendar:calendarView,'investor-tx':investorTx,'investor-map':investorMap,favorites:favoritesView,map:mapView,tours:()=>window.LegacyTours?LegacyTours.view():'',myagent:()=>window.LegacyTours&&LegacyTours.agentView?LegacyTours.agentView():'',agenthome:()=>window.LegacyTours&&LegacyTours.agentDashboard&&LegacyTours.agentDashVisible()?LegacyTours.agentDashboard():inventory(),sellerhome:()=>window.LegacyTours&&LegacyTours.sellerPanel&&LegacyTours.sellerDashVisible()?LegacyTours.sellerPanel():inventory()}[tab]||inventory;root.innerHTML=header()+`<main>${body()}</main><footer class="app-footer" style="padding:18px;font-size:12px;text-align:center">© Legacy - Owner Finance · Brokerage By: KLC Real Estate, LLC${footerLinks()}</footer>${tabBar()}`;bind();applyMsgScroll();if(tab==='inventory'&&(MAPOPEN||!narrowMQ.matches))drawMap();if(tab==='investor-map')drawInvestorMap();if(mapFull)drawFullMap();maybeOpenSharedDetail();highlightClosedDeal();}
 function bind(){const r=$('#app-root');
-  // iOS 26 Safari: re-anchor the bottom tab bar after scrolling / toolbar changes so it cannot stay painted mid-screen.
-  if(!window.__lofTbFix){window.__lofTbFix=1;let tm=0;
-    const fix=()=>{const tb=document.querySelector('.tab-bar');if(!tb||getComputedStyle(tb).display==='none')return;
-      const ae=document.activeElement,typing=ae&&/^(INPUT|TEXTAREA|SELECT)$/.test(ae.tagName);const vv=window.visualViewport;
-      const gap=vv&&!typing?Math.max(0,Math.round(window.innerHeight-vv.height-vv.offsetTop)):0;tb.style.bottom=gap>1?gap+'px':'';
-      tb.style.transform='translate3d(0,0,1px)';requestAnimationFrame(()=>{tb.style.transform='';});};
-    const deb=()=>{clearTimeout(tm);tm=setTimeout(fix,120);};
-    window.addEventListener('scroll',deb,{passive:true});window.addEventListener('orientationchange',deb);window.addEventListener('pageshow',deb);
-    if(window.visualViewport){visualViewport.addEventListener('resize',deb);visualViewport.addEventListener('scroll',deb);}}
   {const setH=()=>{const h=document.querySelector('.app-header');if(h)document.documentElement.style.setProperty('--hdr-h',h.offsetHeight+'px');};setH();if(!window.__admHdr){window.__admHdr=1;window.addEventListener('scroll',()=>requestAnimationFrame(setH),{passive:true});window.addEventListener('resize',setH);}}
   if(!r.dataset.admBound){r.dataset.admBound='1';
     const admApply=box=>{if(!box)return;const q=String(box.dataset.q||'').trim().toLowerCase(),st=box.dataset.st||'ALL';let n=0;
