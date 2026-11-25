@@ -418,8 +418,11 @@ function applyRelationalUsers(stateData,userRows){
   stateData.users=[...byId.values()];
 }
 
+// Test homes (id or slug starting with "legacytest") are never shown, even if the server sends one.
+const isTestListingRow=r=>!!r&&(/^legacytest/i.test(String(r.id||''))||/^legacytest/i.test(String(r.slug||'')));
 function applyRelationalListings(stateData,listRows,opts){
   if(!Array.isArray(listRows)||!listRows.length)return false;
+  listRows=listRows.filter(r=>!isTestListingRow(r));
   const allowTenure=!!(opts&&opts.allowTenure);
   const byId=new Map((stateData.listings||[]).map(l=>[l.id,l]));
   let tenureChanged=false;
@@ -474,7 +477,7 @@ function applyRelationalListings(stateData,listRows,opts){
     byId.set(r.id,next);
   });
   const live=new Set(listRows.map(r=>r.id));
-  stateData.listings=[...byId.values()].filter(l=>live.has(l.id));
+  stateData.listings=[...byId.values()].filter(l=>live.has(l.id)&&!isTestListingRow(l));
   return tenureChanged;
 }
 
