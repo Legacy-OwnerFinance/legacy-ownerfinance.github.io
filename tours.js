@@ -86,12 +86,12 @@ const chip=(txt,tone)=>`<span class="lf-chip ${tone||''}">${txt}</span>`;
 function offerChip(p,o){
   if(p&&p.invalidatedAt||o&&o.invalidatedAt)return chip('❌ '+L('Anulada','Voided'),'bad');
   if(!p)return chip(L('Enviada','Sent'),'info');
-  if(p.dealClosedAt||p.tableStatus==='CLOSED'||(p.checklist||[]).every(c=>DONE_ST.includes(c.status)))return chip('🎉 '+DONE_WORD(p),'ok'); // v39 (9:24 PM): completeAt (option fee approved) is not 'closed'
+  if(p.dealClosedAt||p.tableStatus==='CLOSED'||(p.checklist||[]).every(c=>DONE_STRICT.includes(c.status)))return chip('🎉 '+DONE_WORD(p),'ok'); // v39 (9:24 PM): completeAt (option fee approved) is not 'closed'
   if(p.counter&&p.counter.status==='OPEN'&&!p.decision)return chip('↩️ '+L('Contraoferta','Counter'),'warn');
   if(!p.decision)return chip('🆕 '+L('Por pre-aprobar','To pre-approve'),'warn');
   const ns=nextStepOf(p);return chip(ns?`${L('Paso','Step')} ${ns.n}/${TOT(p)}`:'✅ '+DONE_WORD(p),p.underContract?'ok':'info');
 }
-function offerNext(p){if(!p)return '';if(p.invalidatedAt)return p.voidHideAt?L('Se elimina sola ','Auto-removed ')+esc(when(p.voidHideAt)):'';if(!p.decision)return p.counter&&p.counter.status==='OPEN'?L('Esperando respuesta a la contraoferta','Waiting for the counter answer'):L('Esperando al dueño','Waiting for the owner');const ns=nextStepOf(p);return ns?esc(ns.label)+' — '+esc(L(ns.st[0],ns.st[1])):'';}
+function offerNext(p){if(!p)return '';if(p.dealClosedAt||p.tableStatus==='CLOSED')return L('Trato cerrado','Deal closed');if(p.invalidatedAt)return p.voidHideAt?L('Se elimina sola ','Auto-removed ')+esc(when(p.voidHideAt)):'';if(!p.decision)return p.counter&&p.counter.status==='OPEN'?L('Esperando respuesta a la contraoferta','Waiting for the counter answer'):L('Esperando al dueño','Waiting for the owner');const ns=nextStepOf(p);return ns?esc(ns.label)+' — '+esc(L(ns.st[0],ns.st[1])):'';}
 function offerDue(p){if(!p||p.invalidatedAt)return '';const c=[];if(p.decision==='PRE_APPROVED'&&!p.docsUploadedAt&&p.docsDueAt)c.push(p.docsDueAt);if(p.decision==='PRE_APPROVED'&&!p.depositProofAt&&p.depositDueAt)c.push(p.depositDueAt);if(p.fundsDueAt&&!p.fundsReceiptAt)c.push(p.fundsDueAt);return c.sort()[0]||'';}
 function tourNext(t){
   if(t.proposal)return '🔁 '+L('Cambio de hora pendiente','Time change pending');
@@ -481,10 +481,10 @@ document.addEventListener('change',e=>{
 },true);
 
 /* ---------- "Mi agente" (client account): connected agent card + homes seen together + homes under contract ---------- */
-const DONE_ST=['APPROVED','DONE','NA'];
+const DONE_ST=['APPROVED','DONE','NA','ACCEPTED','WAIVED'],DONE_STRICT=['APPROVED','DONE','NA']; /* v39 E2E: an accepted/waived TRR is a finished step (an agreed closing date is not: the closing day is still ahead); 'closed' needs the strict set */
 function offerStep(p){
   if(!p)return L('Oferta enviada','Offer sent');
-  if(p.completeAt||(p.checklist||[]).every(c=>DONE_ST.includes(c.status)))return '🎉 '+DONE_WORD(p);
+  if(p.dealClosedAt||p.tableStatus==='CLOSED'||(p.checklist||[]).every(c=>DONE_STRICT.includes(c.status)))return '🎉 '+DONE_WORD(p);
   if(!p.decision)return '⏳ '+L('Oferta enviada — esperando la pre-aprobación del dueño','Offer sent — waiting for the owner’s pre-approval');
   const c=(p.checklist||[]).find(x=>!DONE_ST.includes(x.status));if(!c)return '';
   const st=c.key==='DOCS'&&c.status==='SUBMITTED'?DOCS_REVIEW:(STATUS_LABEL[c.status]||STATUS_LABEL.PENDING);
@@ -801,7 +801,7 @@ async function spLoad(force){
 const SP_STEP={PREAPPROVE:['✅','Oferta pre-aprobada','Offer pre-approved'],DENY:['❌','Oferta negada','Offer denied'],COUNTER:['↩️','Contraoferta enviada','Counteroffer sent'],COUNTER_ACCEPT:['🤝','Aceptaron la contraoferta','Counteroffer accepted'],COUNTER_DECLINE:['✕','Rechazaron la contraoferta','Counteroffer declined'],DOC_SLOT:['📎','Documento subido','Document uploaded'],DOCS_APPROVED:['✅','Documentos aprobados','Documents approved'],DOCS_REJECTED:['↩️','Documentos regresados para corregir','Documents sent back to fix'],DEPOSIT_PROOF:['💵','Depósito de $1,000 subido','$1,000 deposit uploaded'],DEPOSIT_APPROVED:['✅','Depósito de $1,000 aprobado','$1,000 deposit approved'],INSPECTION_REQUEST:['🔍','Pidieron inspección','Inspection requested'],INSPECTION_SCHEDULE:['📅','Inspección agendada','Inspection scheduled'],INSPECTION_REPORT:['📄','Reporte de inspección','Inspection report'],TRR_SUBMIT:['📝','TRR enviado','TRR sent'],TRR_WAIVE:['➖','Sin negociar TRR','TRR not negotiated'],TRR_ACCEPT:['✅','TRR aceptado','TRR accepted'],TRR_REJECT:['❌','TRR rechazado','TRR rejected'],TRR_COUNTER:['↩️','Contraoferta de TRR','TRR counter'],TRR_ACCEPT_COUNTER:['🤝','Contraoferta de TRR aceptada','TRR counter accepted'],CLOSING_PROPOSE:['🗓️','Fecha de cierre propuesta','Closing date proposed'],CLOSING_APPROVE:['✅','Fecha de cierre aprobada','Closing date approved'],FUNDS_RECEIPT:['💰','Comprobante de option fee / enganche','Option fee / down payment proof'],FUNDS_APPROVED:['✅','Option fee / enganche aprobado','Option fee / down payment approved'],VOID:['⌛','Oferta anulada (plazo vencido)','Offer voided (deadline passed)'],HOME_PENDING:['📝','Casa bajo contrato','Home under contract'],RESUME:['🔄','Oferta reanudada','Offer resumed']};
 const spStepTxt=e=>{const m=SP_STEP[e.step]||['•',e.step,e.step];let t=L(m[1],m[2]);if(e.step==='DOC_SLOT'&&e.slot)t=e.slot==='ID'?L('Se subió la identificación (ID)','ID uploaded'):L('Se subió un comprobante de ingreso','Proof of income uploaded');return [m[0],t];};
 const spDead=p=>!!(p.invalidatedAt||p.decision==='DENIED'||p.archivedAt);
-const spDone=p=>!!(p.checklist&&p.checklist.every(c=>DONE_ST.includes(c.status)||c.status==='NA'));
+const spDone=p=>!!(p.checklist&&p.checklist.every(c=>DONE_STRICT.includes(c.status)));
 const spAgent=a=>a?`${esc(a.name||L('Agente','Agent'))}${a.brokerage?' · '+esc(a.brokerage):''}`:L('Agente','Agent');
 const spAmt=a=>a?[money(a.price),a.down?L('enganche ','down ')+money(a.down):'',a.monthly?money(a.monthly)+L('/mes','/mo'):''].filter(Boolean).join(' · '):'';
 const spHomeStatus=s=>{const u=String(s||'').toUpperCase();const m=u==='AVAILABLE'||u==='ACTIVE'?[L('Disponible','Available'),'#16a34a']:/PENDING/.test(u)?[L('Pendiente','Pending'),'#d97706']:u==='SOLD'||u==='CLOSED'?[L('Vendida','Sold'),'#475569']:[u||'—','#64748b'];return `<span class="tour-pill" style="background:${m[1]}">${esc(m[0])}</span>`;};
