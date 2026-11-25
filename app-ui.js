@@ -2040,7 +2040,7 @@ function investorAdminCard(){
   }).join('');
   return `<div id="investor-admin">${blocks||`<p>${tr('noneYet')}</p>`}</div>`;
 }
-function dashboard(){if(S.user&&isClient()&&window.LegacyTours&&LegacyTours.clientPanel)return LegacyTours.clientPanel(dashboardFull());return dashboardFull();}
+function dashboard(){if(S.user&&isClient()&&window.LegacyTours&&LegacyTours.clientPanel)return LegacyTours.clientPanel(dashboardFull());if(S.user&&!S.isAdmin()&&!S.isInvestor()&&window.LegacyTours&&LegacyTours.agentAccount&&LegacyTours.agentDashVisible&&LegacyTours.agentDashVisible())return LegacyTours.agentAccount(dashboardFull());return dashboardFull();} // v39 (9:58 PM): agent Mi cuenta folded
 function dashboardFull(){if(!S.user)return auth();if(S.isInvestor())return investorDash();const u=S.user,ap=S.agentProfile(u),ag=S.agentFor(u),D=S.data;
   const favs=D.favorites.filter(f=>f.userId===u.id).map(f=>S.listing(f.listingId)).filter(Boolean);
   const views=D.propertyViews.filter(v=>v.userId===u.id).slice(-10).reverse().map(v=>S.listing(v.listingId)).filter(Boolean);

@@ -156,7 +156,7 @@ function tourCard(t){
   const live=['REQUESTED','ACCEPTED'].includes(t.status);
   const wait=t.status==='REQUESTED'?(t.direct?`<p class="ops-meta">⏳ ${L('Enviada a tu agente. Te llegará una notificación cuando la apruebe o la rechace.','Sent to your agent. You will get a notification when they approve or decline it.')}</p>`:`<p class="ops-meta">⏳ ${L('Les avisamos a los agentes con licencia. Te llegará una notificación cuando uno acepte tu cita.','We notified licensed agents. You will get a notification when one accepts your showing.')}</p>`):'';
   const declined=t.status==='DECLINED'?`<p class="tour-warn">${L('Tu agente no puede en ese horario.','Your agent can’t make that time.')}${t.declineReason?' '+esc(t.declineReason):''} ${L('Puedes pedir otra fecha u hora.','You can request another date or time.')}</p>`:'';
-  const cr=t.status==='CANCELLED'&&t.cancelReason?`<p class="ops-meta">❌ ${L('Razón de la cancelación','Cancellation reason')}: <b>${esc(L(t.cancelReason.labelEs,t.cancelReason.labelEn))}</b>${t.cancelReason.text?' — '+esc(t.cancelReason.text):''}</p>`:'';
+  const cr=t.status==='CANCELLED'&&t.cancelReason?`<p class="ops-meta">❌ ${L('Razón de la cancelación','Cancellation reason')}: <b>${esc(L(t.cancelReason.labelEs,t.cancelReason.labelEn))}</b>${t.cancelReason.auto?' · '+L('cancelada automáticamente','cancelled automatically'):''}${t.cancelReason.text?' — '+esc(t.cancelReason.text):''}</p>`:'';
   const merged=t.mergedInto?`<p class="ops-meta">➕ ${L('Estas casas se agregaron a la ruta del mismo día.','These homes were added to the same-day route.')}</p>`:'';
   const changeable=(t.status==='ACCEPTED'||(t.status==='REQUESTED'&&t.direct))&&!!t.agent&&Date.now()<new Date(t.startsAt).getTime();
   // v39 (2:39 PM): only the client changes the date/time; the agent approves or declines the request.
@@ -573,6 +573,61 @@ function dashData(){
   return {clients:[...clients.values()].sort((a,b)=>String(a.next||'9').localeCompare(String(b.next||'9'))||String(b.last||'').localeCompare(String(a.last||''))),todayT,week,actions,offers,contract,closed,stats};
 }
 function dealDeadline(r){const p=r.p,o=r.o;const c=[];if(!p&&!o.docsUploadedAt&&o.dueAt)c.push(o.dueAt);if(p&&!p.docsUploadedAt&&p.docsDueAt)c.push(p.docsDueAt);if(p&&!p.depositProofAt&&p.depositDueAt)c.push(p.depositDueAt);return c.sort()[0]||'';}
+/* v39 (9:58 PM): agent closings (Dashboard "Cierres") with period chips. Commission shows only here (agent's own) — never to sellers/clients. */
+const AC={rows:null,period:'month',from:'',to:'',busy:false,err:''};
+async function acLoad(force){if(AC.busy||(AC.rows&&!force))return;AC.busy=true;try{const r=await call('tour_agent_closings',{});AC.rows=r.closings||[];AC.err='';}catch(e){AC.err=e.message||String(e);if(!AC.rows)AC.rows=[];}finally{AC.busy=false;rerender();}}
+const ctYmd=d=>chicagoDay(d);
+function acRange(per){const t=ctYmd(new Date()),[y,m,dd]=t.split('-').map(Number);const pad=n=>String(n).padStart(2,'0');const ymd=(Y,M,D)=>`${Y}-${pad(M)}-${pad(D)}`;
+  if(per==='week'){const dt=new Date(Date.UTC(y,m-1,dd));const wd=(dt.getUTCDay()+6)%7;dt.setUTCDate(dt.getUTCDate()-wd);return [dt.toISOString().slice(0,10),t];}
+  if(per==='month')return [ymd(y,m,1),t];
+  if(per==='lastmonth'){const py=m===1?y-1:y,pm=m===1?12:m-1;const last=new Date(Date.UTC(py,pm,0)).getUTCDate();return [ymd(py,pm,1),ymd(py,pm,last)];}
+  if(per==='quarter'){const qm=Math.floor((m-1)/3)*3+1;return [ymd(y,qm,1),t];}
+  if(per==='ytd')return [ymd(y,1,1),t];
+  if(per==='custom')return [AC.from||'0000-01-01',AC.to||'9999-12-31'];
+  return ['0000-01-01','9999-12-31'];}
+const AC_PER=[['week','Esta semana','This week'],['month','Este mes','This month'],['lastmonth','Mes pasado','Last month'],['quarter','Trimestre','Quarter'],['ytd','YTD','YTD'],['custom','Personalizado','Custom'],['all','Todo','All']];
+function acRows(per){const [a,b]=acRange(per||AC.period);return (AC.rows||[]).filter(r=>{const d=String(r.closingDate||'');return d&&d>=a&&d<=b;});}
+const acDay=ymd=>{if(!ymd)return '—';const [y,m,d]=ymd.split('-').map(Number);try{return new Intl.DateTimeFormat(S.lang==='es'?'es-US':'en-US',{timeZone:'UTC',month:'short',day:'numeric',year:'numeric'}).format(new Date(Date.UTC(y,m-1,d)));}catch(e){return ymd;}};
+function agentClosingsSection(){
+  acLoad(false);
+  const rows=acRows(),vol=rows.reduce((n,r)=>n+(Number(r.priceCents)||0),0),com=rows.reduce((n,r)=>n+(Number(r.commissionCents)||0),0),noCom=rows.filter(r=>r.commissionCents==null).length;
+  const chips=`<div class="ac-chips" role="tablist">${AC_PER.map(([k,es_,en])=>`<button type="button" role="tab" aria-selected="${AC.period===k}" class="ac-chip${AC.period===k?' on':''}" data-acper="${k}">${L(es_,en)}</button>`).join('')}</div>`;
+  const custom=AC.period==='custom'?`<div class="ac-range"><label>${L('Desde','From')}<input type="date" data-acfrom="1" value="${esc(AC.from)}"></label><label>${L('Hasta','To')}<input type="date" data-acto="1" value="${esc(AC.to)}"></label></div>`:'';
+  const tot=`<div class="ac-tot"><div><b>${rows.length}</b><span>${rows.length===1?L('cierre','closing'):L('cierres','closings')}</span></div><div><b>${esc(money(vol)||'$0')}</b><span>${L('volumen','volume')}</span></div><div><b>${esc(money(com)||'$0')}</b><span>${L('tu comisión','your commission')}${noCom?` · ${noCom} ${L('sin capturar','not entered')}`:''}</span></div></div>`;
+  const list=AC.rows===null||AC.busy&&!AC.rows.length?`<div class="ad-skel"></div>`:rows.length?`<ul class="ad-list ac-list">${rows.map(r=>`<li class="ad-row"><span class="ad-day">${esc(acDay(r.closingDate))}</span><div class="ad-body"><b>${esc(r.address)}${r.city?', '+esc(r.city):''}</b><small>👤 ${esc(r.clientName||'—')} · 💲 ${esc(money(r.priceCents)||'—')}${r.commissionCents!=null?` · 💼 ${esc(money(r.commissionCents)||'$0')}`:''}${r.test?' · 🧪 '+L('prueba','test'):''}</small></div>${r.offerId?`<button type="button" class="btn-card" data-tgooffer="${esc(r.offerId)}">${L('Ver','View')}</button>`:''}</li>`).join('')}</ul>`:`<p class="ad-empty">${L('No hay cierres en este periodo.','No closings in this period.')}</p>`;
+  return `<section class="card ad-sec" id="ad-closings"><div class="ad-sec-h"><h3>🏁 ${L('Mis cierres','My closings')}</h3><span class="ad-count${rows.length?' on':''}">${rows.length}</span></div>${chips}${custom}${tot}${AC.err?`<p class="tour-warn">${esc(AC.err)}</p>`:''}${list}<small class="ds-priv">🔒 ${L('Tu comisión solo la ves tú y el Admin.','Only you and Admin see your commission.')}</small></section>`;
+}
+document.addEventListener('click',e=>{const t=e.target.closest&&e.target.closest('[data-acper]');if(!t)return;e.preventDefault();AC.period=t.dataset.acper;rerender();setTimeout(()=>{const el=document.getElementById('ad-closings');if(el&&el.getBoundingClientRect().top<0)el.scrollIntoView({block:'start'});},30);});
+document.addEventListener('change',e=>{const t=e.target;if(!t||!t.dataset)return;if(t.dataset.acfrom){AC.from=t.value;rerender();}else if(t.dataset.acto){AC.to=t.value;rerender();}});
+/* v39 (9:58 PM): agent "Mi cuenta" — same content, folded into short cards with a big-button menu (like the client dashboard). */
+const AA_ICON=[[/alert/i,'🔔'],[/visita|visit/i,'📅'],[/perfil|profile/i,'👤'],[/favorit/i,'❤️'],[/mensaje|message/i,'✉️'],[/oferta|offer/i,'💰'],[/carpeta|folder|document/i,'📂'],[/cliente|client/i,'👥']];
+function agentAccount(full){
+  try{
+    const tpl=document.createElement('template');tpl.innerHTML=full||'';
+    const root=tpl.content.firstElementChild&&tpl.content.children.length===1?tpl.content.firstElementChild:tpl.content;
+    const cards=[...root.children].filter(el=>el.classList&&el.classList.contains('card'));
+    if(!cards.length)return full;
+    const menu=[];
+    cards.forEach((c,i)=>{
+      const h=c.querySelector('h2,h3');const title=(h?h.textContent:'').replace(/^[\s\p{Extended_Pictographic}\uFE0F]+/u,'').trim()||L('Sección','Section');
+      const ico=(AA_ICON.find(([re])=>re.test(title))||[0,'•'])[1];
+      if(h)h.remove();
+      const key='aa-'+(title.toLowerCase().replace(/[^a-z0-9áéíóúñ]+/g,'-').slice(0,24)||i);
+      const badge=c.querySelector('.badge,.ad-count,.count');const n=badge?badge.textContent.trim():'';
+      const d=document.createElement('details');d.className='card lf-fold aa-card';d.dataset.fold=key;d.id=key;if(FOLD[key])d.open=true;
+      d.innerHTML=`<summary class="lf-sum"><span class="lf-ico" aria-hidden="true">${ico}</span><span class="lf-main"><b>${esc(title)}</b></span>${n?`<span class="lf-tags"><span class="lf-chip info">${esc(n)}</span></span>`:''}<span class="lf-chev" aria-hidden="true">⌄</span></summary>`;
+      const body=document.createElement('div');body.className='lf-body';
+      [...c.childNodes].forEach(x=>body.appendChild(x));d.appendChild(body);
+      [...c.attributes].forEach(a=>{if(a.name==='id'&&!d.querySelector('#'+CSS.escape(a.value)))body.id=a.value;});
+      c.replaceWith(d);menu.push([key,ico,title]);
+    });
+    const nm=String((S.user&&S.user.name)||'').split(' ')[0];
+    const hero=`<header class="ad-hero aa-hero"><div><p class="ad-kicker">👔 ${L('Mi cuenta de agente','My agent account')}</p><h2>${nm?esc(nm):L('Mi cuenta','My account')}</h2><p class="ad-date">${L('Toca una sección para abrirla.','Tap a section to open it.')}</p></div><button type="button" class="btn-card primary aa-dash" data-tab="agenthome">📊 ${L('Mi panel','My dashboard')}</button></header>`;
+    const wrap=document.createElement('div');wrap.appendChild(tpl.content.cloneNode(true));
+    return `<div class="tour-wrap ad-wrap aa-wrap">${hero}${wrap.innerHTML}</div>`;
+  }catch(e){console.warn('agentAccount',e);return full;}
+}
+document.addEventListener('click',e=>{const t=e.target.closest&&e.target.closest('[data-aaopen]');if(!t)return;e.preventDefault();const d=document.getElementById(t.dataset.aaopen);if(d){d.open=true;FOLD[d.dataset.fold]=true;d.scrollIntoView({behavior:'smooth',block:'start'});}});
 function agentDashboard(){
   if(!S.user)return `<section class="card tour-card"><p>${L('Inicia sesión para ver tu panel.','Sign in to see your dashboard.')}</p></section>`;
   load(false);
@@ -605,7 +660,9 @@ function agentDashboard(){
   const actS=unreadT.length?`<section class="card ad-sec" id="ad-activity"><div class="ad-sec-h"><h3>🔔 ${L('Actividad reciente','Recent activity')}</h3><span class="ad-count on">${unreadT.length}</span></div><ul class="ad-list">${unreadT.slice(0,5).map(m=>`<li class="ad-row"><span class="ad-av" aria-hidden="true">✉️</span><div class="ad-body"><b>${esc(m.peerName||(S.tourPeerNames||{})[m.peerId]||L('Mensaje','Message'))}</b><small>${m.unread} ${m.unread===1?L('mensaje nuevo','new message'):L('mensajes nuevos','new messages')}</small></div><button type="button" class="btn-card" data-tchat="${esc(m.peerId)}" data-tname="${esc(m.peerName||'')}">${L('Abrir','Open')}</button></li>`).join('')}</ul></section>`:'';
   const statsS=`<section class="ad-stats" aria-label="${esc(L('Este mes','This month'))}"><div><b>${D.stats.showings}</b><span>${L('Citas este mes','Showings this month')}</span></div><div><b>${D.stats.offers}</b><span>${L('Ofertas este mes','Offers this month')}</span></div><div><b>${D.stats.closed}</b><span>${L('Cerradas','Closed')}</span></div></section>`;
   const note=!data.canAccept?`<p class="tour-warn">⏳ ${L('Tu cuenta de agente todavía no puede aceptar clientes nuevos (falta aprobación o licencia).','Your agent account can’t accept new clients yet (approval or license pending).')}</p>`:'';
-  return head+note+kpis+actionsS+todayS+offersS+contractS+weekS+clientsS+actS+statsS+`<div class="tour-btns ad-foot"><button type="button" class="btn-card" data-tab="tours">📋 ${L('Todas mis citas','All my showings')}</button><button type="button" class="btn-card" data-tab="inventory">🏠 ${L('Ver casas','See homes')}</button></div></div>`;
+  const acS=agentClosingsSection(),acMonth=acRows('month');
+  const kpis2=kpis.replace(/<\/div>$/,'')+kpi('ad-closings','🏁',AC.rows?acMonth.length:'…',L('Cierres este mes','Closings this month'),AC.rows&&acMonth.length?esc(money(acMonth.reduce((n,r)=>n+(Number(r.priceCents)||0),0))):'')+'</div>';
+  return head+note+kpis2+actionsS+todayS+offersS+contractS+acS+weekS+clientsS+actS+statsS+`<div class="tour-btns ad-foot"><button type="button" class="btn-card" data-tab="tours">📋 ${L('Todas mis citas','All my showings')}</button><button type="button" class="btn-card" data-tab="inventory">🏠 ${L('Ver casas','See homes')}</button></div></div>`;
 }
 let actShowAll=false;
 document.addEventListener('click',e=>{
@@ -845,7 +902,7 @@ window.LegacyTours={
   clientActionRow:l=>{if(S.user)load(false);const c=inCart(l.id),conn=connectedAgent();return `<div class="lof-act-row"><button type="button" class="btn-card${c?'':' primary'}" data-tcart="${esc(l.id)}">${c?'✓ '+L('En tu carrito (quitar)','In your cart (remove)'):'🛒 '+L('Agregar al carrito','Add to cart')}</button><button type="button" class="btn-card" data-tbook="${esc(l.id)}">📅 ${L('Solicitar cita','Request showing')}</button></div><p class="ops-meta tour-note">${conn?L('Junta las casas en tu carrito y envíalas a tu agente. Las ofertas las hace tu agente después de la visita.','Collect homes in your cart and send them to your agent. Your agent makes offers after the visit.'):L(`Junta hasta ${MAX} casas en tu carrito y pide una sola cita. Las ofertas las hace tu agente después de la visita.`,`Collect up to ${MAX} homes in your cart and request one showing. Your agent makes offers after the visit.`)}</p>`;},
   offerSentCard:l=>{if(!S.user||!S.data)return '';const T=['REJECTED','WITHDRAWN','INVALIDATED','FELL_THROUGH','CANCELLED','DECLINED'];const o=(S.data.offers||[]).filter(x=>x&&x.listingId===l.id&&x.userId===S.user.id&&!T.includes(String(x.status||'').toUpperCase())).sort((a,b)=>String(b.createdAt||'').localeCompare(String(a.createdAt||'')))[0];
     if(!o)return '';return `<div class="tour-done">✅ <b>${L('Oferta enviada','Offer sent')}</b>${o.createdAt?' · '+esc(when(o.createdAt)):''}${money(o.offerPrice)?' · '+esc(money(o.offerPrice)):''} <button type="button" class="btn-card" data-tgo="1">${L('Ver próximos pasos','See next steps')}</button></div>`;},
-  agentNavVisible:()=>isClient(),agentDashVisible:()=>isAgent(),agentDashboard,clientDocsCard,sellerDashVisible,sellerPanel,sellerReload:()=>spLoad(true),clientPanel,closingFlowBox,stepChip,stepName,depositFiles,deadOfferIds:()=>(data&&data.deadOfferIds)||[],archive:()=>(data&&data.archive)||[],hiddenShowings:()=>(data&&data.hiddenShowings)||0,fold,tourOfferInfo:id=>{load(false);const o=findOffer(id);return o?(o.pipeline||o):null;},refreshAll:()=>{load(true);spLoad(true);},agentNavLabel:()=>'🤝 '+L('Mi agente','My agent'),agentView,
+  agentNavVisible:()=>isClient(),agentDashVisible:()=>isAgent(),agentDashboard,agentAccount,clientDocsCard,sellerDashVisible,sellerPanel,sellerReload:()=>spLoad(true),clientPanel,closingFlowBox,stepChip,stepName,depositFiles,deadOfferIds:()=>(data&&data.deadOfferIds)||[],archive:()=>(data&&data.archive)||[],hiddenShowings:()=>(data&&data.hiddenShowings)||0,fold,tourOfferInfo:id=>{load(false);const o=findOffer(id);return o?(o.pipeline||o):null;},refreshAll:()=>{load(true);spLoad(true);},agentNavLabel:()=>'🤝 '+L('Mi agente','My agent'),agentView,
   view,refresh:()=>load(true),cart
 };
 })();

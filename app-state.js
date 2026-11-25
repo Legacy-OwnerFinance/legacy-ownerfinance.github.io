@@ -422,7 +422,8 @@ function applyRelationalUsers(stateData,userRows){
 const isTestListingRow=r=>!!r&&(/^legacytest/i.test(String(r.id||''))||/^legacytest/i.test(String(r.slug||'')));
 function applyRelationalListings(stateData,listRows,opts){
   if(!Array.isArray(listRows)||!listRows.length)return false;
-  listRows=listRows.filter(r=>!isTestListingRow(r));
+  const showTest=!!(S._me&&(S._me.role==='ADMIN'||/\+legacytest/i.test(String(S._me.email||'')))); // fake legacytest homes: Admin + legacytest test accounts only
+  if(!showTest)listRows=listRows.filter(r=>!isTestListingRow(r));
   const allowTenure=!!(opts&&opts.allowTenure);
   const byId=new Map((stateData.listings||[]).map(l=>[l.id,l]));
   let tenureChanged=false;
@@ -477,7 +478,7 @@ function applyRelationalListings(stateData,listRows,opts){
     byId.set(r.id,next);
   });
   const live=new Set(listRows.map(r=>r.id));
-  stateData.listings=[...byId.values()].filter(l=>live.has(l.id)&&!isTestListingRow(l));
+  stateData.listings=[...byId.values()].filter(l=>live.has(l.id)&&(showTest||!isTestListingRow(l)));
   return tenureChanged;
 }
 
