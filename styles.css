@@ -2102,3 +2102,47 @@ details.tour-sell.lf-fold{padding:10px 12px}
 .tour-wrap>*,.tour-list>*{min-width:0}
 section[style*="auto-fit"]>*{min-width:0;overflow-wrap:anywhere}
 input[type=file]{max-width:100%}
+
+/* ===== v39 (7:30 PM): client dashboard ===== */
+.cd-wrap{gap:12px}
+.cd-hero{padding:18px;border-radius:var(--card-radius);background:linear-gradient(135deg,#0f172a 0%,#1e293b 70%,#2b2a22 100%);color:#fff;box-shadow:var(--shadow);position:relative;overflow:hidden}
+.cd-hero::after{content:"";position:absolute;right:-50px;top:-50px;width:160px;height:160px;border-radius:50%;background:radial-gradient(circle,rgba(212,175,55,.35),rgba(212,175,55,0) 70%);pointer-events:none}
+.cd-hero h2{margin:2px 0 12px;color:#fff;font-size:24px}
+.cd-next{display:flex;gap:12px;align-items:flex-start;background:#fff;color:var(--ink);border-radius:14px;padding:14px;position:relative;z-index:1}
+.cd-next-i{width:48px;height:48px;flex:0 0 48px;border-radius:12px;display:grid;place-items:center;background:#f7f1e3;font-size:24px}
+.cd-next-b{flex:1;min-width:0;display:flex;flex-direction:column;gap:3px}
+.cd-next-b b{font-size:18px;color:var(--navy);line-height:1.25}
+.cd-next-b small{font-size:13.5px;color:#475569}
+.cd-btns{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px;position:relative;z-index:1}
+.cd-btns .btn-card,.cd-foot .btn-card,.cd-contact .btn-card{min-height:46px;padding:12px 16px;font-size:15px;border-radius:12px;display:inline-flex;align-items:center;justify-content:center;gap:6px;cursor:pointer}
+.cd-hero .cd-btns .btn-card{flex:1 1 140px}
+.cd-hero .cd-btns .btn-card.primary{background:var(--gold);color:#0f172a;border-color:var(--gold)}
+.cd-hero .cd-btns .btn-card:not(.primary){background:rgba(255,255,255,.1);color:#fff;border-color:rgba(255,255,255,.3)}
+.cd-more-steps{list-style:none;margin:12px 0 0;padding:0;display:grid;gap:6px;position:relative;z-index:1}
+.cd-more-steps li{display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:10px;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.14)}
+.cd-ms-t{flex:1;min-width:0;display:flex;flex-direction:column}
+.cd-ms-t b{font-size:13.5px;color:#fff}.cd-ms-t small{font-size:12px;color:#cbd5e1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cd-card{padding:14px 16px;min-width:0}
+.cd-card-h{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:8px}
+.cd-card-h h3{margin:0;font-size:17px;color:var(--navy)}
+.cd-foot{margin-top:10px;display:flex;gap:8px}
+.cd-foot .btn-card{flex:1}
+.cd-list{list-style:none;margin:0;padding:0;display:grid;gap:8px}
+.cd-row{width:100%;display:flex;align-items:center;gap:10px;padding:10px;border:1px solid #eee3cf;border-radius:12px;background:#fffdf8;font:inherit;text-align:left;cursor:pointer;min-height:56px;color:inherit}
+.cd-date{flex:0 0 66px;display:flex;flex-direction:column;align-items:center;padding:4px;border-radius:9px;background:var(--navy);color:#fff}
+.cd-date b{font-size:12px;color:var(--gold-soft);text-transform:capitalize}.cd-date small{font-size:11.5px;color:#fff}
+.cd-two{display:grid;grid-template-columns:1fr;gap:12px}
+@media(min-width:760px){.cd-two{grid-template-columns:1fr 1fr}.cd-hero{padding:22px 24px}}
+.cd-favs{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+.cd-fav{border:1px solid #eee3cf;border-radius:12px;padding:0;overflow:hidden;background:#fff;cursor:pointer;font:inherit;text-align:left}
+.cd-fav img{width:100%;height:84px;object-fit:cover;display:block}
+.cd-fav span{display:block;padding:6px 8px;font-size:12.5px;font-weight:700;color:var(--navy);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cd-agent{display:flex;align-items:center;gap:10px}
+.cd-contact .btn-card{flex:1 1 90px}
+.cd-docs-n{margin:0;font-size:14px;color:#475569}.cd-docs-n b{font-size:22px;color:var(--navy);margin-right:4px}
+.cd-profile{padding:12px 14px}
+.cd-profile>.lf-body>section{padding:0!important}
+.cd-static{padding:2px 0}
+.cd-more-steps li{flex-wrap:wrap;min-width:0}
+.cd-more-steps li>.ad-cd{margin-left:auto;flex:0 1 auto;max-width:100%;white-space:nowrap}
+.cd-ms-t{flex:1 1 160px}
