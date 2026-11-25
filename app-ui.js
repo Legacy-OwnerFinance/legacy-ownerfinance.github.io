@@ -1627,6 +1627,47 @@ function daysPill(l){
     :(es?(d===0?'Activa hoy':`Activa ${d} ${d===1?'día':'días'}`):(d===0?'Active today':`Active ${d} ${d===1?'day':'days'}`));
   return `<span class="days-pill days-${t.kind}">⏱ ${esc(txt)}</span>`;
 }
+/* v41 (share): "Compartir" on every card and home detail, for every role (guests too). Opaque link only, guest-safe text. */
+const SHARE_BASE='https://legacyownerfinance.net/?p=';
+function shareLinkOf(id){return SHARE_BASE+encodeURIComponent(String(id||''));}
+function shareTextOf(l){ // city/area + bd/ba + Owner finance. Never a price or a house number.
+  const es=S.lang==='es',place=[l.area||l.neighborhood||'',l.city||''].map(x=>String(x||'').trim()).filter(Boolean).filter((x,i,a)=>a.indexOf(x)===i).join(', ');
+  const bb=[l.beds!=null&&l.beds!==''?`${l.beds} ${es?'rec':'bd'}`:'',l.baths!=null&&l.baths!==''?`${l.baths} ${es?'baños':'ba'}`:''].filter(Boolean).join(' / ');
+  return `🏡 ${es?'Casa':'Home'}${place?(es?' en ':' in ')+place:''}${bb?' · '+bb:''} · Owner finance${es?' (financiamiento del dueño)':''}`;
+}
+const shareBtn=(id,cls)=>`<button type="button" class="${cls||'btn-card'} share-btn" data-sharehome="${esc(id)}" title="${S.lang==='es'?'Compartir':'Share'}" aria-label="${S.lang==='es'?'Compartir esta casa':'Share this home'}">📤${cls&&cls.indexOf('icon-circle-btn')>=0?'':' '+(S.lang==='es'?'Compartir':'Share')}</button>`;
+const isPhoneShare=()=>{try{return matchMedia('(pointer:coarse)').matches||/Android|iPhone|iPad|iPod/i.test(navigator.userAgent);}catch(e){return false;}};
+let qrLoading=null;
+function loadQr(){if(window.qrcode)return Promise.resolve();if(!qrLoading)qrLoading=new Promise((res,rej)=>{const s=document.createElement('script');s.src='qrcode.min.js?v=20261125share1';s.onload=()=>res();s.onerror=()=>{qrLoading=null;rej(new Error('qr'));};document.head.appendChild(s);});return qrLoading;}
+function openShareSheet(l){
+  const es=S.lang==='es',url=shareLinkOf(l.id),text=shareTextOf(l),full=`${text}\n${url}`,enc=encodeURIComponent;
+  const subj=es?'Mira esta casa · Legacy Owner Finance':'Check out this home · Legacy Owner Finance';
+  const links=[
+    ['wa','🟢','WhatsApp',`https://wa.me/?text=${enc(full)}`],
+    ['sms','💬',es?'Mensaje de texto':'Text message',`sms:?&body=${enc(full)}`],
+    ['mail','✉️',es?'Correo':'Email',`mailto:?subject=${enc(subj)}&body=${enc(full)}`],
+    ['fb','📘','Facebook',`https://www.facebook.com/sharer/sharer.php?u=${enc(url)}`],
+  ];
+  const m=modal(`<div class="share-sheet" role="dialog" aria-label="${es?'Compartir casa':'Share home'}"><h2>📤 ${es?'Compartir esta casa':'Share this home'}</h2>
+    <p class="share-text">${esc(text)}</p>
+    <div class="share-link-row"><input type="text" readonly value="${esc(url)}" aria-label="${es?'Enlace':'Link'}" class="share-url"><button type="button" class="btn-card primary" data-sharecopy="1">🔗 ${es?'Copiar enlace':'Copy link'}</button></div>
+    <div class="share-grid">${links.map(([k,i,lb,h])=>`<a class="btn-card share-opt" data-shareopt="${k}" href="${esc(h)}" ${k==='sms'||k==='mail'?'':'target="_blank" rel="noopener"'}>${i} ${esc(lb)}</a>`).join('')}${navigator.share?`<button type="button" class="btn-card share-opt" data-sharenative="1">📱 ${es?'Más opciones…':'More options…'}</button>`:''}</div>
+    <div class="share-qr"><div class="share-qr-box" aria-label="QR">…</div><small>${es?'Escanea con otro teléfono para abrir la casa.':'Scan with another phone to open the home.'}</small></div></div>`);
+  const box=m.querySelector('.share-qr-box');
+  loadQr().then(()=>{try{const q=window.qrcode(0,'M');q.addData(url);q.make();box.innerHTML=q.createSvgTag({cellSize:4,margin:2,scalable:true,alt:'QR',title:url});}catch(e){box.textContent='';}}).catch(()=>{box.closest('.share-qr').remove();});
+  m.addEventListener('click',async e=>{
+    const c=e.target.closest('[data-sharecopy]');if(c){e.preventDefault();try{await copyText(url);c.textContent=es?'✅ Copiado':'✅ Copied';setTimeout(()=>{if(c.isConnected)c.textContent='🔗 '+(es?'Copiar enlace':'Copy link');},1600);}catch(_){const i=m.querySelector('.share-url');if(i){i.focus();i.select();}}return;}
+    const n=e.target.closest('[data-sharenative]');if(n){e.preventDefault();try{await navigator.share({title:subj,text,url});}catch(_){}return;}
+  });
+  const inp=m.querySelector('.share-url');if(inp)inp.addEventListener('focus',()=>inp.select());
+}
+async function shareHome(id){
+  const l=S.listing&&S.listing(id);if(!l)return;
+  const url=shareLinkOf(l.id),text=shareTextOf(l);
+  if(navigator.share&&isPhoneShare()){try{await navigator.share({title:'Legacy Owner Finance',text,url});return;}catch(e){if(e&&e.name==='AbortError')return;}}
+  openShareSheet(l);
+}
+document.addEventListener('click',e=>{const b=e.target.closest&&e.target.closest('[data-sharehome]');if(!b)return;e.preventDefault();e.stopPropagation();shareHome(b.dataset.sharehome);},true);
 function card(l,mt){
   const ph=(l.photoUrls&&l.photoUrls.length)?l.photoUrls:[l.photoUrl||'listing-placeholder.svg'],i=(PIDX[l.id]||0)%ph.length,multi=ph.length>1;
   const media=badgeHtml=>`<div class="card-media">${badgeHtml}<img src="${esc(cardImg(ph[i]))}" data-img="${l.id}" referrerpolicy="no-referrer" loading="lazy" onerror="window.imgFallback&&window.imgFallback(this)" data-open="${l.id}" style="cursor:pointer">
@@ -1635,11 +1676,11 @@ function card(l,mt){
     return `<article class="prop-card" data-card="${l.id}">${media(`<span class="badge-top-left" style="background:#0f172a">🔒 ${S.lang==='es'?'Vista Previa':'Guest Preview'}</span>`)}</div>
       <div class="card-body"><p class="addr-line">📍 ${partialAddr(l)}</p>${daysPill(l)?`<div class="guest-pill-row">${daysPill(l)}</div>`:''}${hookHtml(l)}
       ${todayApptHtml(l.id)}
-      <div class="card-actions"><button type="button" class="btn-card primary" data-open="${l.id}">${S.lang==='es'?'Ver casa':'View home'}<span class="btn-extra"> · ${ph.length} ${tr('photosCount')}</span></button></div></div></article>`;
+      <div class="card-actions"><button type="button" class="btn-card primary" data-open="${l.id}">${S.lang==='es'?'Ver casa':'View home'}<span class="btn-extra"> · ${ph.length} ${tr('photosCount')}</span></button>${shareBtn(l.id,'btn-card share-card-btn')}</div></div></article>`;
   }
   const col=({AVAILABLE:'#16a34a',COMING_SOON:'#2563eb',SOLD:'#475569',CLOSED:'#475569'})[l.status]||'#d97706';
   return `<article class="prop-card" data-card="${l.id}">${media(`<span class="badge-top-left" style="background:${col}">${esc(S.statusText?S.statusText(l.status):l.status)}</span>`)}
-    <div class="card-top-actions"><button type="button" class="icon-circle-btn" title="${esc(tr('compare'))}" data-compare="${l.id}">${CMP.has(l.id)?'✅':'⚖️'}</button><button type="button" class="icon-circle-btn" title="${esc(tr('favorite'))}" data-fav="${l.id}">${S.isFavorite(l.id)?'❤️':'🤍'}</button></div></div>
+    <div class="card-top-actions"><button type="button" class="icon-circle-btn" title="${esc(tr('compare'))}" data-compare="${l.id}">${CMP.has(l.id)?'✅':'⚖️'}</button><button type="button" class="icon-circle-btn" title="${esc(tr('favorite'))}" data-fav="${l.id}">${S.isFavorite(l.id)?'❤️':'🤍'}</button>${shareBtn(l.id,'icon-circle-btn')}</div></div>
     <div class="card-body">${matchBadge(mt)}${hookHtml(l)}<div class="price-strip">${daysPill(l)}<span class="main-price">${S.money(l.askingPrice)}</span><span class="monthly-pill">${S.money(l.monthlyPayment)}${tr('perMo')}</span></div>
     <p class="addr-line">${title(l)}</p>
     <div class="down-box down-only"><span>${tr('down')}</span><b>${S.money(l.downPayment)}</b></div>
@@ -1816,7 +1857,7 @@ function drawMap(){if(!window.L||!$('#inventory-map'))return;if(map){map.remove(
 function openListing(id){const l=S.listing(id);if(!l)return;if(!(S.isInvestor()&&S.ownsListing(l)))S.recordView(id);const ph=(l.photoUrls&&l.photoUrls.length?l.photoUrls:[l.photoUrl||'listing-placeholder.svg']);
   if(S.isInvestor()&&S.caps&&S.caps.investor&&!S.isPendingApproval(S.user))return S.ownsListing(l)?openOwnEditor(l):openInvestorReadonly(l);
   if(limited()){
-    const m=modal(`<h2>📍 ${partialAddr(l)}</h2>${factChips(l)}${hookHtml(l)}
+    const m=modal(`<h2>📍 ${partialAddr(l)}</h2><div class="share-detail-row">${shareBtn(l.id)}</div>${factChips(l)}${hookHtml(l)}
       ${galleryHtml(ph,partialAddr(l))}
       ${actionRow(l)}
       <div style="background:#f8fafc;border:2px solid #d4af37;border-radius:12px;padding:16px;margin-top:12px;text-align:center">
@@ -1833,7 +1874,7 @@ function openListing(id){const l=S.listing(id);if(!l)return;if(!(S.isInvestor()&
     return;
   }
   const ag=S.user&&S.agentFor(S.user);
-  const m=modal(`<h2>${title(l)}</h2>${factChips(l)}${hookHtml(l)}${tenureHtml(l)}${galleryHtml(ph,esc(l.city||''))}
+  const m=modal(`<h2>${title(l)}</h2><div class="share-detail-row">${shareBtn(l.id)}</div>${factChips(l)}${hookHtml(l)}${tenureHtml(l)}${galleryHtml(ph,esc(l.city||''))}
    ${l.photosUrl?`<a href="${esc(l.photosUrl)}" target="_blank" rel="noopener">${tr('morePhotos')}</a>`:''}
    ${listingTracker(l)}
    <p>${tr('price')} <b>${S.money(l.askingPrice)}</b> · ${tr('down')} <b>${S.money(l.downPayment)}</b> · ${tr('monthly')} <b>${S.money(l.monthlyPayment)}</b> · ${l.termYears||'—'} ${tr('yrs')}</p>
