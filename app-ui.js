@@ -47,6 +47,7 @@ const initTab=()=>{
   const parsed=parseAppHash();
   if(parsed.deal)rememberDeal(parsed.deal);
   if(parsed.tab)return parsed.tab;
+  if(window.LegacyGuides&&LegacyGuides.wantsGuide())return 'guides';
   const p=location.pathname.toLowerCase();
   if(p.includes('/login')||p.includes('/register')||p.includes('/forgot-password')||p.includes('/reset-password'))return 'auth';
   if(p.includes('/admin'))return 'admin';
@@ -69,7 +70,7 @@ const L10N={
     navAuth:'Login / Register',
     logout:'Logout',
     newHere:'New here?',
-    guideLink:'Step-by-step: create your account & navigate the site →',
+    guideLink:'Guide: how to buy your home owner-to-owner, step by step →',
     searchPlaceholder:'Search address or city…',
     searchPlaceholderGuest:'Search street name or city…',
     city:'City',
@@ -304,7 +305,7 @@ const L10N={
     navAuth:'Iniciar Sesión / Registrarse',
     logout:'Cerrar sesión',
     newHere:'¿Nuevo aquí?',
-    guideLink:'Paso a paso: cómo crear tu cuenta y navegar el sitio →',
+    guideLink:'Guía: cómo comprar tu casa dueño a dueño, paso a paso →',
     searchPlaceholder:'Buscar dirección o ciudad…',
     searchPlaceholderGuest:'Buscar calle o ciudad…',
     city:'Ciudad',
@@ -1423,26 +1424,9 @@ function header(){
    ${thanksBanner()}<div class="guide-banner hide-phone"><span>${tr('newHere')} <a href="#guides" data-tab="guides">${tr('guideLink')}</a></span></div>${alertSheet()}${msgBubble()}${msgPanel()}`;
 }
 
-function guides(){
-  if(S.lang==='es'){
-    return `<section class="card" style="padding:20px"><h2>Cómo Funciona</h2>
-    <h3>Crear una cuenta de Comprador</h3><ol>
-    <li>Haz clic en <b>Iniciar Sesión / Registrarse</b> y elige <b>Comprador (Público General)</b>.</li>
-    <li>El código de tu agente (ej. D2D-XXXXXX) es <b>opcional</b>. Si no tienes agente, déjalo en blanco: igual puedes crear tu cuenta. Cuando pidas ver casas, se avisa a los agentes con licencia en regla y el primero que acepte será tu agente.</li>
-    <li>Crea una contraseña (8+ caracteres) y envía el formulario para desbloquear todas las direcciones, precios y detalles.</li></ol>
-    <h3>Crear una cuenta de Agente</h3><ol>
-    <li>Elige <b>Agente con Licencia</b> e ingresa tu número de licencia OREC y tu inmobiliaria (Brokerage).</li>
-    <li>Al registrarte recibirás tu propio código de invitación para compartir con tus clientes.</li></ol>
-    <h3>Cómo navegar el sitio</h3><ol>
-    <li><b>Inventario</b>: una vez dentro de tu cuenta, busca por dirección, filtra por ciudad, zona, recámaras, enganche o mensualidad, explora el mapa interactivo y toca ♥ para guardar casas favoritas.</li>
-    <li>Abre cualquier propiedad para ver fotos, solicitar una cita, enviar una oferta o compartir la casa con tu agente.</li>
-    <li><b>Mi Panel / Perfil</b>: consulta tu perfil, favoritos, mensajes privados con tu agente, ofertas y tu carpeta personal de documentos. Cuando tu oferta es aceptada, se desbloquea el recuadro para subir tu Identificación (ID) y Comprobante de Ingresos.</li>
-    <li>¿Olvidaste tu contraseña? Usa “¿Olvidaste tu contraseña?” en la pantalla de inicio de sesión y te enviaremos un código por correo para crear una nueva.</li></ol></section>`;
-  }
-  return `<section class="card" style="padding:20px"><h2>How It Works</h2><h3>Create a Buyer account</h3><ol><li>Click <b>Login / Register</b> and choose <b>Buyer</b>.</li><li>Your agent's invite code (e.g. D2D-XXXXXX) is <b>optional</b>. If you don't have an agent, leave it blank: you can still create your account. When you ask to see homes, licensed agents in good standing are notified and the first to accept becomes your agent.</li><li>Set a password (8+ characters) and submit to unlock all full addresses, prices, and property details.</li></ol>
-<h3>Create an Agent account</h3><ol><li>Choose <b>Agent</b>, enter your OREC license # and brokerage.</li><li>After registering you receive your own invite code to share with clients.</li></ol>
-<h3>Navigating</h3><ol><li><b>Inventory</b>: once signed in, search by address, filter, view the map, and tap ♥ to save homes.</li><li>Open a home to see photos, request a showing, make an offer or share it with your agent.</li><li><b>Dashboard</b>: profile, favorites, messages, offers and your document folder. Once an offer is accepted, upload your ID and Proof of Income there.</li><li>Forgot your password? Click “Forgot password?” on the login screen and we will email you a code to set a new one.</li></ol></section>`;
-}
+/* 'Cómo Funciona / Guías': list of educational guides (guides.js). The previous account/navigation how-to text is in git history. */
+function guides(){return window.LegacyGuides?LegacyGuides.view():'';}
+
 
 function filtered(){let L=S.data.listings.filter(l=>{const q=F.q.toLowerCase();
   const searchable=!limited()?(l.address+' '+(l.publicTitle||'')+' '+l.city+' '+l.zip):(partialAddr(l)+' '+l.city);
