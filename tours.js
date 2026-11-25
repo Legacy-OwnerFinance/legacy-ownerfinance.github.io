@@ -87,8 +87,8 @@ async function call(action,body){
     if(action==='tour_list')return d;
     if(action==='tour_request'){const conn=connectedAgent();if(!conn&&(body.listingIds||[]).length>MAX)throw new Error(limitText());const homes=(body.listingIds||[]).map(id=>{const l=S.listing(id)||{};return {id,address:l.address,city:l.city,status:l.status};});d.tours.unshift({...d.tours[0]||{},id:'demo-'+Date.now(),status:'REQUESTED',direct:!!conn,startsAt:new Date(body.startsAt).toISOString(),homes,agent:conn||null,feedbackDue:false,feedback:[],offers:[],role:'CLIENT'});return {ok:true};}
     if(action==='tour_link_agent'){const c=String(body.code||'').trim().toUpperCase();if(!/^D2D-[A-Z0-9]{6}$/.test(c)){const er=new Error(L('Escribe el código completo de tu agente (D2D-XXXXXX).','Type your agent’s full code (D2D-XXXXXX).'));er.code='bad_agent_code';throw er;}d.connectedAgent={id:'demo-agent',name:L('Agente de prueba','Test agent'),brokerage:'KLC Real Estate, LLC',licenseNumber:'000000',phone:''};return {ok:true,connectedAgent:d.connectedAgent};}
-    if(action==='client_remove_agent'){const reason=String(body.reason||'').trim();if(!reason){const er=new Error(L('Escribe el motivo para quitar a tu agente.','Write a reason to remove your agent.'));er.code='reason_required';throw er;}d.connectedAgent=null;return {ok:true,connectedAgent:null};}
-    if(action==='admin_agent_removals'){return {ok:true,removals:d.removals||[]};}
+    if(action==='tour_remove_agent'){const reason=String(body.reason||'').trim();if(!reason){const er=new Error(L('Escribe el motivo para quitar a tu agente.','Write a reason to remove your agent.'));er.code='reason_required';throw er;}d.connectedAgent=null;return {ok:true,connectedAgent:null};}
+    if(action==='tour_admin_removals'){return {ok:true,removals:d.removals||[]};}
     if(action==='tour_decline'){const t=d.tours.find(x=>x.id===body.tourId);if(t){t.status='DECLINED';t.declineReason=body.reason||'';}return {ok:true};}
     if(action==='tour_accept'){const rq=d.tours.find(x=>x.id===body.tourId&&x.direct&&x.status==='REQUESTED');const base=rq&&d.tours.find(x=>x!==rq&&x.status==='ACCEPTED'&&dayOf(x.startsAt)===dayOf(rq.startsAt));
       if(base){const seen=new Set(base.homes.map(h=>h.id));rq.homes.forEach(h=>{if(!seen.has(h.id))base.homes.push(h);});d.tours=d.tours.filter(x=>x!==rq);return {ok:true,merged:true,mergedInto:base.id};}
@@ -950,7 +950,7 @@ document.addEventListener('submit',e=>{
   const f=e.target;if(!(f&&f.id==='tourRmF'))return;e.preventDefault();e.stopPropagation();
   const reason=String((new FormData(f)).get('reason')||'').trim();const err=f.querySelector('[data-rmerr]');err.hidden=true;
   if(!reason){err.hidden=false;err.textContent=L('Escribe el motivo para quitar a tu agente. No se puede enviar vacío.','Write a reason to remove your agent. You cannot submit an empty form.');const i=f.querySelector('[name=reason]');if(i)i.focus();return;}
-  act(async()=>{try{await call('client_remove_agent',{reason});}catch(er){err.hidden=false;err.textContent=er.message||String(er);return;}
+  act(async()=>{try{await call('tour_remove_agent',{reason});}catch(er){err.hidden=false;err.textContent=er.message||String(er);return;}
     const bg=f.closest('.tour-ask-bg');if(bg)bg.remove();
     try{const bp=(S.data.buyerProfiles||[]).find(b=>b&&S.user&&b.userId===S.user.id);if(bp){bp.agentId=null;bp.assignedAutomatically=true;}}catch(ex){}
     if(!DEMO)await load(true);rerender();
@@ -964,7 +964,7 @@ document.addEventListener('click',e=>{
   if(t.dataset.tremfresh){e.preventDefault();AR.rows=null;adminRemovalsLoad(true).then(()=>rerender());}
 },true);
 const AR={rows:null,busy:false,err:''};
-async function adminRemovalsLoad(force){if(!S.isAdmin()||AR.busy||(AR.rows&&!force))return;AR.busy=true;try{const r=await call('admin_agent_removals',{});AR.rows=r.removals||[];AR.err='';}catch(e){AR.err=e.message||String(e);}finally{AR.busy=false;}}
+async function adminRemovalsLoad(force){if(!S.isAdmin()||AR.busy||(AR.rows&&!force))return;AR.busy=true;try{const r=await call('tour_admin_removals',{});AR.rows=r.removals||[];AR.err='';}catch(e){AR.err=e.message||String(e);}finally{AR.busy=false;}}
 function adminRemovalsSection(){
   if(!S.isAdmin())return '';
   adminRemovalsLoad(false);
