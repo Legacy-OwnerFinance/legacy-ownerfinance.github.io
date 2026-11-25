@@ -2068,3 +2068,37 @@ details[open]>summary>.adm-chev{transform:rotate(180deg)}
 .adm-homes.clip>.adm-home:nth-child(n+13){display:none}
 .adm-more{width:100%;margin-top:10px;padding:11px}
 .adm-sec-b .adm-sub{margin-top:8px}
+
+/* ===== v39 (7:09 PM): collapsible cards (one line collapsed, tap to open) ===== */
+.lf-fold{display:block;min-width:0}
+.lf-fold>summary.lf-sum{list-style:none;display:flex;align-items:center;gap:10px;cursor:pointer;user-select:none;min-width:0;padding:2px 0}
+.lf-fold>summary.lf-sum::-webkit-details-marker{display:none}
+.lf-sum>img{width:44px;height:44px;flex:0 0 44px;border-radius:9px;object-fit:cover;background:#f1f5f9}
+.lf-ico{width:34px;height:34px;flex:0 0 34px;display:grid;place-items:center;border-radius:10px;background:#f7f1e3;font-size:16px}
+.lf-main{flex:1;min-width:0;display:flex;flex-direction:column;gap:1px}
+.lf-main b{color:var(--navy);font-size:14.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.lf-main small{color:#64748b;font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.lf-chev{flex:0 0 auto;color:#94a3b8;font-size:17px;transition:transform .15s;line-height:1}
+.lf-fold[open]>summary>.lf-chev{transform:rotate(180deg)}
+.lf-fold>.lf-body{padding-top:10px;min-width:0}
+.lf-fold[open]>summary.lf-sum{border-bottom:1px solid #f1e9d8;padding-bottom:10px}
+.lf-chip{flex:0 0 auto;font-size:11px;font-weight:800;padding:3px 8px;border-radius:999px;white-space:nowrap;background:#f1f5f9;color:#334155}
+.lf-chip.ok{background:#dcfce7;color:#166534}.lf-chip.warn{background:#fef3c7;color:#92400e}.lf-chip.bad{background:#fee2e2;color:#991b1b}.lf-chip.info{background:#dbeafe;color:#1e40af}
+.lf-sum .ad-cd{flex:0 0 auto;font-size:11px;padding:2px 6px}
+.lf-tags{display:flex;flex-direction:column;align-items:flex-end;gap:3px;flex:0 0 auto}
+.lf-sum .badge,.lf-sum .tour-pill{flex:0 0 auto}
+details.tour-card.lf-fold{padding:12px 14px}
+details.tour-offer.lf-fold{padding:10px 12px}
+details.tour-sell.lf-fold{padding:10px 12px}
+.ad-list>li.ad-fold{list-style:none;padding:8px 0;border-bottom:1px solid #f1e9d8}
+.ad-list>li.ad-fold:last-child{border-bottom:0}
+.ad-deal-f .lf-body .ad-deal{padding:0;border:0}
+.lf-li{list-style:none;margin:0 0 8px;padding:10px 12px;border:1px solid #eee3cf;border-radius:12px;background:#fffdf8}
+.adm-offer.lf-fold{display:block}
+.adm-offer.lf-fold>.lf-body{display:flex;flex-direction:column;gap:8px}
+.lf-fold:not([open])>.lf-body{display:none}
+.lf-fold,.lf-fold>summary{max-width:100%}
+.ad-list>li.ad-fold,.tour-list>details,.tour-route .lf-fold{min-width:0;max-width:100%}
+.tour-wrap>*,.tour-list>*{min-width:0}
+section[style*="auto-fit"]>*{min-width:0;overflow-wrap:anywhere}
+input[type=file]{max-width:100%}
