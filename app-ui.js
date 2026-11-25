@@ -181,7 +181,7 @@ const L10N={
     phone:'Phone',
     passwordMin:'Password (8+ characters)',
     inviteCode:'Agent invite code (D2D-XXXXXX)',
-    noAgentYet:"I don't have an agent, yet",
+    inviteHint:'Optional. If you already work with an agent, type their code. If not, leave it blank: you can still create your account and request showings. Licensed agents are notified, and the first to accept becomes your agent.',
     orecLicense:'OREC license #',
     brokerage:'Brokerage',
     createAccount:'Create account',
@@ -416,7 +416,7 @@ const L10N={
     phone:'Teléfono',
     passwordMin:'Contraseña (mín. 8 caracteres)',
     inviteCode:'Código de invitación de tu agente (D2D-XXXXXX)',
-    noAgentYet:'Todavía no tengo agente',
+    inviteHint:'Opcional. Si ya tienes agente, escribe su código. Si no, déjalo en blanco: igual puedes crear tu cuenta y pedir citas. Se avisa a los agentes con licencia, y el primero que acepte será tu agente.',
     orecLicense:'Número de licencia OREC #',
     brokerage:'Inmobiliaria (Brokerage)',
     createAccount:'Crear cuenta',
@@ -754,10 +754,10 @@ function contactBar(l){
   const es=S.lang==='es';
   return `<div class="lof-contact-bar"><button type="button" class="btn-card primary" data-contact="${esc(l.id)}">📞 ${es?'Contactar':'Contact'}</button>${!S.user?`<button type="button" class="btn-card" data-register="1">${es?'Crear cuenta':'Create account'}</button>`:''}</div>`;
 }
-function openContactSheet(id){
-  const l=S.listing(id),es=S.lang==='es';
+function openContactSheet(id,customMsg){
+  const l=id?S.listing(id):null,es=S.lang==='es';
   const where=l?(()=>{const d=document.createElement('textarea');d.innerHTML=partialAddr(l);return d.value;})():'';
-  const msg=(es?'Hola, me interesa la casa en ':'Hi, I am interested in the home on ')+where+(l?' '+propertyShareUrl(l.id):'');
+  const msg=customMsg||((es?'Hola, me interesa la casa en ':'Hi, I am interested in the home on ')+where+(l?' '+propertyShareUrl(l.id):''));
   const old=document.querySelector('.lof-sheet-bg');if(old)old.remove();
   const bg=document.createElement('div');bg.className='lof-sheet-bg';
   bg.innerHTML=`<div class="lof-sheet" role="dialog" aria-modal="true" aria-label="${es?'Contactar':'Contact'}"><h3>${es?'¿Cómo quieres contactarnos?':'How would you like to reach us?'}</h3>
@@ -1428,7 +1428,7 @@ function guides(){
     return `<section class="card" style="padding:20px"><h2>Cómo Funciona</h2>
     <h3>Crear una cuenta de Comprador</h3><ol>
     <li>Haz clic en <b>Iniciar Sesión / Registrarse</b> y elige <b>Comprador (Público General)</b>.</li>
-    <li>Ingresa el código de invitación de tu agente (ej. D2D-XXXXXX). ¿No tienes agente? Marca <b>“Todavía no tengo agente”</b> y se te asignará un agente con licencia automáticamente.</li>
+    <li>El código de tu agente (ej. D2D-XXXXXX) es <b>opcional</b>. Si no tienes agente, déjalo en blanco: igual puedes crear tu cuenta. Cuando pidas ver casas, se avisa a los agentes con licencia en regla y el primero que acepte será tu agente.</li>
     <li>Crea una contraseña (8+ caracteres) y envía el formulario para desbloquear todas las direcciones, precios y detalles.</li></ol>
     <h3>Crear una cuenta de Agente</h3><ol>
     <li>Elige <b>Agente con Licencia</b> e ingresa tu número de licencia OREC y tu inmobiliaria (Brokerage).</li>
@@ -1439,7 +1439,7 @@ function guides(){
     <li><b>Mi Panel / Perfil</b>: consulta tu perfil, favoritos, mensajes privados con tu agente, ofertas y tu carpeta personal de documentos. Cuando tu oferta es aceptada, se desbloquea el recuadro para subir tu Identificación (ID) y Comprobante de Ingresos.</li>
     <li>¿Olvidaste tu contraseña? Usa “¿Olvidaste tu contraseña?” en la pantalla de inicio de sesión y te enviaremos un código por correo para crear una nueva.</li></ol></section>`;
   }
-  return `<section class="card" style="padding:20px"><h2>How It Works</h2><h3>Create a Buyer account</h3><ol><li>Click <b>Login / Register</b> and choose <b>Buyer</b>.</li><li>Enter your agent's invite code (e.g. D2D-XXXXXX). No agent? Choose “I don't have an agent, yet” — a licensed agent will be assigned to you.</li><li>Set a password (8+ characters) and submit to unlock all full addresses, prices, and property details.</li></ol>
+  return `<section class="card" style="padding:20px"><h2>How It Works</h2><h3>Create a Buyer account</h3><ol><li>Click <b>Login / Register</b> and choose <b>Buyer</b>.</li><li>Your agent's invite code (e.g. D2D-XXXXXX) is <b>optional</b>. If you don't have an agent, leave it blank: you can still create your account. When you ask to see homes, licensed agents in good standing are notified and the first to accept becomes your agent.</li><li>Set a password (8+ characters) and submit to unlock all full addresses, prices, and property details.</li></ol>
 <h3>Create an Agent account</h3><ol><li>Choose <b>Agent</b>, enter your OREC license # and brokerage.</li><li>After registering you receive your own invite code to share with clients.</li></ol>
 <h3>Navigating</h3><ol><li><b>Inventory</b>: once signed in, search by address, filter, view the map, and tap ♥ to save homes.</li><li>Open a home to see photos, request a showing, make an offer or share it with your agent.</li><li><b>Dashboard</b>: profile, favorites, messages, offers and your document folder. Once an offer is accepted, upload your ID and Proof of Income there.</li><li>Forgot your password? Click “Forgot password?” on the login screen and we will email you a code to set a new one.</li></ol></section>`;
 }
@@ -1891,7 +1891,7 @@ function auth(){return `<section style="display:grid;grid-template-columns:repea
  <p style="margin-top:10px"><a href="#" id="forgot" style="font-weight:600">${tr('forgotPw')}</a></p></form>
  <form id="regF" class="card" style="padding:16px"><h2>${tr('registerTitle')}</h2><select name="role" id="roleSel"><option value="BUYER">${tr('roleBuyer')}</option><option value="AGENT">${tr('roleAgent')}</option>${S.caps&&S.caps.investor?`<option value="INVESTOR">${tr('roleInvestor')}</option>`:''}</select>
  <input name="name" placeholder="${tr('fullName')}" required><input name="email" type="email" placeholder="${tr('email')}" required><input name="phone" placeholder="${tr('phone')}"><input name="password" type="password" placeholder="${tr('passwordMin')}" minlength="8" required>
- <div id="buyerFields"><input name="inviteCode" id="inv" placeholder="${tr('inviteCode')}"><label><input type="checkbox" id="noAgent"> ${tr('noAgentYet')}</label></div>
+ <div id="buyerFields"><input name="inviteCode" id="inv" placeholder="${tr('inviteCode')}" autocapitalize="characters" autocomplete="off" spellcheck="false"><p class="reg-hint">${tr('inviteHint')}</p></div>
  <div id="agentFields" style="display:none"><input name="licenseNumber" placeholder="${tr('orecLicense')}"><input name="brokerage" placeholder="${tr('brokerage')}"><textarea name="bio" maxlength="600" rows="3" placeholder="${S.lang==='es'?'Bio corta (opcional): experiencia, zonas, idiomas…':'Short bio (optional): experience, areas, languages…'}"></textarea></div>
  <div id="investorFields" style="display:none"><input name="businessName" placeholder="${tr('businessName')}"><select name="contactMethod"><option value="">${tr('contactMethod')}</option><option value="PHONE">${tr('contactPhone')}</option><option value="EMAIL">${tr('contactEmail')}</option><option value="WHATSAPP">${tr('contactWhatsApp')}</option><option value="TEXT">${tr('contactText')}</option></select><input name="contactValue" placeholder="${tr('contactValue')}"><input name="representativeName" placeholder="${tr('representativeName')}"></div>
  <button>${tr('createAccount')}</button></form></section>`;}
@@ -2570,7 +2570,6 @@ function bind(){const r=$('#app-root');
      if(t.dataset.clcontract&&t.files&&t.files[0]){const oid=t.dataset.clcontract;const doc=await S.uploadDocument(t.files[0],{docType:'FINAL_CONTRACT',offerId:oid,listingId:t.dataset.listing});await S.saveClosing(oid,{contractDocumentId:doc&&doc.id});alert(cx('contractAdded'));return render();}
      if(t.dataset.txdoc&&t.files&&t.files[0])return await S.uploadDocument(t.files[0],{docType:t.dataset.txdoc,offerId:t.dataset.offer,listingId:t.dataset.listing});
      if(t.id==='roleSel'){const inv=t.value==='INVESTOR',agent=t.value==='AGENT';$('#agentFields').style.display=agent?'':'none';$('#buyerFields').style.display=(!agent&&!inv)?'':'none';const box=$('#investorFields');if(box)box.style.display=inv?'':'none';const name=$('#regF [name="name"]');if(name)name.required=!inv;['businessName','contactMethod','contactValue','representativeName'].forEach(n=>{const el=$('#regF [name="'+n+'"]');if(el)el.required=inv;});}
-     if(t.id==='noAgent'){$('#inv').disabled=t.checked;if(t.checked)$('#inv').value='';}
    }catch(err){alert(err.message);}
   };
   const sub=(id,fn)=>{const el=$(id);if(el)el.onsubmit=wrap(()=>fn(fd(el)));};
@@ -2625,7 +2624,7 @@ function checkResetUrlParams(){
 }
 
 document.addEventListener('keydown',e=>{if(e.key!=='Escape'||!msgOpen)return;msgOpen=false;render();});
-window.LegacyUI={render:()=>render(),go:(t)=>go(t),esc:v=>esc(v),openChat:(peerId,name)=>{if(name){S.tourPeerNames=S.tourPeerNames||{};S.tourPeerNames[peerId]=name;}msgOpen=true;alertOpen=false;msgNew=false;msgPeer=peerId;msgStickBottom=true;render();},tab:()=>tab};
+window.LegacyUI={render:()=>render(),go:(t)=>go(t),esc:v=>esc(v),openChat:(peerId,name)=>{if(name){S.tourPeerNames=S.tourPeerNames||{};S.tourPeerNames[peerId]=name;}msgOpen=true;alertOpen=false;msgNew=false;msgPeer=peerId;msgStickBottom=true;render();},tab:()=>tab,openContact:(id,msg)=>openContactSheet(id,msg)};
 S.on(render);window.addEventListener('hashchange',()=>{const parsed=parseAppHash();if(parsed.deal)rememberDeal(parsed.deal);tab=parsed.tab||'inventory';render();});
 S.load().then(()=>{render();checkResetUrlParams();maybePromptCriteria();}).catch(e=>{document.documentElement.lang=S.lang;$('#app-root').innerHTML='<p style="padding:20px">'+esc(tr('loadFail'))+': '+esc(e.message)+'</p>';}).then(()=>{try{window.legacySplashHide&&window.legacySplashHide()}catch(_){}});
 })();

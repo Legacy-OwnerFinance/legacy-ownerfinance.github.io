@@ -2328,3 +2328,17 @@ details.lf-fold{min-width:0;max-width:100%}
 .share-qr-box{width:170px;height:170px;display:grid;place-items:center;background:#fff}
 .share-qr-box svg{width:100%;height:100%}
 .share-qr small{color:#64748b;text-align:center}
+/* Agent code: sign-up hint + connect-with-agent form (registro solo código) */
+.reg-hint{font-size:.82rem;color:#64748b;margin:4px 2px 8px;line-height:1.35}
+.tour-codef input[name=code]{text-transform:uppercase;letter-spacing:.06em;font-size:1.05rem}
+.tour-codef .ops-meta{margin-top:8px}
+.btn-link{background:none;border:0;padding:0;color:#1d4ed8;font-weight:600;text-decoration:underline;cursor:pointer;font:inherit}
+.tour-needcode{font-size:.88rem}
+
+/* Remove-agent warning (always shown in ES and EN) + admin list */
+.tour-rm-warn{background:#fff7ed;border:1px solid #fdba74;border-radius:10px;padding:10px 12px;margin:8px 0 12px}
+.tour-rm-warn p{margin:0 0 8px;color:#9a3412;font-size:.92rem;line-height:1.4}
+.tour-rm-warn p:last-child{margin-bottom:0}
+.tour-rm-list{list-style:none;margin:0;padding:0}
+.tour-rm-item{border-bottom:1px solid #eee;padding:10px 0}
+.tour-rm-reason{margin:6px 0 0;white-space:pre-wrap;color:#334155}
