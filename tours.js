@@ -65,7 +65,9 @@ async function load(force){
   loading=true;try{data=await call('tour_list');lastErr='';(data.tours||[]).forEach(t=>{const p=t.role==='CLIENT'?t.agent:t.client;if(p&&p.id&&p.name){S.tourPeerNames=S.tourPeerNames||{};S.tourPeerNames[p.id]=p.name;}});}
   catch(e){lastErr=e.message||String(e);}finally{loading=false;loadedAt=Date.now();}
   if(UI()&&(['tours','myagent','agenthome'].includes(UI().tab())||(UI().tab()==='dashboard'&&isClient())))rerender();
+  else if(UI()&&UI().tab()==='admin'){const sig=JSON.stringify(((data&&data.sellerOffers)||[]).map(o=>[o.offerId,o.decision,o.counter&&o.counter.status,o.invalidatedAt,(o.checklist||[]).map(c=>c.status).join('')]));const ae=document.activeElement;if(sig!==adminSig&&!(ae&&/INPUT|SELECT|TEXTAREA/.test(ae.tagName))){adminSig=sig;rerender();}else adminSig=sig;}
 }
+let adminSig='';
 
 /* ---------- small helpers ---------- */
 const when=iso=>{try{return new Intl.DateTimeFormat(S.lang==='es'?'es-US':'en-US',{timeZone:'America/Chicago',weekday:'long',month:'long',day:'numeric',hour:'numeric',minute:'2-digit'}).format(new Date(iso));}catch(e){return iso;}};
@@ -679,7 +681,7 @@ window.LegacyTours={
   clientActionRow:l=>{if(S.user)load(false);const c=inCart(l.id),conn=connectedAgent();return `<div class="lof-act-row"><button type="button" class="btn-card${c?'':' primary'}" data-tcart="${esc(l.id)}">${c?'✓ '+L('En tu carrito (quitar)','In your cart (remove)'):'🛒 '+L('Agregar al carrito','Add to cart')}</button><button type="button" class="btn-card" data-tbook="${esc(l.id)}">📅 ${L('Solicitar cita','Request showing')}</button></div><p class="ops-meta tour-note">${conn?L('Junta las casas en tu carrito y envíalas a tu agente. Las ofertas las hace tu agente después de la visita.','Collect homes in your cart and send them to your agent. Your agent makes offers after the visit.'):L(`Junta hasta ${MAX} casas en tu carrito y pide una sola cita. Las ofertas las hace tu agente después de la visita.`,`Collect up to ${MAX} homes in your cart and request one showing. Your agent makes offers after the visit.`)}</p>`;},
   offerSentCard:l=>{if(!S.user||!S.data)return '';const T=['REJECTED','WITHDRAWN','INVALIDATED','FELL_THROUGH','CANCELLED','DECLINED'];const o=(S.data.offers||[]).filter(x=>x&&x.listingId===l.id&&x.userId===S.user.id&&!T.includes(String(x.status||'').toUpperCase())).sort((a,b)=>String(b.createdAt||'').localeCompare(String(a.createdAt||'')))[0];
     if(!o)return '';return `<div class="tour-done">✅ <b>${L('Oferta enviada','Offer sent')}</b>${o.createdAt?' · '+esc(when(o.createdAt)):''}${money(o.offerPrice)?' · '+esc(money(o.offerPrice)):''} <button type="button" class="btn-card" data-tgo="1">${L('Ver próximos pasos','See next steps')}</button></div>`;},
-  agentNavVisible:()=>isClient(),agentDashVisible:()=>isAgent(),agentDashboard,clientDocsCard,sellerDashVisible,sellerPanel,sellerReload:()=>spLoad(true),agentNavLabel:()=>'🤝 '+L('Mi agente','My agent'),agentView,
+  agentNavVisible:()=>isClient(),agentDashVisible:()=>isAgent(),agentDashboard,clientDocsCard,sellerDashVisible,sellerPanel,sellerReload:()=>spLoad(true),tourOfferInfo:id=>{load(false);const o=findOffer(id);return o?(o.pipeline||o):null;},refreshAll:()=>{load(true);spLoad(true);},agentNavLabel:()=>'🤝 '+L('Mi agente','My agent'),agentView,
   view,refresh:()=>load(true),cart
 };
 })();

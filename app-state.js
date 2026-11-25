@@ -1388,9 +1388,10 @@ S.updateListing=(lid,p)=>{if(!S.isAdmin())throw new Error('Admins only');const l
 S.respondOffer=(oid,status,c={})=>{if(!S.isAdmin())throw new Error('Admins only');const o=S.data.offers.find(x=>x.id===oid);
   o.status=status;o.respondedAt=now();o.adminNotes=c.adminNotes||'';
   if(status==='COUNTERED'){o.counterPrice=+c.counterPrice*100;o.counterDown=+c.counterDown*100;o.counterMonthly=+c.counterMonthly*100;}
-  if(status==='ACCEPTED'){const l=S.listing(o.listingId);const bu=(S.data.users||[]).find(u=>u.id===o.userId)||{};const isTest=/\+legacytest/i.test(String(bu.email||o.buyerEmail||''));/* v39: legacytest offers never move a real home (server enforces it too) */if(l&&!isTest){l.status='PENDING_NO_EM';sbUpsert('listings',listingToRow(l),'id');}if(isTest)o.simulatedHomeStatus='PENDING_NO_EM';o.docsUnlocked=true;}
+  const tourO=window.LegacyTours&&LegacyTours.tourOfferInfo&&LegacyTours.tourOfferInfo(oid);
+  if(status==='ACCEPTED'){const l=S.listing(o.listingId);const bu=(S.data.users||[]).find(u=>u.id===o.userId)||{};const isTest=/\+legacytest/i.test(String(bu.email||o.buyerEmail||''));/* v39: legacytest offers never move a real home (server enforces it too) *//* v39 (6:32 PM): a showing-flow offer only moves the home to Pending when the seller approves all 3 conditions */if(l&&!isTest&&!tourO){l.status='PENDING_NO_EM';sbUpsert('listings',listingToRow(l),'id');}if(isTest)o.simulatedHomeStatus='PENDING_NO_EM';o.docsUnlocked=true;}
   S.save();
-  sbUpsert('offers',{
+  const up=sbUpsert('offers',{
     id:o.id,
     listing_id:o.listingId,
     user_id:o.userId,
@@ -1405,6 +1406,8 @@ S.respondOffer=(oid,status,c={})=>{if(!S.isAdmin())throw new Error('Admins only'
     admin_notes:o.adminNotes||'',
     updated_at:now()
   },'id');
+  // v39 (6:32 PM): Accept / Reject / Counter Offer here also drives the showing-offer flow right away (pre-approve -> 12 h / 72 h clocks, deny, counteroffer, notices).
+  Promise.resolve(up).then(()=>S.api('tour_offer_sync',{offerId:oid})).then(r=>{if(r&&r.tourOffer&&window.LegacyTours&&LegacyTours.refreshAll)LegacyTours.refreshAll();}).catch(()=>{});
 };
 S.TX_DOCS=[
   {type:'CLIENT_ID',label:"1. Client's Form of ID",labelEs:'1. Identificación Oficial del Cliente (ID)'},

@@ -1977,33 +1977,43 @@ function openInvestorReadonly(l){
 }
 function companiesAdminCard(){
   const pack=S.companyAdmin;
-  if(!pack)return `<div class="card" style="padding:16px"><h2>${tr('companiesTitle')}</h2><p>${tr('activity.loading')}</p></div>`;
-  const acct=pack.accounts||[];
+  if(!pack)return `<div id="company-admin"><p class="adm-empty">${tr('activity.loading')}</p></div>`;
+  const acct=pack.accounts||[],AL=(es,en)=>S.lang==='es'?es:en;
   const label=a=>a.isMe?`${esc(a.name||a.email)} — ${tr('myAdminAccount')}`:`${esc(a.name||a.email)} · ${esc(a.email)}${a.businessName?' · '+esc(a.businessName):''}${a.approvalStatus!=='APPROVED'?' ('+tr('pendingL')+')':''}`;
   const acctOpts=excl=>acct.filter(a=>!excl.includes(a.userId)).map(a=>`<option value="${esc(a.userId)}">${label(a)}</option>`).join('');
+  const stTxt=s=>S.statusText?S.statusText(s):s;
+  const stCls=s=>({AVAILABLE:'av',COMING_SOON:'cs',SOLD:'sd',CLOSED:'sd'})[s]||'pd';
   const blocks=(pack.companies||[]).map(c=>{
-    const ids=(c.members||[]).map(m=>m.userId);
-    const members=(c.members||[]).map(m=>`<li><b>${esc(m.name||m.email)}</b> · ${esc(m.email)}${m.isMe?' · Admin':''}${m.approvalStatus!=='APPROVED'?' · '+tr('pendingL'):''} <button type="button" class="btn-card" data-coremove="${esc(c.id)}|${esc(m.userId)}">${tr('removeMember')}</button></li>`).join('');
-    const homes=(c.homes||[]).map(h=>`<li>${esc(h.address)}, ${esc(h.city)} · ${esc(S.statusText?S.statusText(h.status):h.status)} <button type="button" class="btn-card" data-counassign="${esc(c.id)}|${esc(h.id)}">${tr('unassign')}</button></li>`).join('');
+    const ids=(c.members||[]).map(m=>m.userId),hs=c.homes||[];
+    const byS={};hs.forEach(h=>byS[h.status]=(byS[h.status]||0)+1);
+    const members=(c.members||[]).map(m=>`<li><span class="adm-av" aria-hidden="true">${esc(String(m.name||m.email||'?').trim().charAt(0).toUpperCase())}</span><div class="adm-pbody"><b>${esc(m.name||m.email)}</b><small>${esc(m.email)}${m.isMe?' · Admin':''}${m.approvalStatus!=='APPROVED'?' · '+tr('pendingL'):''}</small></div><button type="button" class="adm-x" data-coremove="${esc(c.id)}|${esc(m.userId)}" title="${esc(tr('removeMember'))}" aria-label="${esc(tr('removeMember'))}: ${esc(m.name||m.email)}">✕</button></li>`).join('');
+    const homes=hs.map(h=>`<li data-q="${esc((h.address+' '+h.city).toLowerCase())}" data-st="${esc(h.status)}"><span class="adm-st ${stCls(h.status)}">${esc(stTxt(h.status))}</span><span class="adm-haddr">${esc(h.address)}<small>${esc(h.city)}</small></span><button type="button" class="adm-x" data-counassign="${esc(c.id)}|${esc(h.id)}" title="${esc(tr('unassign'))}" aria-label="${esc(tr('unassign'))}: ${esc(h.address)}">✕</button></li>`).join('');
     const arch=(c.archivedDeals||[]).map(d=>`<li>${esc(d.address)}, ${esc(d.city)} · ${tr('dealArchived')}${d.closingDate?' · '+esc(d.closingDate):''}</li>`).join('');
     const opts=(pack.catalog||[]).filter(l=>l.companyId!==c.id).map(l=>`<option value="${esc(l.id)}">${esc(l.address)}, ${esc(l.city)}${l.companyId?' · '+esc(((pack.companies||[]).find(x=>x.id===l.companyId)||{}).name||''):''}</option>`).join('');
     const sheets=(c.sheets||[]).map(s=>s.url||s.spreadsheetId).join('\n');
-    const empty=!(c.members||[]).length&&!(c.homes||[]).length&&!(c.sheets||[]).length&&!(c.archivedDeals||[]).length;
-    return `<article class="ops-showing co-admin" data-company="${esc(c.id)}"><form data-corename="${esc(c.id)}" class="co-rename"><input name="name" value="${esc(c.name)}" maxlength="160" aria-label="${esc(tr('companyNameL'))}" required><button class="btn-card">${tr('renameCompany')}</button></form>
-      <h4>${tr('membersL')}</h4><ul>${members||`<li>${tr('noneYet')}</li>`}</ul>
-      <form data-coadd="${esc(c.id)}"><label>${tr('addPartner')} <span class="ops-meta">${tr('addPartnerHint')}</span><select name="userId" required><option value="">—</option>${acctOpts(ids)}</select></label><button class="btn-card primary">${tr('addPartner')}</button></form>
-      <h4>${tr('companyHomesL')}</h4><ul>${homes||`<li>${tr('noneYet')}</li>`}</ul>
-      <form data-coassign="${esc(c.id)}"><label>${tr('assignHome')}<select name="listingId"><option value="">—</option>${opts}</select></label><button class="btn-card">${tr('assignHome')}</button></form>
-      ${arch?`<h4>${tr('companyArchivedL')}</h4><ul>${arch}</ul>`:''}
-      <form data-cosheets="${esc(c.id)}"><label>${tr('sheetsLabel')}<textarea name="sheets" rows="2">${esc(sheets)}</textarea></label><button class="btn-card">${tr('save')}</button></form>
-      ${empty?`<p><button type="button" class="btn-card" data-codelete="${esc(c.id)}">${tr('deleteCompany')}</button></p>`:''}</article>`;
+    const empty=!(c.members||[]).length&&!hs.length&&!(c.sheets||[]).length&&!(c.archivedDeals||[]).length;
+    const key='co-'+c.id,hk='coh-'+c.id;if(!(key in ADM_OPEN))ADM_OPEN[key]=false;
+    const listId='co-homes-'+String(c.id).replace(/[^a-z0-9_-]/gi,'');
+    return `<details class="adm-card co-admin" data-company="${esc(c.id)}" data-acct="${esc(key)}" ${ADM_OPEN[key]?'open':''}><summary class="co-sum"><span class="co-logo" aria-hidden="true">🏢</span><span class="co-head"><b>${esc(c.name)}</b><span class="co-stats"><span>👥 ${(c.members||[]).length}</span><span>🏠 ${hs.length}</span>${Object.keys(byS).map(s=>`<span class="adm-st ${stCls(s)}">${esc(stTxt(s))} ${byS[s]}</span>`).join('')}${(c.archivedDeals||[]).length?`<span>🗄️ ${(c.archivedDeals||[]).length}</span>`:''}</span></span><span class="adm-chev" aria-hidden="true">⌄</span></summary>
+      <div class="co-body">
+      <form data-corename="${esc(c.id)}" class="co-rename adm-inline"><input name="name" value="${esc(c.name)}" maxlength="160" aria-label="${esc(tr('companyNameL'))}" required><button class="adm-b">✏️ ${tr('renameCompany')}</button></form>
+      <h4>👥 ${tr('membersL')} <span class="acct-count">${(c.members||[]).length}</span></h4><ul class="adm-people">${members||`<li class="adm-empty">${tr('noneYet')}</li>`}</ul>
+      <form data-coadd="${esc(c.id)}" class="adm-inline"><select name="userId" required aria-label="${esc(tr('addPartner'))}"><option value="">${tr('addPartner')} — ${tr('addPartnerHint')}</option>${acctOpts(ids)}</select><button class="adm-b ok">＋ ${tr('addPartner')}</button></form>
+      <details class="adm-sub" data-acct="${esc(hk)}" ${ADM_OPEN[hk]?'open':''}><summary>🏠 ${tr('companyHomesL')} <span class="acct-count">${hs.length}</span></summary>
+        ${hs.length>6?`<input type="search" class="adm-search" data-admfilter="${listId}" placeholder="🔎 ${esc(AL('Buscar en las casas de esta compañía','Search this company’s homes'))}">`:''}
+        <ul class="co-homes" id="${listId}">${homes||`<li class="adm-empty">${tr('noneYet')}</li>`}</ul></details>
+      <form data-coassign="${esc(c.id)}" class="adm-inline"><select name="listingId" aria-label="${esc(tr('assignHome'))}"><option value="">${tr('assignHome')}…</option>${opts}</select><button class="adm-b">＋ ${tr('assignHome')}</button></form>
+      ${arch?`<details class="adm-sub"><summary>🗄️ ${tr('companyArchivedL')} <span class="acct-count">${(c.archivedDeals||[]).length}</span></summary><ul>${arch}</ul></details>`:''}
+      <details class="adm-sub"><summary>📄 ${tr('sheetsLabel')} <span class="acct-count">${(c.sheets||[]).length}</span></summary><form data-cosheets="${esc(c.id)}"><textarea name="sheets" rows="2" aria-label="${esc(tr('sheetsLabel'))}">${esc(sheets)}</textarea><button class="adm-b">💾 ${tr('save')}</button></form></details>
+      ${empty?`<p><button type="button" class="adm-b no" data-codelete="${esc(c.id)}">🗑 ${tr('deleteCompany')}</button></p>`:''}</div></details>`;
   }).join('');
   const inCo=new Set((pack.companies||[]).flatMap(c=>(c.members||[]).map(m=>m.userId)));
   const people=acct.filter(a=>!a.isMe).map(a=>`<li>${label(a)}${inCo.has(a.userId)?'':' · <i>'+tr('noCompanyYet')+'</i>'}</li>`).join('');
-  return `<div class="card" id="company-admin" style="padding:16px"><h2>${tr('companiesTitle')}</h2><p class="ops-meta">${tr('companiesHint')}</p>
-    <form id="coNewF" class="co-new"><h3>${tr('newCompany')}</h3><label>${tr('companyNameL')}<input name="name" maxlength="160" required></label><label>${tr('firstMember')}<select name="userId" required><option value="">—</option>${acctOpts([])}</select></label><button class="btn-card primary">${tr('newCompany')}</button></form>
-    ${blocks||`<p>${tr('noneYet')}</p>`}
-    <h3>${tr('investorAccountsL')}</h3><ul>${people||`<li>${tr('noneYet')}</li>`}</ul></div>`;
+  return `<div id="company-admin">
+    <details class="adm-sub adm-new" data-acct="co-new" ${ADM_OPEN['co-new']?'open':''}><summary>＋ ${tr('newCompany')}</summary><form id="coNewF" class="co-new"><label>${tr('companyNameL')}<input name="name" maxlength="160" required></label><label>${tr('firstMember')}<select name="userId" required><option value="">—</option>${acctOpts([])}</select></label><button class="adm-b ok">${tr('newCompany')}</button></form></details>
+    ${(pack.companies||[]).length>3?`<input type="search" class="adm-search" data-admfilter="co-list" data-admfilterattr="name" placeholder="🔎 ${esc(AL('Buscar compañía','Search companies'))}">`:''}
+    <div class="co-list" id="co-list">${blocks||`<p class="adm-empty">${tr('noneYet')}</p>`}</div>
+    <details class="adm-sub" data-acct="co-people" ${ADM_OPEN['co-people']?'open':''}><summary>🧑‍💼 ${tr('investorAccountsL')} <span class="acct-count">${acct.filter(a=>!a.isMe).length}</span></summary><ul>${people||`<li>${tr('noneYet')}</li>`}</ul></details></div>`;
 }
 function investorAdminCard(){
   if(!(S.caps&&S.caps.investor))return '';
@@ -2020,7 +2030,7 @@ function investorAdminCard(){
       <form data-assign="${esc(inv.userId)}"><label>${tr('assignHome')}<select name="listingId"><option value="">—</option>${options}</select></label><button class="btn-card">${tr('assignHome')}</button></form>
       <ul>${owned||`<li>${tr('noneYet')}</li>`}</ul></article>`;
   }).join('');
-  return `<div class="card" id="investor-admin" style="padding:16px"><h2>${tr('investorsTitle')}</h2>${blocks||`<p>${tr('noneYet')}</p>`}</div>`;
+  return `<div id="investor-admin">${blocks||`<p>${tr('noneYet')}</p>`}</div>`;
 }
 function dashboard(){if(!S.user)return auth();if(S.isInvestor())return investorDash();const u=S.user,ap=S.agentProfile(u),ag=S.agentFor(u),D=S.data;
   const favs=D.favorites.filter(f=>f.userId===u.id).map(f=>S.listing(f.listingId)).filter(Boolean);
@@ -2152,27 +2162,82 @@ function adminConfirmDelete(u){
   const ok=confirm(S.lang==='es'?`¿Eliminar la cuenta de ${who}?\nSe borran su acceso, perfil, favoritos, vistas, mensajes, citas, ofertas y documentos. Esto no se puede deshacer.`:`Delete the account of ${who}?\nThis removes their login, profile, favorites, views, messages, showings, offers and documents. This cannot be undone.`);
   return ok?{}:null;
 }
+/* v39 (6:32 PM): Admin redesigned for phone + desktop: hero with quick stats, sticky section chips, collapsible section cards, cards instead of cramped tables. Same actions/data attributes as before. */
+const AL=(es,en)=>S.lang==='es'?es:en;
+function admSec(id,icon,title,count,body,opts={}){
+  const key='sec-'+id;if(!(key in ADM_OPEN))ADM_OPEN[key]=!!opts.open;
+  return `<details class="adm-sec${opts.warn?' warn':''}" id="adm-${id}" data-acct="${key}" ${ADM_OPEN[key]?'open':''}><summary><span class="adm-sec-i" aria-hidden="true">${icon}</span><span class="adm-sec-t">${title}</span>${count!=null?`<span class="adm-count${opts.warn&&count?' on':''}">${count}</span>`:''}<span class="adm-chev" aria-hidden="true">⌄</span></summary><div class="adm-sec-b">${opts.hint?`<p class="ops-meta adm-hint">${opts.hint}</p>`:''}${body}</div></details>`;
+}
+function admTourLine(o){
+  const p=window.LegacyTours&&LegacyTours.tourOfferInfo&&LegacyTours.tourOfferInfo(o.id);if(!p||!p.checklist)return '';
+  const c=p.checklist.find(x=>!['APPROVED','DONE','NA'].includes(x.status));
+  const st=p.invalidatedAt?AL('❌ Anulada (plazo vencido)','❌ Voided (deadline passed)'):p.decision==='DENIED'?AL('❌ Negada','❌ Denied'):p.counter&&p.counter.status==='OPEN'&&!p.decision?AL('↩️ Contraoferta enviada — esperando al agente','↩️ Counteroffer sent — waiting for the agent'):!p.decision?AL('🆕 Esperando pre-aprobación','🆕 Waiting for pre-approval'):c?AL(`✅ Pre-aprobada · Paso ${c.n}/7`,`✅ Pre-approved · Step ${c.n}/7`):AL('🎉 Completada','🎉 Completed');
+  return `<p class="adm-flow">🛒 ${AL('Oferta de cita con carrito','Showing-cart offer')}: <b>${esc(st)}</b>${p.decision==='PRE_APPROVED'&&!p.docsUploadedAt&&p.docsDueAt?` · 📎 ${AL('docs antes del','docs by')} ${esc(new Date(p.docsDueAt).toLocaleString(S.lang==='es'?'es-US':'en-US',{timeZone:'America/Chicago',weekday:'short',hour:'numeric',minute:'2-digit'}))}`:''} <a href="#tours&offer=${esc(o.id)}">${AL('Ver pasos','See steps')}</a></p>`;
+}
+function admOffers(D){
+  const list=D.offers.slice().reverse();
+  if(!list.length)return `<p class="adm-empty">${tr('noOffers')}</p>`;
+  return `<div class="adm-grid">${list.map(o=>{const l=S.listing(o.listingId)||{},u=D.users.find(x=>x.id===o.userId)||{};const done=o.status==='CLOSED'||o.status==='FELL_THROUGH';const prog=progOfOffer(o),cp=closingPanel(o);
+    return `<article class="adm-card adm-offer"><div class="adm-card-h"><div><b>${esc(l.address||'—')}</b><small>${esc(l.city||'')}</small></div>${offerBadge(o.status)}</div>
+      <div class="adm-kv"><span>👤 ${esc(u.name||'—')}</span><span>💲 <b>${S.money(o.offerPrice)}</b> · ${tr('down')} ${S.money(o.downPayment)} · ${S.money(o.monthlyPayment)}${tr('perMo')}</span>${o.status==='COUNTERED'?`<span class="adm-ctr">↩️ ${tr('counterLabel')}: ${S.money(o.counterPrice)} / ${S.money(o.counterDown)} / ${S.money(o.counterMonthly)}</span>`:''}</div>
+      ${admTourLine(o)}
+      <div class="adm-acts">${done?'':`<button data-acc="${o.id}" class="adm-b ok">✅ ${tr('accept')}</button><button data-ctr="${o.id}" class="adm-b warn">↩️ ${tr('counterOffer')}</button><button data-rej="${o.id}" class="adm-b no">✕ ${tr('reject')}</button>`}${S.canAdminDelete()?`<button type="button" class="adm-b ghost btn-del" data-offdel="${esc(o.id)}" title="${AL('Eliminar oferta','Delete offer')}">🗑</button>`:''}</div>
+      ${prog||cp?`<details class="adm-sub"${o.status==='ACCEPTED'?' open':''}><summary>🏁 ${AL('Cierre, documentos y avance','Closing, documents and progress')}</summary>${dealTracker(prog)}${cp}</details>`:''}</article>`;}).join('')}</div>`;
+}
+function admPending(D){
+  const pend=D.users.filter(u=>u.approvalStatus==='PENDING');
+  return `${pend.length?`<div class="adm-grid">${pend.map(u=>{const ap=S.agentProfile(u);const info=ap?(ap.licenseNumber||'')+' / '+(ap.brokerage||''):(u.investorProfile?(u.investorProfile.businessName||'')+' / '+(u.investorProfile.representativeName||'')+' / '+(u.investorProfile.contactMethod||'')+': '+(u.investorProfile.contactValue||''):'—');
+    return `<article class="adm-card"><div class="adm-card-h"><div><b>${esc(u.name||'—')}</b><small>${esc(u.email)}</small></div><span class="adm-chip">${esc(roleLabel(u.role))}</span></div><div class="adm-kv"><span>🪪 ${esc(info)}</span><span>🗓️ ${esc(new Date(u.createdAt).toLocaleDateString())}</span></div><div class="adm-acts"><button data-approve="${u.id}" class="adm-b ok">✅ ${AL('Aprobar','Approve')}</button><button data-decline="${u.id}" class="adm-b no">✕ ${AL('Rechazar','Decline')}</button>${S.canAdminDelete()?`<button type="button" class="adm-b ghost btn-del" data-rejdel="${esc(u.id)}">🗑 ${AL('Rechazar y eliminar','Decline & delete')}</button>`:''}</div></article>`;}).join('')}</div>`:`<p class="adm-empty">✅ ${AL('No hay cuentas pendientes','No accounts pending')}</p>`}${rejectedAccounts(D)}`;
+}
+function admShowings(D){
+  const list=(D.showings||[]).slice().sort((a,b)=>String(b.preferredAt||'').localeCompare(String(a.preferredAt||'')));
+  if(!list.length)return `<p class="adm-empty">${AL('Aún no hay solicitudes de visita','No showing requests yet')}</p>`;
+  return `<div class="adm-grid">${list.map(sh=>{const l=S.listing(sh.listingId)||{},u=(D.users.find(x=>x.id===sh.userId)||{}),st=String(sh.status||'REQUESTED').toUpperCase();
+    const b=st==='APPROVED'?'✅ '+tr('showingApproved'):st==='DENIED'?'❌ '+tr('showingDenied'):'⏳ '+tr('showingRequested');
+    const acts=st==='REQUESTED'?`<button data-showacc="${sh.id}" class="adm-b ok">✅ ${AL('Aprobar','Approve')}</button><button data-showden="${sh.id}" class="adm-b no">✕ ${AL('Rechazar','Deny')}</button>`:(st==='APPROVED'&&S.caps&&S.caps.investor?`<button type="button" class="adm-b" data-showcan="${sh.id}">${tr('cancelShowing')}</button><button type="button" class="adm-b" data-showmsg="${sh.id}">${tr('messageAgent')}</button>`:'');
+    return `<article class="adm-card"><div class="adm-card-h"><div><b>${esc(l.address||sh.listingId)}</b><small>${esc(l.city||'')}</small></div><span class="adm-chip">${b}</span></div><div class="adm-kv"><span>👤 ${esc(u.name||'—')}</span><span>📅 ${esc(S.formatShowingWhen?S.formatShowingWhen(sh.preferredAt):sh.preferredAt)}</span></div>${acts?`<div class="adm-acts">${acts}</div>`:''}</article>`;}).join('')}</div>`;
+}
+function admListings(D){
+  const counts={};D.listings.forEach(l=>counts[l.status]=(counts[l.status]||0)+1);
+  const filt=`<div class="adm-tools"><input type="search" class="adm-search" data-admfilter="adm-homes-list" placeholder="🔎 ${esc(AL('Buscar dirección o ciudad','Search address or city'))}" aria-label="${esc(AL('Buscar casas','Search homes'))}"><div class="adm-chips" role="group">${['ALL',...S.STATUSES.filter(s=>counts[s])].map(s=>`<button type="button" class="adm-fchip${s==='ALL'?' on':''}" data-admstatus="${s}" data-admlist="adm-homes-list">${s==='ALL'?AL('Todas','All'):esc(S.statusText(s))} <b>${s==='ALL'?D.listings.length:counts[s]}</b></button>`).join('')}</div></div>`;
+  const more=D.listings.length>12?`<button type="button" class="adm-b adm-more" data-admmore="adm-homes-list">${AL('Mostrar todas las casas','Show all homes')} (${D.listings.length})</button>`:'';
+  return filt+`<div class="adm-grid adm-homes${ADM_OPEN.homesAll?'':' clip'}" id="adm-homes-list">${D.listings.map(l=>`<article class="adm-card adm-home" data-row="${l.id}" data-q="${esc((l.address+' '+l.city).toLowerCase())}" data-st="${esc(l.status)}">
+    <div class="adm-card-h"><div><b>${esc(l.address)}</b><small>${esc(l.city)}</small></div><select data-status="${l.id}" aria-label="${esc(tr('colStatus'))}">${S.STATUSES.map(s=>`<option value="${s}" ${l.status===s?'selected':''}>${S.statusText(s)}</option>`).join('')}</select></div>
+    <div class="adm-money"><label>${tr('price')} $<input data-f="askingPrice" type="number" inputmode="decimal" value="${l.askingPrice/100}"></label><label>${tr('down')} $<input data-f="downPayment" type="number" inputmode="decimal" value="${l.downPayment/100}"></label><label>${tr('monthly')} $<input data-f="monthlyPayment" type="number" inputmode="decimal" value="${l.monthlyPayment/100}"></label></div>
+    ${S.caps&&S.caps.investor?`<label class="adm-insp">${tr('inspectionDate')}<input data-insp="${esc(l.id)}" type="datetime-local" value="${esc(toLocalInput(l.inspectionAt))}"></label>`:''}
+    <div class="adm-acts listing-actions"><button type="button" class="adm-b ok" data-save="${esc(l.id)}">💾 ${tr('save')}</button><button type="button" class="adm-b copy-link-btn" data-copylink="${esc(l.id)}">🔗 ${tr('share.copyLink')}</button>${S.caps&&S.caps.ready?`<button type="button" class="adm-b copy-link-btn" data-activity="${esc(l.id)}">📈 ${tr('activity.button')}</button>`:''}</div></article>`).join('')}</div>${ADM_OPEN.homesAll?'':more}`;
+}
+function admAccounts(D){
+  const byName=(a,b)=>String(a.name||a.email||'').localeCompare(String(b.name||b.email||''));
+  const agents=D.users.filter(u=>u.role==='AGENT').sort(byName),users=D.users.filter(u=>u.role!=='AGENT').sort(byName);
+  const rows=(list,ag)=>list.length?`<ul class="adm-people">${list.map(u=>{const ap=S.agentProfile(u);return `<li><span class="adm-av" aria-hidden="true">${esc(String(u.name||u.email||'?').trim().charAt(0).toUpperCase())}</span><div class="adm-pbody"><b>${esc(u.name||'—')}</b><small>${esc(u.email)}</small><small>${esc(roleLabel(u.role))} · ${approvalLabel(u)}${ag&&ap&&ap.inviteCode?` · ${tr('colInvite')}: <code>${esc(ap.inviteCode)}</code>`:''}</small></div><div class="adm-pacts"><button data-reset="${u.id}" class="adm-b ghost" title="${esc(tr('colResetPw'))}">🔑 ${tr('reset')}</button>${userDelCell(u)}</div></li>`;}).join('')}</ul>`:`<p class="adm-empty">${AL('No hay cuentas','No accounts')}</p>`;
+  return `<input type="search" class="adm-search" data-admfilter="adm-people-wrap" placeholder="🔎 ${esc(AL('Buscar nombre o correo','Search name or email'))}"><div id="adm-people-wrap">
+  <details class="acct-group" data-acct="users" ${ADM_OPEN.users?'open':''}><summary>👥 ${AL('Usuarios','Users')} <span class="acct-count">${users.length}</span></summary>${rows(users,false)}</details>
+  <details class="acct-group" data-acct="agents" ${ADM_OPEN.agents?'open':''}><summary>🪪 ${AL('Agentes','Agents')} <span class="acct-count">${agents.length}</span></summary>${rows(agents,true)}</details></div>`;
+}
 function admin(){if(!S.isAdmin())return `<p style="padding:18px">${tr('adminsOnly')}</p>`;const D=S.data;
-  return `<section style="padding:18px;display:grid;gap:16px">${investorAdminCard()}
-  ${(()=>{const pend=D.users.filter(u=>u.approvalStatus==='PENDING');return `<div class="card" style="padding:16px;border:2px solid #d97706"><h2>⏳ ${S.lang==='es'?'Cuentas Pendientes de Aprobación':'Accounts Pending Approval'} (${pend.length})</h2><table><tr><th>${tr('colName')}</th><th>${tr('email')}</th><th>${tr('colRole')}</th><th>${S.lang==='es'?'Licencia / Correduría':'License / Brokerage'}</th><th>${S.lang==='es'?'Registro':'Signed up'}</th><th>${tr('colActions')}</th></tr>${pend.map(u=>{const ap=S.agentProfile(u);return `<tr><td>${esc(u.name)}</td><td>${esc(u.email)}</td><td>${esc(roleLabel(u.role))}</td><td>${esc(ap?(ap.licenseNumber||'')+' / '+(ap.brokerage||''):(u.investorProfile?(u.investorProfile.businessName||'')+' / '+(u.investorProfile.representativeName||'')+' / '+(u.investorProfile.contactMethod||'')+': '+(u.investorProfile.contactValue||''):'—'))}</td><td>${esc(new Date(u.createdAt).toLocaleDateString())}</td><td><button data-approve="${u.id}" style="background:#16a34a;color:#fff">${S.lang==='es'?'Aprobar':'Approve'}</button> <button data-decline="${u.id}" style="background:#dc2626;color:#fff">${S.lang==='es'?'Rechazar':'Decline'}</button>${S.canAdminDelete()?` <button type="button" class="btn-del" data-rejdel="${esc(u.id)}">🗑 ${S.lang==='es'?'Rechazar y eliminar':'Decline & delete'}</button>`:''}</td></tr>`;}).join('')||`<tr><td colspan=6>${S.lang==='es'?'No hay cuentas pendientes':'No accounts pending'}</td></tr>`}</table>${rejectedAccounts(D)}</div>`;})()}
-<div class="card" style="padding:16px"><h2>${tr('recentOffers')}</h2><table><tr><th>${tr('colProperty')}</th><th>${tr('colBuyer')}</th><th>${tr('colOffer')}</th><th>${tr('colStatus')}</th><th>${tr('colActions')}</th></tr>
-  ${D.offers.slice().reverse().map(o=>`<tr><td>${esc((S.listing(o.listingId)||{}).address)}</td><td>${esc((D.users.find(u=>u.id===o.userId)||{}).name)}</td><td>${S.money(o.offerPrice)} / ${S.money(o.downPayment)} / ${S.money(o.monthlyPayment)}</td><td>${offerBadge(o.status)}</td>
-   <td>${(o.status==='CLOSED'||o.status==='FELL_THROUGH')?'—':`<button data-acc="${o.id}" style="background:#16a34a;color:#fff">${tr('accept')}</button> <button data-ctr="${o.id}" style="background:#d97706;color:#fff">${tr('counterOffer')}</button> <button data-rej="${o.id}" style="background:#dc2626;color:#fff">${tr('reject')}</button>`}${S.canAdminDelete()?` <button type="button" class="btn-del" data-offdel="${esc(o.id)}" title="${S.lang==='es'?'Eliminar oferta':'Delete offer'}">🗑 ${S.lang==='es'?'Eliminar':'Delete'}</button>`:''}</td></tr>${(progOfOffer(o)||closingPanel(o))?`<tr><td colspan=5>${dealTracker(progOfOffer(o))}${closingPanel(o)}</td></tr>`:''}`).join('')||`<tr><td colspan=5>${tr('noOffers')}</td></tr>`}</table></div>
-  ${accountsCard(D)}
-  <div class="card" style="padding:16px"><h2>${S.lang==='es'?'Solicitudes de visita':'Showing requests'}</h2>
-  <table><tr><th>${tr('colProperty')}</th><th>${S.lang==='es'?'Solicitado por':'Requested by'}</th><th>${S.lang==='es'?'Fecha/hora':'Date/time'}</th><th>${tr('colStatus')}</th><th>${tr('colActions')}</th></tr>
-  ${(D.showings||[]).slice().sort((a,b)=>String(b.preferredAt||'').localeCompare(String(a.preferredAt||''))).map(sh=>{
-    const l=S.listing(sh.listingId)||{};
-    const u=(D.users.find(x=>x.id===sh.userId)||{});
-    const st=String(sh.status||'REQUESTED').toUpperCase();
-    const badge=st==='APPROVED'?'✅ '+tr('showingApproved'):st==='DENIED'?'❌ '+tr('showingDenied'):'⏳ '+tr('showingRequested');
-    const acts=st==='REQUESTED'?`<button data-showacc="${sh.id}" style="background:#16a34a;color:#fff">${S.lang==='es'?'Aprobar':'Approve'}</button> <button data-showden="${sh.id}" style="background:#dc2626;color:#fff">${S.lang==='es'?'Rechazar':'Deny'}</button>`:(st==='APPROVED'&&S.caps&&S.caps.investor?`<button type="button" data-showcan="${sh.id}">${tr('cancelShowing')}</button> <button type="button" data-showmsg="${sh.id}">${tr('messageAgent')}</button>`:'—');
-    return `<tr><td>${esc(l.address||sh.listingId)}${l.city?', '+esc(l.city):''}</td><td>${esc(u.name||'—')}</td><td>${esc(S.formatShowingWhen?S.formatShowingWhen(sh.preferredAt):sh.preferredAt)}</td><td>${badge}</td><td>${acts}</td></tr>`;
-  }).join('')||`<tr><td colspan=5>${S.lang==='es'?'Aún no hay solicitudes de visita':'No showing requests yet'}</td></tr>`}
-  </table></div>
-  <div class="card" style="padding:16px"><h2>${tr('listings')}</h2><div class="table-scroll"><table><tr><th>${tr('colAddress')}</th><th>${tr('colStatus')}</th><th>${tr('price')} $</th><th>${tr('down')} $</th><th>${tr('monthly')} $</th><th></th></tr>${D.listings.map(l=>`<tr data-row="${l.id}"><td>${esc(l.address)}, ${esc(l.city)}</td>
-   <td><select data-status="${l.id}">${S.STATUSES.map(s=>`<option value="${s}" ${l.status===s?'selected':''}>${S.statusText(s)}</option>`).join('')}</select></td>
-   <td><input data-f="askingPrice" type="number" value="${l.askingPrice/100}" style="width:90px"></td><td><input data-f="downPayment" type="number" value="${l.downPayment/100}" style="width:80px"></td><td><input data-f="monthlyPayment" type="number" value="${l.monthlyPayment/100}" style="width:80px"></td><td class="listing-actions"><button type="button" data-save="${esc(l.id)}">${tr('save')}</button><button type="button" class="copy-link-btn" data-copylink="${esc(l.id)}">${tr('share.copyLink')}</button>${S.caps&&S.caps.ready?`<button type="button" class="copy-link-btn" data-activity="${esc(l.id)}">${tr('activity.button')}</button>`:''}${S.caps&&S.caps.investor?`<label style="display:block;font-size:11px;margin-top:6px">${tr('inspectionDate')}<input data-insp="${esc(l.id)}" type="datetime-local" value="${esc(toLocalInput(l.inspectionAt))}"></label>`:''}</td></tr>`).join('')}</table></div></div></section>`;}
+  const pend=D.users.filter(u=>u.approvalStatus==='PENDING').length;
+  const openOffers=D.offers.filter(o=>['SUBMITTED','COUNTERED'].includes(o.status)).length;
+  const reqShow=(D.showings||[]).filter(s=>String(s.status||'REQUESTED').toUpperCase()==='REQUESTED').length;
+  const active=D.listings.filter(l=>l.status==='AVAILABLE').length;
+  const coN=S.companyAdmin&&S.companyAdmin.companies?S.companyAdmin.companies.length:null;
+  const hour=+new Intl.DateTimeFormat('en-US',{timeZone:'America/Chicago',hour:'numeric',hour12:false}).format(new Date());
+  const hello=hour<12?AL('Buenos días','Good morning'):hour<19?AL('Buenas tardes','Good afternoon'):AL('Buenas noches','Good evening');
+  const nm=String(S.user&&S.user.name||'').split(' ')[0];
+  const k=(id,icon,n,label,warn)=>`<button type="button" class="adm-kpi${warn?' warn':''}" data-admjump="${id}"><span aria-hidden="true">${icon}</span><b>${n}</b><small>${label}</small></button>`;
+  const nav=[['offers','💰',AL('Ofertas','Offers')],['companies','🏢',AL('Compañías','Companies')],['homes','🏠',AL('Casas','Homes')],['showings','📅',AL('Citas','Showings')],['accounts','👥',AL('Usuarios','Users')],['pending','⏳',AL('Pendientes','Pending')]];
+  const hero=`<header class="adm-hero"><div class="adm-hero-top"><div><p class="ad-kicker">🛡️ ${AL('Administración','Administration')}</p><h2>${hello}${nm?', '+esc(nm):''}</h2><p class="adm-tag">Legacy - Owner Finance · The Rivas Legacy Group</p></div>${window.LegacyTours&&LegacyTours.sellerDashVisible&&LegacyTours.sellerDashVisible()?`<button type="button" class="adm-hero-btn" data-tab="sellerhome">📊 ${AL('Panel de compañía','Company dashboard')}</button>`:''}</div>
+    <div class="adm-kpis">${k('offers','💰',openOffers,AL('Ofertas abiertas','Open offers'),openOffers>0)}${k('pending','⏳',pend,AL('Cuentas por aprobar','Accounts to approve'),pend>0)}${k('showings','📅',reqShow,AL('Visitas por aprobar','Showings to approve'),reqShow>0)}${k('homes','🏠',active,AL('Casas disponibles','Available homes'))}</div></header>`;
+  const chips=`<nav class="adm-nav" aria-label="${esc(AL('Secciones','Sections'))}">${nav.map(([id,i,t])=>`<button type="button" data-admjump="${id}">${i} ${t}</button>`).join('')}</nav>`;
+  return `<section class="adm-wrap">${hero}${chips}
+   ${pend?admSec('pending','⏳',AL('Cuentas pendientes de aprobación','Accounts pending approval'),pend,admPending(D),{open:true,warn:true}):''}
+   ${admSec('offers','💰',tr('recentOffers'),D.offers.length,admOffers(D),{open:openOffers>0})}
+   ${S.caps&&S.caps.investor?admSec('companies','🏢',S.caps.companies?tr('companiesTitle'):tr('investorsTitle'),coN,investorAdminCard(),{hint:S.caps.companies?tr('companiesHint'):''}):''}
+   ${admSec('homes','🏠',tr('listings'),D.listings.length,admListings(D))}
+   ${admSec('showings','📅',AL('Solicitudes de visita','Showing requests'),(D.showings||[]).length,admShowings(D),{open:reqShow>0})}
+   ${admSec('accounts','👥',tr('usersAgents'),D.users.length,admAccounts(D))}
+   ${pend?'':admSec('pending','⏳',AL('Cuentas pendientes de aprobación','Accounts pending approval'),0,admPending(D))}
+  </section>`;}
 
 function maybeOpenSharedDetail(){
   if(!S.user||!S.data||resetQueryActive()||!shareDetailAllowed())return;
@@ -2187,6 +2252,17 @@ function render(){if(!agentLanded&&S.user){agentLanded=1;if(tab==='inventory'&&!
   const mapFull=tab==='map';document.documentElement.classList.toggle('lof-map-on',mapFull);if(mapFull){headerCompact=false;if(window.scrollY)window.scrollTo(0,0);}
   const body={inventory,guides,dashboard,admin,auth,calendar:calendarView,'investor-tx':investorTx,'investor-map':investorMap,favorites:favoritesView,map:mapView,tours:()=>window.LegacyTours?LegacyTours.view():'',myagent:()=>window.LegacyTours&&LegacyTours.agentView?LegacyTours.agentView():'',agenthome:()=>window.LegacyTours&&LegacyTours.agentDashboard&&LegacyTours.agentDashVisible()?LegacyTours.agentDashboard():inventory(),sellerhome:()=>window.LegacyTours&&LegacyTours.sellerPanel&&LegacyTours.sellerDashVisible()?LegacyTours.sellerPanel():inventory()}[tab]||inventory;root.innerHTML=header()+`<main>${body()}</main><footer class="app-footer" style="padding:18px;font-size:12px;text-align:center">© Legacy - Owner Finance · Brokerage By: KLC Real Estate, LLC${footerLinks()}</footer>${tabBar()}`;bind();applyMsgScroll();if(tab==='inventory'&&(MAPOPEN||!narrowMQ.matches))drawMap();if(tab==='investor-map')drawInvestorMap();if(mapFull)drawFullMap();maybeOpenSharedDetail();highlightClosedDeal();}
 function bind(){const r=$('#app-root');
+  {const setH=()=>{const h=document.querySelector('.app-header');if(h)document.documentElement.style.setProperty('--hdr-h',h.offsetHeight+'px');};setH();if(!window.__admHdr){window.__admHdr=1;window.addEventListener('scroll',()=>requestAnimationFrame(setH),{passive:true});window.addEventListener('resize',setH);}}
+  if(!r.dataset.admBound){r.dataset.admBound='1';
+    const admApply=box=>{if(!box)return;const q=String(box.dataset.q||'').trim().toLowerCase(),st=box.dataset.st||'ALL';let n=0;
+      box.querySelectorAll(':scope>[data-q],:scope>.co-admin,.adm-people>li').forEach(el=>{const txt=String(el.dataset.q||el.textContent||'').toLowerCase();const ok=(!q||txt.includes(q))&&(st==='ALL'||!el.dataset.st||el.dataset.st===st);el.hidden=!ok;if(ok)n++;});
+      if(q||st!=='ALL'){box.classList.remove('clip');const m=document.querySelector(`[data-admmore="${box.id}"]`);if(m)m.hidden=true;}
+      let em=box.querySelector(':scope>.adm-nomatch');if(!n&&(q||st!=='ALL')){if(!em){em=document.createElement('p');em.className='adm-empty adm-nomatch';box.appendChild(em);}em.textContent=S.lang==='es'?'Nada coincide con la búsqueda.':'Nothing matches your search.';em.hidden=false;}else if(em)em.hidden=true;};
+    r.addEventListener('input',e=>{const t=e.target;if(!t||!t.dataset||!t.dataset.admfilter)return;const box=document.getElementById(t.dataset.admfilter);if(box){box.dataset.q=t.value;admApply(box);}});
+    r.addEventListener('click',e=>{const j=e.target.closest&&e.target.closest('[data-admjump]');if(j){e.preventDefault();const sec=document.getElementById('adm-'+j.dataset.admjump);if(sec){if(sec.tagName==='DETAILS'&&!sec.open)sec.open=true;const y=sec.getBoundingClientRect().top+window.scrollY-((document.querySelector('.adm-nav')||{}).offsetHeight||0)-(document.querySelector('.app-header')||{offsetHeight:0}).offsetHeight-8;window.scrollTo({top:Math.max(0,y),behavior:'smooth'});}return;}
+      const mo=e.target.closest&&e.target.closest('[data-admmore]');if(mo){const box=document.getElementById(mo.dataset.admmore);if(box)box.classList.remove('clip');ADM_OPEN.homesAll=true;mo.hidden=true;return;}
+      const c=e.target.closest&&e.target.closest('[data-admstatus]');if(c){const box=document.getElementById(c.dataset.admlist);if(!box)return;box.dataset.st=c.dataset.admstatus;c.parentNode.querySelectorAll('[data-admstatus]').forEach(b=>b.classList.toggle('on',b===c));admApply(box);}});
+  }
   if(!r.dataset.acctToggle){r.dataset.acctToggle='1';r.addEventListener('toggle',e=>{const el=e.target;if(el&&el.dataset&&el.dataset.acct)ADM_OPEN[el.dataset.acct]=el.open;},true);}
   r.onclick=async e=>{
    const tb=e.target.closest('[data-tabbar]');if(tb){e.preventDefault();return tabBarGo(tb.dataset.tabbar);}
@@ -2267,7 +2343,7 @@ function bind(){const r=$('#app-root');
      if(d.editown){const home=S.listing(d.editown);if(home)openOwnEditor(home);return;}
      if(d.cosel){S.setActiveCompany(d.cosel==='all'?'':d.cosel);return render();}
      if(d.coremove){const [co,u]=String(d.coremove).split('|');if(co&&u&&confirm(tr('confirmRemoveMember'))){try{await S.companyAction('company_member_remove',{companyId:co,userId:u});}catch(err){alert(err.message);}render();}return;}
-     if(d.counassign){const [co,l]=String(d.counassign).split('|');if(co&&l){try{await S.companyAction('company_assign',{companyId:co,listingIds:[],unassignIds:[l]});}catch(err){alert(err.message);}render();}return;}
+     if(d.counassign){const [co,l]=String(d.counassign).split('|');if(co&&l&&confirm(S.lang==='es'?'¿Quitar esta casa de la compañía?':'Remove this home from the company?')){try{await S.companyAction('company_assign',{companyId:co,listingIds:[],unassignIds:[l]});}catch(err){alert(err.message);}render();}return;}
      if(d.codelete){if(confirm(tr('confirmDeleteCompany'))){try{await S.companyAction('company_delete',{companyId:d.codelete});}catch(err){alert(err.message);}render();}return;}
      if(d.unassign){const parts=String(d.unassign).split('|');if(parts[0]&&parts[1]){await S.assignInvestorListings(parts[0],[],[parts[1]]);render();}return;}
      if(d.alertdel){await S.deleteAlert(d.alertdel);return render();}
