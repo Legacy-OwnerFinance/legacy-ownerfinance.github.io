@@ -1135,11 +1135,12 @@ S.sendMessage=({toUserId,listingId,kind,body})=>{if(!S.user)throw new Error(S.la
 S.myMessages=()=>S.user?S.data.messages.filter(m=>m.fromUserId===S.user.id||m.toUserId===S.user.id):[];
 S.submitOffer=f=>{if(!S.user)throw new Error(S.lang==='es'?'Inicia sesión primero':'Please log in');needApproved();
   const o={id:uid(),userId:S.user.id,listingId:f.listingId,offerPrice:+f.offerPrice*100,
-    downPayment:+f.downPayment*100,monthlyPayment:+f.monthlyPayment*100,notes:f.notes||'',inspections:f.inspections==='YES',status:'SUBMITTED',createdAt:now()};
+    downPayment:+f.downPayment*100,monthlyPayment:+f.monthlyPayment*100,notes:f.notes||'',inspections:f.inspections==='YES',status:'SUBMITTED',createdAt:now()};if(f.tourId)o.tourId=String(f.tourId); // v39: which showing this offer comes from
   S.data.offers.push(o);
   S.save();
   sbUpsert('offers',{
     id:o.id,
+    ...(o.tourId?{tour_id:o.tourId}:{}),
     listing_id:o.listingId,
     user_id:o.userId,
     buyer_name:S.user.name||'',

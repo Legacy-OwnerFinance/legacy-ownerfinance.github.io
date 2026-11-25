@@ -600,7 +600,7 @@ function agentClosingsSection(){
 document.addEventListener('click',e=>{const t=e.target.closest&&e.target.closest('[data-acper]');if(!t)return;e.preventDefault();AC.period=t.dataset.acper;rerender();setTimeout(()=>{const el=document.getElementById('ad-closings');if(el&&el.getBoundingClientRect().top<0)el.scrollIntoView({block:'start'});},30);});
 document.addEventListener('change',e=>{const t=e.target;if(!t||!t.dataset)return;if(t.dataset.acfrom){AC.from=t.value;rerender();}else if(t.dataset.acto){AC.to=t.value;rerender();}});
 /* v39 (9:58 PM): agent "Mi cuenta" — same content, folded into short cards with a big-button menu (like the client dashboard). */
-const AA_ICON=[[/alert/i,'🔔'],[/visita|visit/i,'📅'],[/perfil|profile/i,'👤'],[/favorit/i,'❤️'],[/mensaje|message/i,'✉️'],[/oferta|offer/i,'💰'],[/carpeta|folder|document/i,'📂'],[/cliente|client/i,'👥']];
+const AA_ICON=[[/alert/i,'🔔'],[/visita|visit|showing|cita/i,'📅'],[/perfil|profile/i,'👤'],[/favorit/i,'❤️'],[/mensaje|message/i,'✉️'],[/oferta|offer/i,'💰'],[/carpeta|folder|document/i,'📂'],[/cliente|client/i,'👥']];
 function agentAccount(full){
   try{
     const tpl=document.createElement('template');tpl.innerHTML=full||'';

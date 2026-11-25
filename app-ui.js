@@ -811,7 +811,7 @@ function openAuthPop(kind){
   bg.querySelector('[data-popreg]').onclick=()=>to('#regF [name="name"]');
   bg.querySelector('[data-poplogin]').onclick=()=>to('#loginF [name="email"]');
 }
-function openOfferPop(id){
+function openOfferPop(id,tourId){
   const l=S.listing(id);if(!l)return;
   if(limited())return openAuthPop('offer');
   const d=v=>Math.round((+v||0)/100),hint=v=>v?`<em>${px('asking')}: ${S.money(v)}</em>`:'';
@@ -838,7 +838,7 @@ function openOfferPop(id){
     if(!ok)return;
     const parts=[];if(aa.checked)parts.push(tr('allAskingNote'));if(String(v.notes||'').trim())parts.push(String(v.notes).trim());
     if(v.closingDate)parts.push(`${S.lang==='es'?'Cierre propuesto':'Proposed closing'}: ${v.closingDate}`);
-    try{S.submitOffer({listingId:id,offerPrice:v.offerPrice,downPayment:v.downPayment,monthlyPayment:v.monthlyPayment,inspections:v.inspections,notes:parts.join(' - ')});}
+    try{S.submitOffer({listingId:id,tourId:tourId||null,offerPrice:v.offerPrice,downPayment:v.downPayment,monthlyPayment:v.monthlyPayment,inspections:v.inspections,notes:parts.join(' - ')});}
     catch(err){return bad('notes',err.message||String(err));}
     popDone(bg,px('sentOffer'),px('sentOfferB'));};
 }
@@ -870,7 +870,7 @@ function openApptPop(id){
     popDone(bg,px('sentAppt'),`${px('sentApptB')} <a href="tel:${CONTACT_TEL}">${CONTACT_SHOW}</a>.`);};
 }
 document.addEventListener('click',e=>{const t=e.target.closest&&e.target.closest('[data-offerpop],[data-showpop]');if(!t)return;e.preventDefault();e.stopPropagation();
-  if(t.dataset.offerpop)return openOfferPop(t.dataset.offerpop);return openApptPop(t.dataset.showpop);});
+  if(t.dataset.offerpop)return openOfferPop(t.dataset.offerpop,t.dataset.tofferfor||null);return openApptPop(t.dataset.showpop);});
 function galStep(g,dir){const t=g&&g.querySelector('.lof-gal-track');if(t)t.scrollBy({left:dir*t.clientWidth,behavior:'smooth'});}
 function galSync(t){const g=t.closest('.lof-gal');if(!g)return;const n=t.children.length,i=Math.min(n-1,Math.max(0,Math.round(t.scrollLeft/Math.max(1,t.clientWidth))));const b=g.querySelector('.lof-gal-count b');if(b)b.textContent=String(i+1);}
 function scrollToResults(){const el=document.querySelector('.cards-toolbar');if(el)el.scrollIntoView({behavior:'smooth',block:'start'});}
