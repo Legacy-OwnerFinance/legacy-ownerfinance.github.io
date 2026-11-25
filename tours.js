@@ -1,6 +1,7 @@
 /* v39: Showing cart ("carrito") + agent-claimed tours.
    Clients (no direct offers):
-   - No connected agent: up to 5 homes per showing, sent to every licensed agent; first to accept is connected.
+   - No connected agent: cart up to 5 homes; to request the showing they first connect with an agent by typing the agent's code (D2D-XXXXXX).
+     (Sign-up no longer offers "I don't have an agent, yet"; the code stays optional at sign-up. Server action: tour_link_agent.)
    - Connected agent: any number of homes/requests, sent ONLY to that agent, who approves or declines.
    Agents in good standing: see anonymous requests, first to accept gets the client; call / in-app chat.
    Both: route by distance (editable), calendar (Google link + .ics for Apple/Outlook), feedback,
@@ -33,6 +34,41 @@ const maxCart=()=>connectedAgent()?MAX_DIRECT:MAX;
 function setCart(a){try{localStorage.setItem(cartKey(),JSON.stringify([...new Set(a)].slice(0,maxCart())));}catch(e){}}
 function inCart(id){return cart().includes(id);}
 const limitText=()=>L(`Puedes pedir hasta ${MAX} casas por cita. Agenda primero estas ${MAX} casas, o conéctate con un agente para poder ver más.`,`You can request up to ${MAX} homes per showing. Schedule these ${MAX} homes first, or connect with an agent to see more.`);
+/* ---------- connect with an agent by code (required before a showing request when there is no connected agent) ---------- */
+const CODE_RE=/^D2D-[A-Z0-9]{6}$/;
+const normCode=v=>{let c=String(v||'').toUpperCase().replace(/[^A-Z0-9]/g,'');if(c.startsWith('D2D'))c=c.slice(3);return c?'D2D-'+c:'';};
+const codeMsg=()=>L('Hola, quiero ver casas en la app Legacy - Owner Finance y no tengo código de agente. ¿Me pueden conectar con un agente?','Hi, I want to see homes on the Legacy - Owner Finance app and I do not have an agent code. Can you connect me with an agent?');
+function codeFormHtml(id){return `<form class="tour-form tour-codef" id="${id}" novalidate><label>${L('Código de tu agente','Your agent’s code')}<input name="code" placeholder="D2D-XXXXXX" autocapitalize="characters" autocomplete="off" spellcheck="false" maxlength="12" required></label>
+   <div class="tour-btns"><button type="submit" class="btn-card primary">🤝 ${L('Conectar con mi agente','Connect with my agent')}</button></div><p class="tour-warn" data-codeerr hidden></p>
+   <p class="ops-meta">${L('¿No tienes código?','No code?')} <button type="button" class="btn-link" data-tcodehelp="1">📞 ${L('Contáctanos','Contact us')}</button></p></form>`;}
+async function linkAgent(code){
+  const c=normCode(code);
+  if(!CODE_RE.test(c))throw new Error(L('Escribe el código completo de tu agente (D2D-XXXXXX).','Type your agent’s full code (D2D-XXXXXX).'));
+  let r;try{r=await call('tour_link_agent',{code:c});}
+  catch(e){if(e.code==='bad_action')throw new Error(L('Conectar con código todavía no está activo (vista previa). Mientras tanto llámanos o escríbenos al (405) 338-4124.','Connecting by code is not active yet (preview). Meanwhile call or text us at (405) 338-4124.'));throw e;}
+  if(r&&r.connectedAgent){data=Object.assign(data||{},{connectedAgent:r.connectedAgent});}
+  try{const bp=(S.data.buyerProfiles||[]).find(b=>b&&S.user&&b.userId===S.user.id);if(bp)bp.assignedAutomatically=false;}catch(e){}
+  if(!DEMO)await load(true);
+  return r&&r.connectedAgent;
+}
+// One delegated handler for every code form (the prompt sheet and the inline one in "Mi agente").
+document.addEventListener('submit',e=>{const f=e.target;if(!(f&&f.classList&&f.classList.contains('tour-codef')))return;e.preventDefault();e.stopPropagation();
+  const err=f.querySelector('[data-codeerr]'),inp=f.querySelector('[name=code]'),bg=f.closest('.tour-ask-bg');err.hidden=true;
+  act(async()=>{let a;try{a=await linkAgent(inp.value);}catch(er){err.hidden=false;err.textContent=er.message||String(er);inp.focus();return;}
+    if(bg)bg.remove();rerender();
+    alert(bg?L(`¡Listo! Ya estás conectado con ${a&&a.name||'tu agente'}. Ahora toca “Enviar a mi agente” para pedir la cita.`,`Done! You are now connected with ${a&&a.name||'your agent'}. Now tap “Send to my agent” to request the showing.`)
+      :L(`¡Listo! Ya estás conectado con ${a&&a.name||'tu agente'}.`,`Done! You are now connected with ${a&&a.name||'your agent'}.`));
+    if(bg)setTimeout(()=>{const b=document.querySelector('#tourReqF button[type=submit]');if(b)b.scrollIntoView({behavior:'smooth',block:'center'});},150);});},true);
+function codeSheet(){
+  const m=sheet(`<h3>🤝 ${L('Primero conecta con tu agente','First, connect with your agent')}</h3>
+   <p>${L('Para pedir una cita necesitas un agente con licencia que te acompañe. Escribe el código de invitación que te dio tu agente (empieza con D2D-).','To request a showing you need a licensed agent to go with you. Type the invite code your agent gave you (it starts with D2D-).')}</p>${codeFormHtml('tourCodeSheetF')}`);
+  setTimeout(()=>{const i=m.querySelector('[name=code]');if(i)i.focus();},60);
+  return m;
+}
+document.addEventListener('click',e=>{const t=e.target.closest&&e.target.closest('[data-tcodehelp],[data-tcodeask]');if(!t)return;e.preventDefault();e.stopPropagation();
+  if(t.dataset.tcodeask)return codeSheet();
+  document.querySelectorAll('.tour-ask-bg').forEach(x=>x.remove());if(UI()&&UI().openContact)UI().openContact(null,codeMsg());},true);
+document.addEventListener('input',e=>{const i=e.target;if(i&&i.name==='code'&&i.closest&&i.closest('.tour-codef')){const p=i.selectionStart===i.value.length;i.value=i.value.toUpperCase();if(p)i.selectionStart=i.selectionEnd=i.value.length;}});
 function addToCart(id){const c=cart();if(c.includes(id))return true;const cap=maxCart();if(c.length>=cap){alert(cap===MAX?limitText():L(`Máximo ${cap} casas por solicitud. Envía estas primero a tu agente.`,`Up to ${cap} homes per request. Send these to your agent first.`));return false;}c.push(id);setCart(c);return true;}
 function removeFromCart(id){setCart(cart().filter(x=>x!==id));}
 
@@ -50,6 +86,7 @@ async function call(action,body){
   if(DEMO){const d=demoData();
     if(action==='tour_list')return d;
     if(action==='tour_request'){const conn=connectedAgent();if(!conn&&(body.listingIds||[]).length>MAX)throw new Error(limitText());const homes=(body.listingIds||[]).map(id=>{const l=S.listing(id)||{};return {id,address:l.address,city:l.city,status:l.status};});d.tours.unshift({...d.tours[0]||{},id:'demo-'+Date.now(),status:'REQUESTED',direct:!!conn,startsAt:new Date(body.startsAt).toISOString(),homes,agent:conn||null,feedbackDue:false,feedback:[],offers:[],role:'CLIENT'});return {ok:true};}
+    if(action==='tour_link_agent'){const c=String(body.code||'').trim().toUpperCase();if(!/^D2D-[A-Z0-9]{6}$/.test(c)){const er=new Error(L('Escribe el código completo de tu agente (D2D-XXXXXX).','Type your agent’s full code (D2D-XXXXXX).'));er.code='bad_agent_code';throw er;}d.connectedAgent={id:'demo-agent',name:L('Agente de prueba','Test agent'),brokerage:'KLC Real Estate, LLC',licenseNumber:'000000',phone:''};return {ok:true,connectedAgent:d.connectedAgent};}
     if(action==='tour_decline'){const t=d.tours.find(x=>x.id===body.tourId);if(t){t.status='DECLINED';t.declineReason=body.reason||'';}return {ok:true};}
     if(action==='tour_accept'){const rq=d.tours.find(x=>x.id===body.tourId&&x.direct&&x.status==='REQUESTED');const base=rq&&d.tours.find(x=>x!==rq&&x.status==='ACCEPTED'&&dayOf(x.startsAt)===dayOf(rq.startsAt));
       if(base){const seen=new Set(base.homes.map(h=>h.id));rq.homes.forEach(h=>{if(!seen.has(h.id))base.homes.push(h);});d.tours=d.tours.filter(x=>x!==rq);return {ok:true,merged:true,mergedInto:base.id};}
@@ -114,13 +151,15 @@ function cartSection(){
   const c=cart().map(id=>S.listing(id)).filter(Boolean);const today=chicagoDay(new Date());const conn=connectedAgent();const cap=maxCart();
   const items=c.map(l=>`<li class="tour-cart-item"><img src="${esc((l.photoUrls&&l.photoUrls[0])||l.photoUrl||'listing-placeholder.svg')}" alt=""><span><b>${esc(l.address)}</b><br><small>${esc(l.city||'')}</small></span><button type="button" class="btn-card" data-tcartdel="${esc(l.id)}" aria-label="${esc(L('Quitar','Remove'))}">✕</button></li>`).join('');
   const intro=conn?L(`Tus solicitudes van directo a tu agente, <b>${esc(conn.name)}</b>, quien las aprueba o rechaza según su agenda y el acceso a las casas. Puedes agregar todas las casas que quieras.`,`Your requests go straight to your agent, <b>${esc(conn.name)}</b>, who approves or declines them based on their schedule and access to the homes. Add as many homes as you like.`)
-    :L(`Agrega las casas que te gustan (hasta ${MAX} por cita) y pide una sola cita para verlas. Un agente con licencia la acepta y te acompaña.`,`Add the homes you like (up to ${MAX} per showing) and request one showing for all of them. A licensed agent accepts it and shows you the homes.`);
+    :L(`Agrega las casas que te gustan (hasta ${MAX} por cita). Para pedir la cita, primero conecta con tu agente escribiendo su código (D2D-XXXXXX).`,`Add the homes you like (up to ${MAX} per showing). To request the showing, first connect with your agent by typing their code (D2D-XXXXXX).`);
   const btn=conn?`📨 ${L(`Enviar a mi agente (${c.length} ${c.length===1?'casa':'casas'})`,`Send to my agent (${c.length} ${c.length===1?'home':'homes'})`)}`:`📅 ${L(`Solicitar cita para ${c.length} ${c.length===1?'casa':'casas'}`,`Request showing for ${c.length} ${c.length===1?'home':'homes'}`)}`;
+  const needCode=!conn&&isClient();
   return `<section class="card tour-card" id="tour-cart"><h2>🛒 ${L('Mi carrito de casas','My home cart')} <small>(${c.length}${conn?'':'/'+cap})</small></h2>
    <p class="ops-meta">${intro}</p>
    ${c.length?`<ul class="tour-cart">${items}</ul>`:`<p>${L('Tu carrito está vacío. Abre una casa y toca “🛒 Agregar al carrito”.','Your cart is empty. Open a home and tap “🛒 Add to cart”.')}</p><button type="button" class="btn-card primary" data-tab="inventory">🏠 ${L('Ver casas','See homes')}</button>`}
    ${!conn&&c.length>=MAX?`<p class="tour-warn">ℹ️ ${esc(limitText())}</p>`:''}
    ${c.length&&data&&data.canRequest!==false?`<form id="tourReqF" class="tour-form"><label>${L('Fecha','Date')}<input type="date" name="date" min="${today}" value="${esc(form.date)}" required></label><label>${L('Hora','Time')}<select name="time">${timeOptions(form.time)}</select></label><label class="tour-notes">${L('Notas (opcional)','Notes (optional)')}<textarea name="notes" rows="2" maxlength="1000">${esc(form.notes)}</textarea></label>
+   ${needCode?`<p class="tour-warn tour-needcode">🤝 ${L('Antes de enviar la cita te pediremos el código de tu agente.','Before sending, we will ask for your agent’s code.')}</p>`:''}
    <button type="submit" class="btn-card primary"${busy?' disabled':''}>${btn}</button></form>`:''}
    ${c.length&&data&&data.canRequest===false?`<p class="tour-warn">${L('Las citas con carrito están en prueba. Por ahora llama o escribe al (405) 338-4124.','Cart showings are in testing. For now call or text (405) 338-4124.')}</p>`:''}</section>`;
 }
@@ -463,6 +502,7 @@ document.addEventListener('submit',e=>{
   if(f&&f.id==='tourReqF'){e.preventDefault();const v=Object.fromEntries(new FormData(f));form={date:v.date,time:v.time,notes:v.notes||''};
     const ids=cart();if(!ids.length)return;
     if(!connectedAgent()&&ids.length>MAX)return alert(limitText());
+    if(!connectedAgent()&&isClient())return codeSheet();
     const at=new Date(`${v.date}T${v.time}:00`);if(isNaN(at.getTime()))return alert(L('Elige fecha y hora.','Pick a date and time.'));
     return act(async()=>{try{await call('tour_request',{listingIds:ids,startsAt:`${v.date}T${v.time}`,notes:v.notes||''});}catch(er){if(er.code==='agent_busy')return busySheet(er.message);throw er;}setCart([]);form={date:'',time:'10:00',notes:''};await load(true);alert(connectedAgent()?L('¡Enviada a tu agente! Te avisamos cuando la apruebe o la rechace.','Sent to your agent! We will let you know when they approve or decline it.'):L('¡Cita solicitada! Les avisamos a los agentes con licencia; te llegará una notificación cuando uno la acepte.','Showing requested! We notified licensed agents; you will get a notification when one accepts.'));});}
   if(f&&f.dataset&&f.dataset.tflowf){e.preventDefault();const v=Object.fromEntries(new FormData(f));return act(async()=>{await call('tour_offer_flow',{offerId:f.dataset.toffer,op:f.dataset.tflowf,when:`${v.date}T${v.time}`});await load(true);});}
@@ -500,9 +540,9 @@ function agentView(){
   if(!data&&!lastErr)return head+`<p style="padding:18px">${L('Cargando…','Loading…')}</p></div>`;
   const a=(data&&data.connectedAgent)||connectedAgent();
   if(!a)return head+`<section class="card tour-card ma-empty"><div class="ma-empty-i" aria-hidden="true">🤝</div><h3>${L('Aún no tienes un agente','You don’t have an agent yet')}</h3>
-   <p>${L('Agrega las casas que te gustan a tu carrito y pide una cita: el primer agente con licencia que la acepte será tu agente y te acompañará a verlas, en español o en inglés.','Add the homes you like to your cart and request a showing: the first licensed agent who accepts it becomes your agent and shows you the homes, in English or Spanish.')}</p>
-   <div class="tour-btns"><button type="button" class="btn-card primary" data-tab="tours">📅 ${L('Pedir una cita / conectar con un agente','Request a showing / connect with an agent')}</button><button type="button" class="btn-card" data-tab="inventory">🏠 ${L('Ver casas','See homes')}</button></div>
-   <p class="ops-meta">${L('¿Preguntas? Llama o escribe al (405) 338-4124.','Questions? Call or text (405) 338-4124.')}</p></section></div>`;
+   <p>${L('Cuando quieras ver casas, conecta con tu agente: escribe el código de invitación que te dio (empieza con D2D-). Mientras tanto puedes ver casas, guardar favoritas y llenar tu carrito (hasta 5 casas).','When you are ready to see homes, connect with your agent: type the invite code they gave you (it starts with D2D-). Meanwhile you can browse homes, save favorites and fill your cart (up to 5 homes).')}</p>
+   ${codeFormHtml('tourCodeF')}
+   <div class="tour-btns"><button type="button" class="btn-card" data-tab="inventory">🏠 ${L('Ver casas','See homes')}</button></div></section></div>`;
   const nowMs=Date.now();
   const mine=((data&&data.tours)||[]).filter(t=>t.role==='CLIENT'&&t.agent&&t.agent.id===a.id);
   const seen=new Map();
@@ -773,7 +813,7 @@ function clientPanel(full){
   const favB=favs.length?`<div class="cd-favs">${favs.slice(0,4).map(l=>`<button type="button" class="cd-fav" data-open="${esc(l.id)}"><img src="${esc(ph(l))}" alt="" loading="lazy" onerror="this.onerror=null;this.src='listing-placeholder.svg'"><span>${esc(String(l.address||'').split(',')[0])}</span></button>`).join('')}</div>`:`<p class="ad-empty">${L('Toca ❤️ en una casa para guardarla aquí.','Tap ❤️ on a home to save it here.')}</p>`;
   const a=(data&&data.connectedAgent)||connectedAgent();const tel=a&&a.phone?String(a.phone).replace(/[^\d+]/g,''):'';
   const agB=a?`<div class="cd-agent"><span class="ad-av" aria-hidden="true">${esc(String(a.name||'?').trim().charAt(0).toUpperCase())}</span><div class="lf-main"><b>${esc(a.name||'')}</b><small>${esc(a.brokerage||'')}</small></div></div><div class="cd-btns cd-contact">${tel?`<a class="btn-card primary" href="tel:${esc(tel)}">📞 ${L('Llamar','Call')}</a><a class="btn-card" href="sms:${esc(tel)}">💬 ${L('Texto','Text')}</a>`:''}<button type="button" class="btn-card" data-tchat="${esc(a.id||'')}" data-tname="${esc(a.name||'')}">✉️ ${L('Mensaje','Message')}</button></div>`
-    :`<p class="ad-empty">${L('Aún no tienes agente. El primero que acepte tu cita será tu agente.','No agent yet. The first one to accept your showing becomes your agent.')}</p>`;
+    :`<p class="ad-empty">${L('Aún no tienes agente. Cuando quieras ver casas, conecta con tu agente escribiendo su código (D2D-XXXXXX).','No agent yet. When you want to see homes, connect with your agent by typing their code (D2D-XXXXXX).')}</p>`;
   const myDocs=((S.data&&S.data.documents)||[]).filter(d=>d.userId===u.id).length;
   const docB=`<p class="cd-docs-n"><b>${myDocs}</b> ${myDocs===1?L('documento guardado','document saved'):L('documentos guardados','documents saved')}</p>`;
   const more=`<details class="card cd-profile lf-fold" data-fold="cd-profile"${FOLD['cd-profile']?' open':''} id="cd-profile"><summary class="lf-sum"><span class="lf-ico" aria-hidden="true">⚙️</span><span class="lf-main"><b>${L('Mi perfil, mensajes y documentos','My profile, messages and documents')}</b><small>${L('Datos, contraseña, búsqueda, carpeta','Details, password, search, folder')}</small></span><span class="lf-chev" aria-hidden="true">⌄</span></summary><div class="lf-body">${full||''}</div></details>`;
@@ -781,7 +821,7 @@ function clientPanel(full){
     ${card('cd-shows','📅',L('Mis citas','My showings'),upcoming.length,showsB,`<button type="button" class="btn-card" data-tab="tours">${L('Ver todas','See all')}</button>`)}
     ${card('cd-offers','💰',L('Mis ofertas','My offers'),offers.length+legacy.length,offB,'')}
     <div class="cd-two">${card('cd-favs','❤️',L('Favoritas','Favorites'),favs.length,favB,favs.length?`<button type="button" class="btn-card" data-tab="favorites">${L('Ver todas','See all')}</button>`:'')}
-    ${card('cd-agent','🤝',L('Mi agente','My agent'),null,agB,a?`<button type="button" class="btn-card" data-tab="myagent">${L('Ver perfil','See profile')}</button>`:`<button type="button" class="btn-card" data-tab="tours">📅 ${L('Pedir cita','Request a showing')}</button>`)}</div>
+    ${card('cd-agent','🤝',L('Mi agente','My agent'),null,agB,a?`<button type="button" class="btn-card" data-tab="myagent">${L('Ver perfil','See profile')}</button>`:`<button type="button" class="btn-card" data-tab="myagent">🤝 ${L('Conectar con mi agente','Connect with my agent')}</button>`)}</div>
     ${card('cd-docs','📂',L('Documentos','Documents'),null,docB,`<button type="button" class="btn-card" data-cdprofile="1">${L('Abrir mi carpeta','Open my folder')}</button>`)}
     ${more}</div>`;
 }
@@ -899,7 +939,7 @@ window.LegacyTours={
   navVisible:()=>!!S.user&&(isClient()||isAgent()||S.isAdmin()||(S.isInvestor&&S.isInvestor()&&!S.isPendingApproval(S.user))),
   navLabel:()=>isClient()?'🛒 '+L('Carrito y citas','Cart & showings'):isAgent()?'🔔 '+L('Citas de clientes','Client showings'):S.isAdmin()?'🛒 '+L('Citas con carrito','Cart showings'):'💬 '+L('Comentarios de visitas','Showing feedback'),
   headerButton:()=>{if(!isClient())return '';const n=cart().length;return `<button type="button" class="tour-cart-btn" data-tgo="1" aria-label="${esc(L('Carrito de casas','Home cart'))}">🛒${n?`<span class="menu-badge">${n}</span>`:''}</button>`;},
-  clientActionRow:l=>{if(S.user)load(false);const c=inCart(l.id),conn=connectedAgent();return `<div class="lof-act-row"><button type="button" class="btn-card${c?'':' primary'}" data-tcart="${esc(l.id)}">${c?'✓ '+L('En tu carrito (quitar)','In your cart (remove)'):'🛒 '+L('Agregar al carrito','Add to cart')}</button><button type="button" class="btn-card" data-tbook="${esc(l.id)}">📅 ${L('Solicitar cita','Request showing')}</button></div><p class="ops-meta tour-note">${conn?L('Junta las casas en tu carrito y envíalas a tu agente. Las ofertas las hace tu agente después de la visita.','Collect homes in your cart and send them to your agent. Your agent makes offers after the visit.'):L(`Junta hasta ${MAX} casas en tu carrito y pide una sola cita. Las ofertas las hace tu agente después de la visita.`,`Collect up to ${MAX} homes in your cart and request one showing. Your agent makes offers after the visit.`)}</p>`;},
+  clientActionRow:l=>{if(S.user)load(false);const c=inCart(l.id),conn=connectedAgent();return `<div class="lof-act-row"><button type="button" class="btn-card${c?'':' primary'}" data-tcart="${esc(l.id)}">${c?'✓ '+L('En tu carrito (quitar)','In your cart (remove)'):'🛒 '+L('Agregar al carrito','Add to cart')}</button><button type="button" class="btn-card" data-tbook="${esc(l.id)}">📅 ${L('Solicitar cita','Request showing')}</button></div><p class="ops-meta tour-note">${conn?L('Junta las casas en tu carrito y envíalas a tu agente. Las ofertas las hace tu agente después de la visita.','Collect homes in your cart and send them to your agent. Your agent makes offers after the visit.'):L(`Junta hasta ${MAX} casas en tu carrito. Para pedir la cita, conecta con tu agente con su código. Las ofertas las hace tu agente después de la visita.`,`Collect up to ${MAX} homes in your cart. To request the showing, connect with your agent using their code. Your agent makes offers after the visit.`)}</p>`;},
   offerSentCard:l=>{if(!S.user||!S.data)return '';const T=['REJECTED','WITHDRAWN','INVALIDATED','FELL_THROUGH','CANCELLED','DECLINED'];const o=(S.data.offers||[]).filter(x=>x&&x.listingId===l.id&&x.userId===S.user.id&&!T.includes(String(x.status||'').toUpperCase())).sort((a,b)=>String(b.createdAt||'').localeCompare(String(a.createdAt||'')))[0];
     if(!o)return '';return `<div class="tour-done">✅ <b>${L('Oferta enviada','Offer sent')}</b>${o.createdAt?' · '+esc(when(o.createdAt)):''}${money(o.offerPrice)?' · '+esc(money(o.offerPrice)):''} <button type="button" class="btn-card" data-tgo="1">${L('Ver próximos pasos','See next steps')}</button></div>`;},
   agentNavVisible:()=>isClient(),agentDashVisible:()=>isAgent(),agentDashboard,agentAccount,clientDocsCard,sellerDashVisible,sellerPanel,sellerReload:()=>spLoad(true),clientPanel,closingFlowBox,stepChip,stepName,depositFiles,deadOfferIds:()=>(data&&data.deadOfferIds)||[],archive:()=>(data&&data.archive)||[],hiddenShowings:()=>(data&&data.hiddenShowings)||0,fold,tourOfferInfo:id=>{load(false);const o=findOffer(id);return o?(o.pipeline||o):null;},refreshAll:()=>{load(true);spLoad(true);},agentNavLabel:()=>'🤝 '+L('Mi agente','My agent'),agentView,
