@@ -86,7 +86,7 @@ const chip=(txt,tone)=>`<span class="lf-chip ${tone||''}">${txt}</span>`;
 function offerChip(p,o){
   if(p&&p.invalidatedAt||o&&o.invalidatedAt)return chip('❌ '+L('Anulada','Voided'),'bad');
   if(!p)return chip(L('Enviada','Sent'),'info');
-  if(p.completeAt||(p.checklist||[]).every(c=>DONE_ST.includes(c.status)))return chip('🎉 '+DONE_WORD(p),'ok');
+  if(p.dealClosedAt||p.tableStatus==='CLOSED'||(p.checklist||[]).every(c=>DONE_ST.includes(c.status)))return chip('🎉 '+DONE_WORD(p),'ok'); // v39 (9:24 PM): completeAt (option fee approved) is not 'closed'
   if(p.counter&&p.counter.status==='OPEN'&&!p.decision)return chip('↩️ '+L('Contraoferta','Counter'),'warn');
   if(!p.decision)return chip('🆕 '+L('Por pre-aprobar','To pre-approve'),'warn');
   const ns=nextStepOf(p);return chip(ns?`${L('Paso','Step')} ${ns.n}/${TOT(p)}`:'✅ '+DONE_WORD(p),p.underContract?'ok':'info');
@@ -289,6 +289,7 @@ function docSlotsBox(p,role){
   const up=(slot,label,replace,multi,cls)=>`<label class="btn-card${cls?' '+cls:''}">${label}<input type="file" hidden accept="image/*,application/pdf"${multi?' multiple':''} data-tslot="${slot}" data-trepl="${replace?1:0}" data-tlid="${esc(p.listingId)}" data-toffer="${esc(p.offerId)}"></label>`;
   const row=(slot)=>{const has=slot==='ID'?(sl.ID?[sl.ID]:[]):(sl.INCOME||[]);const ok=has.length>0;
     const btns=buyer&&!locked?`<div class="tour-btns ds-btns">${slot==='ID'?up('ID',ok?'🔁 '+L('Reemplazar','Replace'):'📎 '+L('Subir ID','Upload ID'),ok,false,ok?'':'primary'):ok?up('INCOME','➕ '+L('Agregar otro','Add another'),false,true,'')+up('INCOME','🔁 '+L('Reemplazar todo','Replace all'),true,true,''):up('INCOME','📎 '+L('Subir comprobantes','Upload proof'),false,true,'primary')}</div>`:'';
+    if(ok&&approved)return `<div class="ds-slot ok">${foldLine('✅',`${slot==='ID'?'🪪':'💼'} ${esc(L(...SLOT_LBL[slot]))}`,L('Aprobado','Approved'),p.docsApprovedAt,`<div class="ds-files">${has.map(fileA).join('')}</div>`,'ds-fold')}</div>`;
     return `<div class="ds-slot ${ok?'ok':'miss'}"><div class="ds-h"><b>${slot==='ID'?'🪪':'💼'} ${esc(L(...SLOT_LBL[slot]))}</b><span class="ds-st">${ok?(approved?'✅ '+L('Aprobado','Approved'):'✅ '+L('Subido','Uploaded')):'⏳ '+L('Falta','Missing')}</span></div>${ok?`<div class="ds-files">${has.map(fileA).join('')}</div>`:''}${slot==='INCOME'&&!ok&&buyer&&!locked?`<small>${L('Puedes subir varios archivos (talones de pago, estados de cuenta, carta de empleo).','You can upload several files (pay stubs, bank statements, employment letter).')}</small>`:''}${btns}</div>`;};
   let msg='';
   if(approved)msg=`<p class="tour-done">✅ ${L('Documentos aprobados por el vendedor.','Documents approved by the seller.')}</p>`;
@@ -305,6 +306,7 @@ function depositBox(p,role){
   if(!p||!(p.depositDocs||[]).length)return '';
   const seller=role==='SELLER'||role==='ADMIN';
   const st=p.depositApprovedAt?`<p class="tour-done">✅ ${L('Depósito aprobado por el vendedor.','Deposit approved by the seller.')}</p>`:`<p class="tour-done">🔎 ${L('Comprobante recibido','Proof received')}${seller?' — '+L('verifícalo en tu banco y apruébalo.','check it in your bank and approve it.'):' — '+L('el vendedor lo está revisando.','the seller is reviewing it.')}</p>`;
+  if(p.depositApprovedAt)return `<div class="ds-box dep-box"><div class="ds-slot ok">${foldLine('✅','💵 '+L('Comprobante del depósito','Deposit proof'),L('Depósito aprobado por el vendedor','Deposit approved by the seller'),p.depositApprovedAt,depositFiles(p),'ds-fold')}</div></div>`;
   return `<div class="ds-box dep-box"><div class="ds-slot ok"><div class="ds-h"><b>💵 ${L('Comprobante del depósito','Deposit proof')}</b><span class="ds-st">${p.depositApprovedAt?'✅ '+L('Aprobado','Approved'):'✅ '+L('Subido','Uploaded')}</span></div>${depositFiles(p,true)}</div>${st}<small class="ds-priv">🔒 ${L('Archivo privado: lo ven el cliente, su agente, el vendedor y el Admin. El enlace vence en 2 minutos.','Private file: the client, their agent, the seller and Admin can see it. The link expires in 2 minutes.')}</small></div>`;
 }
 function stepBody(p,c,role){
@@ -357,8 +359,12 @@ function stepBody(p,c,role){
   }
   return '';
 }
+// v39 (9:24 PM): finished (✅) or not-needed (—) steps fold to one line; tap to open. The current step stays open.
+const STEP_DONE_AT=(p,c)=>({DOCS:p.docsApprovedAt,DEPOSIT:p.depositApprovedAt,INSPECTIONS:p.inspectionReportAt||p.inspectionWaivedAt||p.inspectionAt,TRR:p.trrAgreedAt||(p.trr&&p.trr.agreedAt),CLOSING:p.dealClosedAt||p.closingAt,OPTION_FEE:p.fundsApprovedAt,PAID:p.paidAt||p.thanksAt}[c.key]||c.at||null);
+function foldLine(icon,title,result,at,inner,cls){return `<details class="lf-done-fold${cls?' '+cls:''}"><summary><span class="lfd-i" aria-hidden="true">${icon}</span><span class="lfd-t"><b>${title}</b><small>${result}${at?' · '+esc(shortDay(at)):''}</small></span><span class="lfd-c" aria-hidden="true">▾</span></summary><div class="lfd-b">${inner}</div></details>`;}
 function checklist(p,role){
-  return `<ol class="tour-check">${p.checklist.map(c=>{const st=c.key==='DOCS'&&c.status==='SUBMITTED'?DOCS_REVIEW:(STATUS_LABEL[c.status]||STATUS_LABEL.PENDING);const due=c.dueAt&&['DOCS','DEPOSIT'].includes(c.key)&&!['APPROVED','DONE','NA','INVALIDATED'].includes(c.status)&&!(c.key==='DOCS'&&c.status==='SUBMITTED')?` · ${L('antes del','by')} ${esc(when(c.dueAt))}`:'';
+  const cur=nextStepOf(p);
+  return `<ol class="tour-check">${p.checklist.map(c=>{if((DONE_ST.includes(c.status)||['ACCEPTED','AGREED','WAIVED'].includes(c.status))&&!(cur&&cur.n===c.n)&&!p.invalidatedAt){const st=STATUS_LABEL[c.status]||STATUS_LABEL.DONE;const live=p.decision!=='DENIED';const body=live?stepBody(p,c,role):'';return `<li class="tour-check-i s-${c.status.toLowerCase()} is-folded">${foldLine(st[2],`${c.n}) ${esc(L(...STEP_LABEL[c.key]))}`,esc(L(st[0],st[1])),['NA','WAIVED'].includes(c.status)?null:c.key==='CLOSING'&&c.status==='AGREED'?(p.closing&&p.closing.at):STEP_DONE_AT(p,c),body?`<div class="tour-step-body">${body}</div>`:`<small>${esc(L(st[0],st[1]))}</small>`)}</li>`;}const st=c.key==='DOCS'&&c.status==='SUBMITTED'?DOCS_REVIEW:(STATUS_LABEL[c.status]||STATUS_LABEL.PENDING);const due=c.dueAt&&['DOCS','DEPOSIT'].includes(c.key)&&!['APPROVED','DONE','NA','INVALIDATED'].includes(c.status)&&!(c.key==='DOCS'&&c.status==='SUBMITTED')?` · ${L('antes del','by')} ${esc(when(c.dueAt))}`:'';
     const live=!p.invalidatedAt&&p.decision!=='DENIED';
     return `<li class="tour-check-i s-${c.status.toLowerCase()}"><div><span>${st[2]} <b>${c.n}) ${esc(L(...STEP_LABEL[c.key]))}</b>${c.key==='DOCS'&&['PENDING','LATE'].includes(c.status)?' '+L('(12 horas desde la pre-aprobación)','(12 hours from the pre-approval)'):''}${c.key==='DEPOSIT'&&['PENDING','LATE'].includes(c.status)?' '+L('(72 horas desde la pre-aprobación)','(72 hours from the pre-approval)'):''}<br><small>${esc(L(st[0],st[1]))}${due}</small></span>${live?`<div class="tour-step-body">${stepBody(p,c,role)}</div>`:''}</div></li>`;}).join('')}</ol>`;
 }
@@ -627,7 +633,7 @@ function closingFlowBox(p,role,opts={}){
   const id=esc(p.offerId),ns=nextStepOf(p),n=ns?ns.n:8,closed=!!(p.dealClosedAt||p.tableStatus==='CLOSED');
   const canEdit=!closed&&!p.invalidatedAt&&['ADMIN','SELLER','AGENT'].includes(role),canStatus=!closed&&!p.invalidatedAt&&(role==='ADMIN'||role==='SELLER');
   const mySide=role==='AGENT'?'AGENT':role==='CLIENT'?'CLIENT':'SELLER';
-  const row=(icon,label,body)=>`<div class="cf-row"><span class="cf-l"><span aria-hidden="true">${icon}</span> ${label}</span><div class="cf-v">${body}</div></div>`;
+  const row=(icon,label,body,done)=>done?`<div class="cf-row cf-row-done">${foldLine('✅',`${icon} ${label}`,done[0],done[1],`<div class="cf-v">${body}</div>`,'cf-fold')}</div>`:`<div class="cf-row"><span class="cf-l"><span aria-hidden="true">${icon}</span> ${label}</span><div class="cf-v">${body}</div></div>`;
   // Closing date (step 5)
   const c=p.closing,ap=c&&c.approvals||{};
   let dateB=c?`<b>${esc(shortDay(c.at))} · ${esc(timeOf(c.at))}</b> ${p.closingAt?chip('✅ '+L('Confirmada','Confirmed'),'ok'):chip(L('Propuesta','Proposed'),'warn')}<small class="cf-ap">${['CLIENT','AGENT','SELLER'].map(k=>`${ap[k]?'✅':'⏳'} ${esc(L(...ROLE_LBL[k]))}`).join(' · ')}</small>`:`<small>${L('Sin fecha todavía','Not set yet')}</small>`;
@@ -649,10 +655,10 @@ function closingFlowBox(p,role,opts={}){
   return `<div class="cf-box" data-cf-for="${id}"><div class="cf-h">${opts.noHead?'':`<b>🏁 ${L('Cierre, documentos y avance','Closing, documents and progress')}</b>`}${stepChip(p)}</div>
     <div class="ad-prog" role="img" aria-label="${esc(L('Paso','Step')+' '+Math.min(n,TOT(p))+'/'+TOT(p))}">${DOTS(p).map(i=>`<span class="${closed||i<n?'on':i===n?'cur':''}"></span>`).join('')}</div>
     ${ns&&!closed?`<p class="cf-next">${L('Ahora','Now')}: <b>${esc(ns.label)}</b> — ${esc(L(ns.st[0],ns.st[1]))}</p>`:''}
-    ${row('📅',L('Fecha de cierre','Closing date'),dateB)}
-    ${row('🔍',L('Inspecciones','Inspections'),inspB)}
-    ${row('💵',L('Recibo del EM ($1,000)','EM receipt ($1,000)'),emB)}
-    ${row('📄',L('Contrato final','Final contract'),ctB)}
+    ${row('📅',L('Fecha de cierre','Closing date'),dateB,p.closingAt&&c?[`${esc(shortDay(c.at))} · ${esc(timeOf(c.at))} · ${L('Confirmada por todos','Confirmed by everyone')}`,null]:null)}
+    ${row('🔍',L('Inspecciones','Inspections'),inspB,p.inspectionDone?[L('Reporte recibido','Report received'),p.inspectionReportAt]:p.inspectionWaived||((p.checklist||[]).find(x=>x.key==='INSPECTIONS')||{}).status==='NA'?[L('No aplica (sin inspecciones)','Not needed (waived)'),null]:null)}
+    ${row('💵',L('Recibo del EM ($1,000)','EM receipt ($1,000)'),emB,p.depositApprovedAt?[L('Aprobado','Approved'),p.depositApprovedAt]:null)}
+    ${row('📄',L('Contrato final','Final contract'),ctB,closed&&ks.length?[`${ks.length} ${ks.length===1?L('archivo','file'):L('archivos','files')}`,null]:null)}
     ${opts.commission||''}${status}</div>`;
 }
 async function cfRefresh(){await load(true);try{await spLoad(true);}catch(e){}if(S.refreshClosings)try{await S.refreshClosings();}catch(e){}if(window.render)try{render();}catch(e){}}

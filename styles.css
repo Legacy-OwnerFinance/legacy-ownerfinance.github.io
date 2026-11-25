@@ -2182,3 +2182,21 @@ details.lf-fold{min-width:0;max-width:100%}
 .cf-up{flex-direction:row!important;height:auto!important;min-height:44px;max-height:60px;align-self:flex-start;padding:10px 14px!important;width:auto!important}
 .cf-up input{display:none!important}
 .tour-linkbtn{background:none;border:0;padding:6px 0;min-height:36px;color:#1d4ed8;text-decoration:underline;font:inherit;font-size:13.5px;cursor:pointer;align-self:flex-start}
+/* v39 (9:24 PM): finished steps fold to one line */
+.lf-done-fold{border:1px solid #d1fae5;background:#f0fdf4;border-radius:10px;margin:4px 0}
+.lf-done-fold>summary{list-style:none;display:flex;align-items:center;gap:8px;padding:8px 10px;min-height:40px;cursor:pointer}
+.lf-done-fold>summary::-webkit-details-marker{display:none}
+.lf-done-fold .lfd-i{flex:0 0 auto}
+.lf-done-fold .lfd-t{flex:1 1 auto;min-width:0;display:flex;flex-wrap:wrap;gap:2px 8px;align-items:baseline}
+.lf-done-fold .lfd-t b{font-size:14px}
+.lf-done-fold .lfd-t small{color:#166534;font-size:12.5px}
+.lf-done-fold .lfd-c{flex:0 0 auto;color:#64748b;transition:transform .15s}
+.lf-done-fold[open] .lfd-c{transform:rotate(180deg)}
+.lf-done-fold .lfd-b{padding:0 10px 10px}
+.tour-check-i.is-folded{display:block;padding:0;border:0;background:none}
+.tour-check-i.s-na .lf-done-fold{background:#f8fafc;border-color:#e2e8f0}
+.tour-check-i.s-na .lf-done-fold .lfd-t small{color:#475569}
+.cf-row.cf-row-done{display:block}
+.cf-row.cf-row-done .lf-done-fold{margin:2px 0}
+.ds-slot .ds-fold{margin:0;border:0;background:none}
+.ds-slot .ds-fold>summary{padding:4px 0}
