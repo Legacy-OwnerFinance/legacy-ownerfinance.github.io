@@ -584,6 +584,7 @@ async function markVisibleThreadRead(){
     peerId=el?(el.getAttribute('data-peer')||''):'';
   }catch(e){peerId='';}
   if(!peerId||!msgEnabled())return false;
+  if(document.visibilityState&&document.visibilityState!=='visible')return false; // v51: Seen only while the chat is really on screen
   const unread=(S.msgThreads||[]).some(t=>t&&t.peerId===peerId&&(t.unread|0)>0);
   if(!unread)return false;
   await markThreadRead(peerId);
@@ -621,6 +622,27 @@ S.markNotifRead=markNotifRead;
 S.msgEnabled=msgEnabled;
 S.refreshMsgUnread=refreshMsgUnread;
 S.markThreadRead=markThreadRead;
+// v51: Delivered / Seen receipts for my own messages in the open conversation, plus both avatars.
+S.msgReceipts={peerId:'',map:{},peer:null,meAvatarUrl:null,sig:''};
+async function refreshReceipts(peerId){
+  if(!peerId||!msgEnabled()||!S.user)return false;
+  try{
+    const r=await api('messages_receipts',{peerId});
+    if(!r||!r.ok)return false;
+    const map={};(r.receipts||[]).forEach(x=>{if(x&&x.id)map[x.id]={deliveredAt:x.deliveredAt||null,seenAt:x.seenAt||null};});
+    const sig=JSON.stringify([peerId,map,r.peer&&r.peer.avatarUrl,r.meAvatarUrl]);
+    const changed=sig!==S.msgReceipts.sig;
+    S.msgReceipts={peerId,map,peer:r.peer||null,meAvatarUrl:r.meAvatarUrl||null,sig};
+    return changed;
+  }catch(e){return false;}
+}
+async function refreshVisibleReceipts(){
+  let peerId='';
+  try{const el=document.querySelector('.msg-chat[data-peer]');peerId=el?(el.getAttribute('data-peer')||''):'';}catch(e){}
+  if(!peerId)return false;
+  return refreshReceipts(peerId);
+}
+S.refreshReceipts=refreshReceipts;
 async function refreshInvestor(){
   if(!(S.caps&&S.caps.investor)||!S.user){
     const had=!!(S.investorHome||S.investorTx||S.investorAdmin);
@@ -954,6 +976,7 @@ async function pollSupabase(opts){
     try{if(await refreshPortal({fromPoll:true}))changed=true;}catch(e){}
     try{if(await refreshMsgUnreadPolled(!!(opts&&opts.forceMsg)))changed=true;}catch(e){}
     try{if(await markVisibleThreadRead())changed=true;}catch(e){}
+    try{if(await refreshVisibleReceipts())changed=true;}catch(e){}
     try{if(await refreshInvestor())changed=true;}catch(e){}
     try{if(await refreshClosings(!!(opts&&opts.forceMsg)))changed=true;}catch(e){}
     try{if(await refreshProgress(!!(opts&&opts.forceMsg)))changed=true;}catch(e){}
