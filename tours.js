@@ -399,13 +399,30 @@ function stepBody(p,c,role){
   return '';
 }
 // v39 (9:24 PM): finished (✅) or not-needed (—) steps fold to one line; tap to open. The current step stays open.
+// oc9: on each refresh the finished step is a closed <details> (no saved open state) and the next incomplete step renders expanded.
 const STEP_DONE_AT=(p,c)=>({DOCS:p.docsApprovedAt,DEPOSIT:p.depositApprovedAt,INSPECTIONS:p.inspectionReportAt||p.inspectionWaivedAt||p.inspectionAt,TRR:p.trrAgreedAt||(p.trr&&p.trr.agreedAt),CLOSING:p.dealClosedAt||p.closingAt,OPTION_FEE:p.fundsApprovedAt,PAID:p.paidAt||p.thanksAt}[c.key]||c.at||null);
 function foldLine(icon,title,result,at,inner,cls){return `<details class="lf-done-fold${cls?' '+cls:''}"><summary><span class="lfd-i" aria-hidden="true">${icon}</span><span class="lfd-t"><b>${title}</b><small>${result}${at?' · '+esc(shortDay(at)):''}</small></span><span class="lfd-c" aria-hidden="true">▾</span></summary><div class="lfd-b">${inner}</div></details>`;}
+function stepDone(c){return DONE_ST.includes(c.status)||['ACCEPTED','AGREED','WAIVED'].includes(c.status);}
+function stepFold(icon,title,inner,later){return `<details class="lf-done-fold${later?' step-later':''}"><summary><span class="lfd-i" aria-hidden="true">${icon}</span><span class="lfd-t"><b>${title}</b></span><span class="lfd-c" aria-hidden="true">▾</span></summary>${inner?`<div class="lfd-b">${inner}</div>`:''}</details>`;}
 function checklist(p,role){
-  const cur=nextStepOf(p);
-  return `<ol class="tour-check">${p.checklist.map(c=>{if((DONE_ST.includes(c.status)||['ACCEPTED','AGREED','WAIVED'].includes(c.status))&&!(cur&&cur.n===c.n)&&!p.invalidatedAt){const st=STATUS_LABEL[c.status]||STATUS_LABEL.DONE;const live=p.decision!=='DENIED';const body=live?stepBody(p,c,role):'';return `<li class="tour-check-i s-${c.status.toLowerCase()} is-folded">${foldLine(st[2],`${c.n}) ${esc(L(...STEP_LABEL[c.key]))}`,esc(L(st[0],st[1])),['NA','WAIVED'].includes(c.status)?null:c.key==='CLOSING'&&c.status==='AGREED'?(p.closing&&p.closing.at):STEP_DONE_AT(p,c),body?`<div class="tour-step-body">${body}</div>`:`<small>${esc(L(st[0],st[1]))}</small>`)}</li>`;}const st=c.key==='DOCS'&&c.status==='SUBMITTED'?DOCS_REVIEW:(STATUS_LABEL[c.status]||STATUS_LABEL.PENDING);const due=c.dueAt&&['DOCS','DEPOSIT'].includes(c.key)&&!['APPROVED','DONE','NA','INVALIDATED'].includes(c.status)&&!(c.key==='DOCS'&&c.status==='SUBMITTED')?` · ${L('antes del','by')} ${esc(when(c.dueAt))}`:'';
-    const live=!p.invalidatedAt&&p.decision!=='DENIED';
-    return `<li class="tour-check-i s-${c.status.toLowerCase()}"><div><span>${st[2]} <b>${c.n}) ${esc(L(...STEP_LABEL[c.key]))}</b>${c.key==='DOCS'&&['PENDING','LATE'].includes(c.status)?' '+L('(12 horas desde la pre-aprobación)','(12 hours from the pre-approval)'):''}${c.key==='DEPOSIT'&&['PENDING','LATE'].includes(c.status)?' '+L('(72 horas desde la pre-aprobación)','(72 hours from the pre-approval)'):''}<br><small>${esc(L(st[0],st[1]))}${due}</small>${window.LegacyGuides?LegacyGuides.stepLink(c.key):''}</span>${live?`<div class="tour-step-body">${stepBody(p,c,role)}</div>`:''}</div></li>`;}).join('')}</ol>`;
+  const cur=nextStepOf(p),live=!p.invalidatedAt&&p.decision!=='DENIED';
+  return `<ol class="tour-check">${(p.checklist||[]).map(c=>{
+    const title=`${c.n}) ${esc(L(...STEP_LABEL[c.key]))}`;
+    const finished=stepDone(c)&&!(cur&&cur.n===c.n)&&!p.invalidatedAt;
+    const future=!!(cur&&c.n>cur.n)&&!p.invalidatedAt&&p.decision!=='DENIED';
+    if(finished||future){
+      const st=c.key==='DOCS'&&c.status==='SUBMITTED'?DOCS_REVIEW:(STATUS_LABEL[c.status]||STATUS_LABEL.DONE);
+      const icon=finished?(['NA','WAIVED'].includes(c.status)?'➖':'✅'):st[2];
+      const at=future||['NA','WAIVED'].includes(c.status)?null:c.key==='CLOSING'&&c.status==='AGREED'?(p.closing&&p.closing.at):STEP_DONE_AT(p,c);
+      const body=live?stepBody(p,c,role):'';
+      const guide=window.LegacyGuides?LegacyGuides.stepLink(c.key):'';
+      const inner=`<small>${esc(L(st[0],st[1]))}${at?' · '+esc(shortDay(at)):''}</small>${body?`<div class="tour-step-body">${body}</div>`:''}${guide||''}`;
+      return `<li class="tour-check-i s-${String(c.status).toLowerCase()} is-folded${future?' is-later':''}">${stepFold(icon,title,inner,future)}</li>`;
+    }
+    const st=c.key==='DOCS'&&c.status==='SUBMITTED'?DOCS_REVIEW:(STATUS_LABEL[c.status]||STATUS_LABEL.PENDING);
+    const due=c.dueAt&&['DOCS','DEPOSIT'].includes(c.key)&&!['APPROVED','DONE','NA','INVALIDATED'].includes(c.status)&&!(c.key==='DOCS'&&c.status==='SUBMITTED')?` · ${L('antes del','by')} ${esc(when(c.dueAt))}`:'';
+    return `<li class="tour-check-i s-${String(c.status).toLowerCase()} is-current"><div><span>${st[2]} <b>${c.n}) ${esc(L(...STEP_LABEL[c.key]))}</b>${c.key==='DOCS'&&['PENDING','LATE'].includes(c.status)?' '+L('(12 horas desde la pre-aprobación)','(12 hours from the pre-approval)'):''}${c.key==='DEPOSIT'&&['PENDING','LATE'].includes(c.status)?' '+L('(72 horas desde la pre-aprobación)','(72 hours from the pre-approval)'):''}<br><small>${esc(L(st[0],st[1]))}${due}</small>${window.LegacyGuides?LegacyGuides.stepLink(c.key):''}</span>${live?`<div class="tour-step-body">${stepBody(p,c,role)}</div>`:''}</div></li>`;
+  }).join('')}</ol>`;
 }
 const money=c=>{const v=Number(c)/100;return Number.isFinite(v)&&v>0?'$'+v.toLocaleString('en-US',{maximumFractionDigits:2}):'';};
 function amountLine(p){const a=p&&p.amount;if(!a)return '';return [money(a.price),a.down?L('enganche ','down ')+money(a.down):'',a.monthly?money(a.monthly)+L('/mes','/mo'):''].filter(Boolean).join(' · ');}
@@ -426,6 +443,150 @@ function decisionLine(p){
   if(p.counter&&p.counter.status==='OPEN')return '';
   return `<p class="ops-meta">⏳ ${L('Esperando la pre-aprobación del dueño. Los plazos (12 h documentos, 72 h depósito) empiezan cuando la pre-apruebe.','Waiting for the owner’s pre-approval. The clocks (12 h documents, 72 h deposit) start when it is pre-approved.')}${p.resumes?' 🔄 '+L('Oferta reanudada.','Offer resumed.'):''}</p>`;
 }
+/* oc9: one or two plain sentences for the step the viewer is on. Side is buyer (client), agent, or owner (seller and Admin). */
+function offerSide(role){return role==='CLIENT'||role==='FOLLOWER'?'buyer':role==='AGENT'?'agent':'owner';}
+function limitBit(iso){
+  if(!iso)return '';
+  const t=new Date(iso).getTime();if(!Number.isFinite(t))return '';
+  const txt=`${shortDay(iso)}, ${timeOf(iso)}`,end=/[.!?]$/.test(txt)?'':'.';
+  return t<=Date.now()?` ${L('Plazo vencido','Deadline passed')}: ${txt}${end}`:` ${L('Fecha límite','Deadline')}: ${txt}${end}`;
+}
+function stepBlurb(p,role){
+  if(!p)return '';
+  const side=offerSide(role);
+  if(p.invalidatedAt)return p.voidReason==='DEPOSIT'
+    ?L('Oferta anulada: no se subió el comprobante del depósito de $1,000 dentro de 72 horas.','Offer voided: the $1,000 deposit proof was not uploaded within 72 hours.')
+    :L('Oferta anulada: no se subieron los documentos dentro de 12 horas.','Offer voided: the documents were not uploaded within 12 hours.');
+  if(p.decision==='DENIED'){const note=String(p.decisionNote||'').trim();const base=L('El dueño no aceptó la oferta.','The owner did not accept the offer.');return note&&note.length<=80?`${base} ${note}`:base;}
+  if(p.dealClosedAt||p.tableStatus==='CLOSED')return L('Trato cerrado. La casa quedó vendida: este es el paso final.','Deal closed. The home is sold: this is the final step.');
+  const steps=p.checklist||[];
+  const doneBlurb=side==='buyer'
+    ?L('Listo. Ya completaste todos los pasos de esta oferta.','Done. You have completed every step of this offer.')
+    :L('Todos los pasos están completos. El vendedor puede marcar la casa como vendida.','Every step is complete. The seller can mark the home sold.');
+  if(steps.length&&steps.every(c=>DONE_STRICT.includes(c.status)))return doneBlurb;
+  if(!p.decision){
+    if(p.counter&&p.counter.status==='OPEN'){
+      if(side==='owner')return L('Enviaste una contraoferta. Estás esperando la respuesta del agente.','You sent a counteroffer. You are waiting for the agent’s answer.');
+      if(side==='agent')return L('El dueño hizo una contraoferta. Acéptala o recházala para seguir.','The owner made a counteroffer. Accept it or decline it to continue.');
+      return L('El dueño hizo una contraoferta. Tu agente la revisa contigo y responde.','The owner made a counteroffer. Your agent reviews it with you and answers.');
+    }
+    if(side==='owner')return L('Oferta nueva. Pre-aprueba, niega o haz una contraoferta. Los plazos empiezan cuando la pre-apruebes.','New offer. Pre-approve it, deny it, or send a counteroffer. The clocks start when you pre-approve.');
+    if(side==='agent')return L('Esperando que el dueño pre-apruebe la oferta. Ahí empiezan los plazos de documentos y depósito.','Waiting for the owner to pre-approve the offer. The document and deposit clocks start then.');
+    return L('Tu agente envió la oferta. Estamos esperando que el dueño la pre-apruebe.','Your agent sent the offer. We are waiting for the owner to pre-approve it.');
+  }
+  const c=steps.find(x=>!DONE_ST.includes(x.status));
+  if(!c)return steps.length?doneBlurb:L('La oferta está pre-aprobada.','The offer is pre-approved.');
+  const n=c.n,tot=p.stepsTotal||7,P=(es,en)=>L(`Paso ${n} de ${tot}: ${es}`,`Step ${n} of ${tot}: ${en}`);
+  const me=role==='ADMIN'?'SELLER':role;
+  if(c.key==='DOCS'){
+    const fix=p.docsRejectedAt&&!p.docsUploadedAt&&!p.docsApprovedAt;
+    const due=!p.docsUploadedAt?limitBit(p.docsDueAt):'';
+    if(fix){
+      if(side==='buyer')return P('el vendedor pidió corregir tus documentos. Vuelve a subir tu ID y tus comprobantes de ingreso.','the seller asked you to fix your documents. Upload your ID and proof of income again.');
+      if(side==='agent')return P('el vendedor pidió corregir los documentos. Hay que volver a subir el ID y los comprobantes de ingreso.','the seller asked to fix the documents. The ID and proof of income need to be uploaded again.');
+      return P('pediste una corrección de documentos. Esperando que vuelvan a subir el ID y los comprobantes de ingreso.','you asked for the documents to be fixed. Waiting for the ID and proof of income to be uploaded again.');
+    }
+    if(c.status==='SUBMITTED'||(p.docsUploadedAt&&!p.docsApprovedAt)){
+      if(side==='buyer')return P('el vendedor está revisando tu ID y comprobantes de ingreso.','the seller is reviewing your ID and proof of income.');
+      if(side==='agent')return P('el vendedor está revisando el ID y los comprobantes de ingreso.','the seller is reviewing the ID and proof of income.');
+      return P('revisa el ID y los comprobantes de ingreso, y apruébalos o pide una corrección.','review the ID and proof of income, then approve them or ask for a fix.');
+    }
+    if(side==='buyer')return P('sube tu ID y tus comprobantes de ingreso.','upload your ID and your proof of income.')+due;
+    if(side==='agent')return P('el comprador debe subir su ID y sus comprobantes de ingreso.','the buyer needs to upload their ID and proof of income.')+due;
+    return P('esperando el ID y los comprobantes de ingreso del comprador.','waiting for the buyer’s ID and proof of income.')+due;
+  }
+  if(c.key==='DEPOSIT'){
+    const due=!p.depositProofAt?limitBit(p.depositDueAt):'';
+    if(c.status==='SUBMITTED'||(p.depositProofAt&&!p.depositApprovedAt)){
+      if(side==='owner')return P('revisa el comprobante del depósito de $1,000 y apruébalo si ya está en tu banco.','review the $1,000 deposit proof and approve it if it is already in your bank.');
+      if(side==='agent')return P('el vendedor está revisando el comprobante del depósito de $1,000.','the seller is reviewing the $1,000 deposit proof.');
+      return P('el vendedor está revisando tu comprobante del depósito de $1,000.','the seller is reviewing your $1,000 deposit proof.');
+    }
+    if(side==='buyer')return P('sube el comprobante del depósito de $1,000.','upload the $1,000 deposit proof.')+due;
+    if(side==='agent')return P('el comprador debe subir el comprobante del depósito de $1,000.','the buyer needs to upload the $1,000 deposit proof.')+due;
+    return P('esperando el comprobante del depósito de $1,000.','waiting for the $1,000 deposit proof.')+due;
+  }
+  if(c.key==='INSPECTIONS'){
+    if(c.status==='LOCKED')return P('las inspecciones se abren cuando documentos y depósito estén listos y el vendedor apruebe al menos 2 de 3 condiciones.','inspections open once the documents and deposit are in and the seller has approved at least 2 of 3 conditions.');
+    if(c.status==='SCHEDULED'||p.inspectionAt){
+      const whenTxt=p.inspectionAt?` (${shortDay(p.inspectionAt)}, ${timeOf(p.inspectionAt)})`:'';
+      if(side==='owner')return P(`la inspección está agendada${whenTxt}. El reporte llega cuando terminen.`,`the inspection is scheduled${whenTxt}. The report arrives when it is done.`);
+      return P(`la inspección está agendada${whenTxt}. Sube el reporte cuando esté listo.`,`the inspection is scheduled${whenTxt}. Upload the report when it is ready.`);
+    }
+    if(side==='agent')return P('agenda la inspección o indica que no habrá inspecciones.','schedule the inspection, or say there will be no inspections.');
+    if(side==='buyer')return P('tu agente coordina la inspección, o pueden decidir no hacerla.','your agent sets up the inspection, or you can decide to skip it.');
+    return P('el agente está coordinando la inspección, o puede indicar que no habrá.','the agent is setting up the inspection, or may say there will not be one.');
+  }
+  if(c.key==='TRR'){
+    if(c.status==='LOCKED')return P('la negociación de reparaciones (TRR) se abre al subir el reporte de inspección.','repair negotiations (TRR) open when the inspection report is uploaded.');
+    if(c.status==='REVIEW'||c.status==='SUBMITTED'){
+      if(side==='owner')return P('revisa la lista de reparaciones (TRR) y acéptala, contraoferta o recházala.','review the repair list (TRR) and accept it, counter it, or reject it.');
+      return P('el vendedor está revisando la lista de reparaciones (TRR).','the seller is reviewing the repair list (TRR).');
+    }
+    if(c.status==='COUNTERED'){
+      if(side==='owner')return P('enviaste una contraoferta de reparaciones. Esperando la respuesta del agente.','you sent a repair counteroffer. Waiting for the agent’s answer.');
+      if(side==='agent')return P('el vendedor contraofertó las reparaciones. Acéptala o envía otra propuesta.','the seller countered the repairs. Accept it or send another proposal.');
+      return P('el vendedor contraofertó las reparaciones. Tu agente te ayuda a responder.','the seller countered the repairs. Your agent helps you answer.');
+    }
+    if(c.status==='REJECTED'){
+      if(side==='owner')return P('rechazaste el TRR. El agente puede enviar otra lista o seguir sin reparaciones.','you rejected the TRR. The agent can send another list or go on without repairs.');
+      if(side==='agent')return P('el vendedor rechazó el TRR. Puedes enviar otra lista o no negociar.','the seller rejected the TRR. You can send another list or skip negotiations.');
+      return P('el vendedor rechazó las reparaciones. Tu agente puede proponer otra lista o seguir sin TRR.','the seller rejected the repairs. Your agent can propose another list or go on without a TRR.');
+    }
+    if(side==='agent')return P('escribe lo que piden reparar, o elige no negociar el TRR.','write what you want repaired, or choose not to negotiate a TRR.');
+    if(side==='buyer')return P('tu agente prepara la lista de reparaciones (TRR) o decide no negociarla.','your agent prepares the repair list (TRR) or decides not to negotiate it.');
+    return P('esperando la lista de reparaciones del comprador, si deciden negociar.','waiting for the buyer’s repair list, if they choose to negotiate.');
+  }
+  if(c.key==='CLOSING'){
+    const whenC=p.closing&&p.closing.at?`${shortDay(p.closing.at)}, ${timeOf(p.closing.at)}`:'';
+    const atBit=whenC?` (${whenC})`:'';
+    if(c.status==='LOCKED')return P('la fecha de cierre se abre cuando documentos, depósito y, si hubo inspección, las reparaciones estén listos.','the closing date opens once documents, deposit and, if there was an inspection, repairs are done.');
+    if(c.status==='AGREED'||p.closingAt)return P(`la fecha de cierre está confirmada${atBit}. El pago del cierre se pide cerca de ese día.`,`the closing date is confirmed${atBit}. The closing payment is due near that day.`);
+    if(c.status==='TO_SCHEDULE'){
+      if(side==='buyer')return P('propón el día y la hora del cierre.','propose the day and time for closing.');
+      if(side==='agent')return P('el comprador elige el día y la hora del cierre.','the buyer picks the day and time for closing.');
+      return P('esperando que el comprador proponga la fecha de cierre.','waiting for the buyer to propose the closing date.');
+    }
+    const ap=(p.closing&&p.closing.approvals)||{};
+    if(side==='buyer')return P(`hay una fecha de cierre propuesta${atBit}. Confírmala o pide otra.`,`a closing date is proposed${atBit}. Confirm it or ask for another.`);
+    if(ap[me])return P(`ya aprobaste la fecha de cierre${atBit}. Falta que los demás confirmen.`,`you already approved the closing date${atBit}. The others still need to confirm.`);
+    return P(`hay una fecha de cierre propuesta${atBit}. Apruébala o pide otra.`,`a closing date is proposed${atBit}. Approve it or ask for another.`);
+  }
+  if(c.key==='OPTION_FEE'){
+    const due=(p.fundsDueAt&&!p.fundsReceiptAt&&['PENDING','LATE'].includes(c.status))?limitBit(p.fundsDueAt):'';
+    if(c.status==='LOCKED')return P('el option fee o enganche se deposita 24 horas antes del cierre, cuando la fecha esté confirmada.','the option fee or down payment is due 24 hours before closing, once the date is confirmed.');
+    if(c.status==='SUBMITTED'||(p.fundsReceiptAt&&!p.fundsApprovedAt)){
+      if(side==='owner')return P('verifica el comprobante del option fee o enganche y apruébalo.','verify the option fee or down payment proof and approve it.');
+      return P('el vendedor está verificando el comprobante del option fee o enganche.','the seller is verifying the option fee or down payment proof.');
+    }
+    if(side==='buyer')return P('sube el comprobante del option fee o enganche.','upload the option fee or down payment proof.')+due;
+    if(side==='agent')return P('el comprador debe subir el comprobante del option fee o enganche.','the buyer needs to upload the option fee or down payment proof.')+due;
+    return P('esperando el comprobante del option fee o enganche.','waiting for the option fee or down payment proof.')+due;
+  }
+  if(c.key==='PAID'){
+    const passed=p.closingAt&&Date.now()>new Date(p.closingAt).getTime();
+    const mine=(p.experience||[]).some(x=>x.role===me);
+    if(!passed)return P('después del día de cierre podrás dejar tus comentarios y guardar los documentos.','after closing day you can leave your comments and save the documents.');
+    if(mine)return P('gracias por tus comentarios. Puedes subir los documentos de cierre para tus registros.','thank you for your comments. You can upload the closing documents for your records.');
+    return P('cuenta cómo fue el cierre y sube los documentos para tus registros.','share how the closing went and upload the documents for your records.');
+  }
+  const st=STATUS_LABEL[c.status]||STATUS_LABEL.PENDING,lab=STEP_LABEL[c.key]||['Este paso','This step'];
+  return P(`${lab[0]}. ${st[0]}.`,`${lab[1]}. ${st[1]}.`);
+}
+function offerFacts(p,kind){
+  const label=kind==='sent'?L('Oferta enviada','Offer sent'):L('Oferta inicial','Initial offer');
+  const at=p&&(p.offerAt||p.dueAt),amt=amountLine(p),bits=[];
+  if(at)bits.push(`${label} · ${esc(when(at))}`);
+  if(amt)bits.push(`<b>${esc(amt)}</b>`);
+  return bits.length?`<p class="ops-meta">${bits.join(' · ')}</p>`:'';
+}
+function offerDetailsFold(p,extra,kind){
+  if(!p)return '';
+  const body=`${extra||''}${offerFacts(p,kind)}${decisionLine(p)}${homeStatusLine(p)}`;
+  if(!String(body).trim())return '';
+  const amt=amountLine(p);
+  return fold('odet-'+p.offerId,`<span class="lf-main"><b>${L('Detalles de la oferta','Offer details')}</b>${amt?`<small>${esc(amt)}</small>`:''}</span>`,body,{cls:'oc-details'});
+}
 function offerCard(t,h,o){
   const p=o.pipeline;const live=!o.invalidatedAt&&!(p&&p.decision==='DENIED');
   const head=p&&p.invalidatedAt?`<div class="tour-warn">❌ <b>${L('Oferta anulada','Offer voided')}</b> · ${esc(when(p.offerAt))}${amountLine(p)?' · '+esc(amountLine(p)):''}</div>`:`<div class="tour-done">✅ <b>${L('Oferta enviada','Offer sent')}</b> · ${esc(when(p?p.offerAt:o.dueAt))}${p&&amountLine(p)?' · '+esc(amountLine(p)):''}</div>`;
@@ -434,8 +595,9 @@ function offerCard(t,h,o){
   const voidBox=p.invalidatedAt?(t.role==='AGENT'?`<div class="tour-btns"><button type="button" class="btn-card primary" data-tresume="${esc(o.offerId)}" data-tlid="${esc(h.id)}">🔄 ${L('Reanudar oferta','Resume offer')}</button><button type="button" class="btn-card btn-del" data-tarch="${esc(o.offerId)}">🗑️ ${L('Eliminar oferta','Delete offer')}</button></div><p class="ops-meta">${L('Reanudar abre la oferta para revisarla y enviarla de nuevo: vuelve al dueño como nueva, tiene que pre-aprobarla otra vez y los plazos y condiciones empiezan de cero.','Resume opens the offer so you can review it and send it again: it goes back to the owner as new, they must pre-approve it again, and the clocks and conditions start over.')}</p>`:`<p class="ops-meta">${L('Tu agente puede reanudarla o eliminarla.','Your agent can resume it or delete it.')}</p>`):'';
   const dl=offerDue(p),nx=offerNext(p);
   const sum=`<span class="lf-ico" aria-hidden="true">💰</span><span class="lf-main"><b>${L('Oferta','Offer')}${amountLine(p)?' · '+esc(money(p.amount&&p.amount.price)):''}</b><small>${nx}</small></span><span class="lf-tags">${offerChip(p,o)}${dl?cdSpan(dl):''}</span>`;
-  if(p.invalidatedAt)return fold('offer-'+o.offerId,sum,`${head}${decisionLine(p)}${voidBox}${ocBox(o.offerId,t.role)}`,{cls:'tour-offer'+focusOffer(o.offerId),id:'offer-'+o.offerId,force:hashHas('offer='+o.offerId)});
-  return fold('offer-'+o.offerId,sum,`${head}${decisionLine(p)}${counterBox(p,t.role)}${homeStatusLine(p)}<h4>${L('Próximos pasos','Next steps')}</h4>${checklist(p,t.role)}${ups}${closingFlowBox(p,t.role)}${ocBox(o.offerId,t.role)}`,{cls:'tour-offer'+focusOffer(o.offerId),id:'offer-'+o.offerId,force:hashHas('offer='+o.offerId)});
+  const top=`<p class="oc-step-sum">${esc(stepBlurb(p,t.role))}</p>${offerDetailsFold(p,'','sent')}`;
+  if(p.invalidatedAt)return fold('offer-'+o.offerId,sum,`${top}${voidBox}${ocBox(o.offerId,t.role)}`,{cls:'tour-offer'+focusOffer(o.offerId),id:'offer-'+o.offerId,force:hashHas('offer='+o.offerId)});
+  return fold('offer-'+o.offerId,sum,`${top}${counterBox(p,t.role)}<h4>${L('Próximos pasos','Next steps')}</h4>${checklist(p,t.role)}${ups}${closingFlowBox(p,t.role)}${ocBox(o.offerId,t.role)}`,{cls:'tour-offer'+focusOffer(o.offerId),id:'offer-'+o.offerId,force:hashHas('offer='+o.offerId)});
 }
 function sellerSection(){
   const so=(data&&data.sellerOffers)||[];if(!so.length)return '';
@@ -445,7 +607,10 @@ function sellerSection(){
     const docs=(p.documents||[]).length?`<p class="ops-meta">📎 ${(p.documents||[]).map(x=>esc((x.docType==='DEPOSIT_PROOF'?'💵 ':'')+x.name)).join(' · ')}</p>`:'';
     const dl=offerDue(p);
     const sum=`<span class="lf-ico" aria-hidden="true">🏠</span><span class="lf-main"><b>${esc(p.address)}</b><small>${esc(money(p.amount&&p.amount.price))}${offerNext(p)?' · '+offerNext(p):''}</small></span><span class="lf-tags">${offerChip(p)}${dl?cdSpan(dl):''}</span>`;
-    return fold('sell-'+p.offerId,sum,`<h3>${esc(p.address)}${p.city?', '+esc(p.city):''}</h3>${p.owner?`<p class="ops-meta">🏢 ${L('Vendedor','Seller')}: <b>${esc(p.owner.companyName||(p.owner.investorOnly?L('Inversionista asignado','Assigned investor'):L('Administrador','Administrator')))}</b>${p.owner.byDefault?' · '+L('por defecto (casa sin vendedor asignado; el Admin puede moverla a otra compañía en Compañías)','default (home without an assigned seller; Admin can move it to another company under Companies)'):''}</p>`:''}<p class="ops-meta">${L('Oferta inicial','Initial offer')} · ${esc(when(p.offerAt))}${amountLine(p)?' · <b>'+esc(amountLine(p))+'</b>':''}</p>${decisionLine(p)}${homeStatusLine(p)}${btns}${docs}${checklist(p,S.isAdmin()?'ADMIN':'SELLER')}${closingFlowBox(p,S.isAdmin()?'ADMIN':'SELLER')}`,{cls:'tour-sell'+focusOffer(p.offerId),id:'offer-'+p.offerId,force:hashHas('offer='+p.offerId)||(!p.decision&&!(p.counter&&p.counter.status==='OPEN'))});}).join('')}</section>`;
+    const role=S.isAdmin()?'ADMIN':'SELLER';
+    const sellerLine=p.owner?`<p class="ops-meta">🏢 ${L('Vendedor','Seller')}: <b>${esc(p.owner.companyName||(p.owner.investorOnly?L('Inversionista asignado','Assigned investor'):L('Administrador','Administrator')))}</b>${p.owner.byDefault?' · '+L('por defecto (casa sin vendedor asignado; el Admin puede moverla a otra compañía en Compañías)','default (home without an assigned seller; Admin can move it to another company under Companies)'):''}</p>`:'';
+    const top=`<h3>${esc(p.address)}${p.city?', '+esc(p.city):''}</h3><p class="oc-step-sum">${esc(stepBlurb(p,role))}</p>${offerDetailsFold(p,sellerLine,'initial')}`;
+    return fold('sell-'+p.offerId,sum,`${top}${btns}${docs}${checklist(p,role)}${closingFlowBox(p,role)}`,{cls:'tour-sell'+focusOffer(p.offerId),id:'offer-'+p.offerId,force:hashHas('offer='+p.offerId)||(!p.decision&&!(p.counter&&p.counter.status==='OPEN'))});}).join('')}</section>`;
 }
 function findOffer(id){for(const t of ((data&&data.tours)||[]).concat(addedTours(),looseTours()))for(const o of t.offers||[])if(o.offerId===id)return o;const so=((data&&data.sellerOffers)||[]).find(x=>x.offerId===id);return so?{offerId:id,pipeline:so}:null;}
 function clientDocsCard(){
