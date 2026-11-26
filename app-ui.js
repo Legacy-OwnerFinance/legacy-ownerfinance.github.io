@@ -133,6 +133,7 @@ const L10N={
     forgotSubmitBtn:'Save New Password & Sign In',
     pwMismatch:'Passwords do not match.',
     adminInviteTitle:'Set your admin password',
+    sellerInviteTitle:'Set your password',
     adminInviteLoading:'Opening your invitation…',
     adminInviteInvalid:'This invite link is invalid or has expired.',
     adminInviteEmail:'This invitation is for',
@@ -375,6 +376,7 @@ const L10N={
     forgotSubmitBtn:'Guardar Contraseña e Iniciar Sesión',
     pwMismatch:'Las contraseñas no coinciden.',
     adminInviteTitle:'Crea tu contraseña de administrador',
+    sellerInviteTitle:'Crea tu contraseña',
     adminInviteLoading:'Abriendo tu invitación…',
     adminInviteInvalid:'Este enlace de invitación no es válido o ya venció.',
     adminInviteEmail:'Esta invitación es para',
@@ -1965,7 +1967,7 @@ async function startAdminInvitePreview(){
   try{
     const j=await S.previewAdminInvite(token);
     if(adminInviteToken()!==token)return;
-    INV={status:'ok',token,email:j.email||'',welcome:j.welcome||null,error:''};
+    INV={status:'ok',token,email:j.email||'',welcome:j.welcome||null,kind:j.kind||'ADMIN',error:''};
   }catch(e){
     if(adminInviteToken()!==token)return;
     INV={status:'bad',token,email:'',welcome:null,error:(e&&e.message)||tr('adminInviteInvalid')};
@@ -1978,7 +1980,7 @@ function adminInvite(){
   if(INV.status==='idle'||INV.token!==token){startAdminInvitePreview();return `<section class="card" style="padding:20px;margin:24px auto;max-width:520px"><h2>${tr('adminInviteTitle')}</h2><p style="color:#475569">${tr('adminInviteLoading')}</p></section>`;}
   if(INV.status==='loading')return `<section class="card" style="padding:20px;margin:24px auto;max-width:520px"><h2>${tr('adminInviteTitle')}</h2><p style="color:#475569">${tr('adminInviteLoading')}</p></section>`;
   if(INV.status!=='ok')return `<section class="card" style="padding:20px;margin:24px auto;max-width:520px"><h2>${tr('adminInviteTitle')}</h2><p style="color:#b91c1c">${esc(INV.error||tr('adminInviteInvalid'))}</p></section>`;
-  return `<section class="card" style="padding:20px;margin:24px auto;max-width:520px"><h2>${tr('adminInviteTitle')}</h2>
+  return `<section class="card" style="padding:20px;margin:24px auto;max-width:520px"><h2>${tr(INV.kind==='INVESTOR'?'sellerInviteTitle':'adminInviteTitle')}</h2>
     ${welcomeText(INV.welcome)}
     <p style="font-size:14px;color:#334155;margin:0 0 14px 0">${tr('adminInviteEmail')} <b>${esc(INV.email)}</b></p>
     <form id="adminInviteF" style="display:grid;gap:10px">
