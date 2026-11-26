@@ -643,6 +643,18 @@ async function refreshVisibleReceipts(){
   return refreshReceipts(peerId);
 }
 S.refreshReceipts=refreshReceipts;
+// v53: photos for the conversation list (server returns only people you have a conversation with; admins get the Legacy logo).
+S.msgPeers={};let peersAt=0,peersSig='';
+async function refreshMsgPeers(ids){
+  if(!msgEnabled()||!S.user)return false;
+  const list=[...new Set((ids||[]).filter(x=>x&&x!=='legacy-system'))].slice(0,100);
+  if(!list.length)return false;
+  const sig=list.slice().sort().join(',');
+  if(sig===peersSig&&Date.now()-peersAt<120000)return false;
+  peersSig=sig;peersAt=Date.now();
+  try{const r=await api('messages_peers',{peerIds:list});if(!r||!r.ok)return false;const m={};(r.peers||[]).forEach(p=>{if(p&&p.id)m[p.id]=p;});const ch=JSON.stringify(m)!==JSON.stringify(S.msgPeers);S.msgPeers=m;return ch;}catch(e){return false;}
+}
+S.refreshMsgPeers=refreshMsgPeers;
 async function refreshInvestor(){
   if(!(S.caps&&S.caps.investor)||!S.user){
     const had=!!(S.investorHome||S.investorTx||S.investorAdmin);
