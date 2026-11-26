@@ -2445,3 +2445,6 @@ details.lf-fold{min-width:0;max-width:100%}
 .oc-timeline li small{color:#64748b}
 .oc-h{margin:12px 0 6px;font-size:.95rem}
 .oc-list li .btn-card{flex:0 0 auto;width:auto;padding-left:12px;padding-right:12px}
+/* v49: offer invitations */
+.oc-inv{border:1px solid #e5d9b6;border-radius:12px;padding:12px 14px;margin:10px 0;background:#fffdf6}
+.oc-inv p{margin:0 0 8px}
