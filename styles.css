@@ -2410,3 +2410,14 @@ details.lf-fold{min-width:0;max-width:100%}
 @media (max-width:640px){.gd-wrap{padding:8px 8px 110px}.gd-article{padding:0 14px 14px;font-size:15px}.gd-hero{margin:0 -14px 10px;padding:14px}.gd-hero h2{font-size:18px}.gd-hero-logo{width:52px;height:52px}}
 .gd-article h4{font-size:16px;margin:16px 0 4px;color:var(--navy,#0f172a)}
 .gd-app-sm{padding:8px 12px}
+
+
+/* Investor deletion approval (Admin) */
+.invdel-list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:8px}
+.invdel-item{display:flex;flex-wrap:wrap;align-items:flex-start;justify-content:space-between;gap:8px;padding:10px 0;border-bottom:1px solid #e5e7eb}
+.invdel-pend{color:#b45309;font-weight:600}
+@media (max-width:390px){
+  .invdel-item{flex-direction:column}
+  .invdel-item .adm-pacts{width:100%}
+  .invdel-item .adm-b{margin:0 8px 8px 0}
+}

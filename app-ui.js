@@ -2362,9 +2362,14 @@ function investorCompanyStats(u){
   return {companies:mine, homes:homeIds.size, closed:closedIds.size};
 }
 function investorDelCell(u){
-  if(!S.canAdminDelete())return '—';
+  if(!S.isAdmin()||!S.canAdminDelete())return '';
   if(S.user&&u.id===S.user.id)return `<span class="acct-note">${S.lang==='es'?'Tu cuenta':'Your account'}</span>`;
   if(u.role==='ADMIN'||S.isMainAdmin(u))return `<span class="acct-note">${S.lang==='es'?'Administrador':'Administrator'}</span>`;
+  const pend=S.pendingInvestorDeleteFor&&S.pendingInvestorDeleteFor(u.id);
+  if(pend){
+    const when=pend.requestedAt?esc(new Date(pend.requestedAt).toLocaleString(S.lang==='es'?'es-US':'en-US',{timeZone:'America/Chicago',month:'short',day:'numeric',hour:'numeric',minute:'2-digit'})):'';
+    return `<span class="acct-note invdel-pend">${S.lang==='es'?'Pendiente de aprobación':'Pending approval'}${when?' · '+when:''}</span>`;
+  }
   return `<button type="button" class="btn-del" data-invdel="${esc(u.id)}">🗑 ${S.lang==='es'?'Eliminar':'Delete'}</button>`;
 }
 function investorRows(list){
@@ -2403,8 +2408,16 @@ function adminConfirmDelete(u){
     return {confirmAdmin:String(typed).trim()};
   }
     if(u.role==='INVESTOR'){
-    const ok=confirm(S.lang==='es'?`¿Eliminar la cuenta de inversionista de ${who}?\nSe quita su acceso (inicio de sesión, membresías en compañías y notificaciones). Las compañías, casas, tratos cerrados y documentos se quedan para el resto de la compañía. Esto no se puede deshacer.`:`Delete the investor account of ${who}?\nThis removes their login, company memberships and notifications. Companies, homes, closed deals and documents stay with the company. This cannot be undone.`);
-    return ok?{investor:true}:null;
+    if(S.isOwnerAdmin&&S.isOwnerAdmin()){
+      const typed=prompt(S.lang==='es'?`Vas a eliminar la cuenta de inversionista de ${who}.\nSe quita su acceso (inicio de sesión, membresías en compañías y notificaciones). Las compañías, casas, tratos cerrados y documentos se quedan para el resto de la compañía. Esto no se puede deshacer.\n\nEscribe su correo o DELETE para confirmar:`:`You are about to delete the investor account of ${who}.\nThis removes their login, company memberships and notifications. Companies, homes, closed deals and documents stay with the company. This cannot be undone.\n\nType their email or DELETE to confirm:`);
+      if(typed==null)return null;
+      const t=String(typed).trim();
+      const email=String(u.email||'').trim().toLowerCase();
+      if(t.toUpperCase()!=='DELETE'&&t.toLowerCase()!==email){alert(S.lang==='es'?'El texto no coincide. No se eliminó nada.':'The text does not match. Nothing was deleted.');return null;}
+      return {investor:true,confirmEmail:t};
+    }
+    const ok=confirm(S.lang==='es'?`¿Pedir la eliminación de la cuenta de inversionista de ${who}?\nNo se borra todavía. El administrador principal debe aprobarla. Las compañías, casas, tratos cerrados y documentos se quedan para el resto de la compañía.`:`Request deletion of the investor account of ${who}?\nNothing is deleted yet. The owner admin must approve it. Companies, homes, closed deals and documents stay with the company.`);
+    return ok?{investor:true,needsApproval:true}:null;
   }
   const ok=confirm(S.lang==='es'?`¿Eliminar la cuenta de ${who}?\nSe borran su acceso, perfil, favoritos, vistas, mensajes, citas, ofertas y documentos. Esto no se puede deshacer.`:`Delete the account of ${who}?\nThis removes their login, profile, favorites, views, messages, showings, offers and documents. This cannot be undone.`);
   return ok?{}:null;
@@ -2475,8 +2488,28 @@ function admAccounts(D){
   <details class="acct-group" data-acct="agents" ${ADM_OPEN.agents?'open':''}><summary>🪪 ${AL('Agentes','Agents')} <span class="acct-count">${agents.length}</span></summary>${rows(agents,true)}</details>
   <details class="acct-group" data-acct="investors" ${ADM_OPEN.investors?'open':''}><summary>🏢 ${tr('investorsTitle')} <span class="acct-count">${investors.length}</span></summary>${invRows}</details></div>`;
 }
+function jumpAdminSection(id){
+  const sec=document.getElementById('adm-'+id);if(!sec)return;
+  if(sec.tagName==='DETAILS'&&!sec.open)sec.open=true;
+  const y=sec.getBoundingClientRect().top+window.scrollY-((document.querySelector('.adm-nav')||{}).offsetHeight||0)-(document.querySelector('.app-header')||{offsetHeight:0}).offsetHeight-8;
+  window.scrollTo({top:Math.max(0,y),behavior:'smooth'});
+}
+function admInvestorDeletes(){
+  const all=S.investorDeletes||[];
+  const pending=all.filter(r=>r&&r.status==='REQUESTED');
+  const recent=all.filter(r=>r&&r.status!=='REQUESTED').slice(0,8);
+  const owner=S.isOwnerAdmin&&S.isOwnerAdmin();
+  const fmt=ts=>ts?esc(new Date(ts).toLocaleString(S.lang==='es'?'es-US':'en-US',{timeZone:'America/Chicago',month:'short',day:'numeric',hour:'numeric',minute:'2-digit'})):'';
+  const who=t=>`${esc((t&&t.name)||'—')} <${esc((t&&t.email)||'')}>`;
+  const by=r=>r.requestedBy?`${esc(r.requestedBy.name||r.requestedBy.email||'—')}`:'—';
+  if(!pending.length&&!recent.length)return `<p class="adm-empty">${AL('No hay solicitudes de eliminación de inversionistas.','There are no investor deletion requests.')}</p>`;
+  const pendRows=pending.length?pending.map(r=>`<li class="invdel-item"><div class="adm-pbody"><b>${who(r.target)}</b><small>${AL('Solicitado por','Requested by')} ${by(r)} · ${fmt(r.requestedAt)}</small></div><div class="adm-pacts">${owner?`<button type="button" class="adm-b ok" data-invdelok="${esc(r.id)}">${AL('Aprobar','Approve')}</button> <button type="button" class="adm-b no" data-invdelno="${esc(r.id)}">${AL('Rechazar','Reject')}</button>`:`<span class="acct-note">${AL('Pendiente de aprobación','Pending approval')}</span>`}</div></li>`).join(''):`<p class="adm-empty">${AL('No hay solicitudes pendientes.','There are no pending requests.')}</p>`;
+  const recRows=recent.length?`<details class="adm-sub"><summary>${AL('Recientes','Recent')} (${recent.length})</summary><ul class="adm-people">${recent.map(r=>`<li><div class="adm-pbody"><b>${who(r.target)}</b><small>${r.status==='DONE'?AL('Eliminada','Deleted'):AL('Rechazada','Rejected')} · ${fmt(r.decidedAt||r.requestedAt)} · ${by(r)}</small></div></li>`).join('')}</ul></details>`:'';
+  return `<ul class="adm-people invdel-list">${pending.length?pendRows:''}</ul>${pending.length?'':pendRows}${recRows}`;
+}
 function admin(){if(!S.isAdmin())return `<p style="padding:18px">${tr('adminsOnly')}</p>`;const D=S.data;
   const pend=D.users.filter(u=>u.approvalStatus==='PENDING').length;
+  const invPend=(S.investorDeletes||[]).filter(r=>r&&r.status==='REQUESTED').length;
   if(window.LegacyTours&&LegacyTours.tourOfferInfo)LegacyTours.tourOfferInfo('');
   const liveOffers=D.offers.filter(o=>!S.isDeadOffer(o)),liveShows=(D.showings||[]).filter(sh=>!S.isDeadShowing(sh));
   const openOffers=liveOffers.filter(o=>['SUBMITTED','COUNTERED'].includes(o.status)).length;
@@ -2487,17 +2520,19 @@ function admin(){if(!S.isAdmin())return `<p style="padding:18px">${tr('adminsOnl
   const hello=hour<12?AL('Buenos días','Good morning'):hour<19?AL('Buenas tardes','Good afternoon'):AL('Buenas noches','Good evening');
   const nm=String(S.user&&S.user.name||'').split(' ')[0];
   const k=(id,icon,n,label,warn)=>`<button type="button" class="adm-kpi${warn?' warn':''}" data-admjump="${id}"><span aria-hidden="true">${icon}</span><b>${n}</b><small>${label}</small></button>`;
-  const nav=[['offers','💰',AL('Ofertas','Offers')],['companies','🏢',AL('Compañías','Companies')],['homes','🏠',AL('Casas','Homes')],['showings','📅',AL('Citas','Showings')],['accounts','👥',AL('Usuarios','Users')],['pending','⏳',AL('Pendientes','Pending')]];
-  const hero=`<header class="adm-hero"><div class="adm-hero-top"><div><p class="ad-kicker">🛡️ ${AL('Administración','Administration')}</p><h2>${hello}${nm?', '+esc(nm):''}</h2><p class="adm-tag">Legacy - Owner Finance · The Rivas Legacy Group</p></div>${window.LegacyTours&&LegacyTours.sellerDashVisible&&LegacyTours.sellerDashVisible()?`<button type="button" class="adm-hero-btn" data-tab="sellerhome">📊 ${AL('Panel de compañía','Company dashboard')}</button>`:''}</div>
-    <div class="adm-kpis">${k('offers','💰',openOffers,AL('Ofertas abiertas','Open offers'),openOffers>0)}${k('pending','⏳',pend,AL('Cuentas por aprobar','Accounts to approve'),pend>0)}${k('showings','📅',reqShow,AL('Visitas por aprobar','Showings to approve'),reqShow>0)}${k('homes','🏠',active,AL('Casas disponibles','Available homes'))}</div></header>`;
+  const nav=[['offers','💰',AL('Ofertas','Offers')],['companies','🏢',AL('Compañías','Companies')],['homes','🏠',AL('Casas','Homes')],['showings','📅',AL('Citas','Showings')],['accounts','👥',AL('Usuarios','Users')],['investdel','🗑',AL('Borrados','Deletions')],['pending','⏳',AL('Pendientes','Pending')]];
+  const hero=`<header class="adm-hero"><div class="adm-hero-top"><div><p class="ad-kicker">🛡️ ${AL('Administración','Administration')}</p><h2>${hello}${nm?', '+esc(nm):''}</h2><p class="adm-tag">Legacy - Owner Finance</p></div>${window.LegacyTours&&LegacyTours.sellerDashVisible&&LegacyTours.sellerDashVisible()?`<button type="button" class="adm-hero-btn" data-tab="sellerhome">📊 ${AL('Panel de compañía','Company dashboard')}</button>`:''}</div>
+    <div class="adm-kpis">${k('offers','💰',openOffers,AL('Ofertas abiertas','Open offers'),openOffers>0)}${k('pending','⏳',pend,AL('Cuentas por aprobar','Accounts to approve'),pend>0)}${k('investdel','🗑',invPend,AL('Borrados por aprobar','Deletions to approve'),invPend>0)}${k('showings','📅',reqShow,AL('Visitas por aprobar','Showings to approve'),reqShow>0)}${k('homes','🏠',active,AL('Casas disponibles','Available homes'))}</div></header>`;
   const chips=`<nav class="adm-nav" aria-label="${esc(AL('Secciones','Sections'))}">${nav.map(([id,i,t])=>`<button type="button" data-admjump="${id}">${i} ${t}</button>`).join('')}</nav>`;
   return `<section class="adm-wrap">${hero}${chips}
+   ${invPend?admSec('investdel','🗑',AL('Eliminación de inversionistas por aprobar','Investor deletions awaiting approval'),invPend,admInvestorDeletes(),{open:true,warn:true,hint:S.isOwnerAdmin()&&S.isOwnerAdmin()?AL('Tú apruebas o rechazas. Hasta que apruebes, la cuenta sigue activa.','You approve or reject these. The account stays active until you approve.'):AL('Tú enviaste estas solicitudes. La cuenta no se elimina hasta que el administrador principal las apruebe.','You sent these requests. The account is not deleted until the owner admin approves them.')}):''}
    ${pend?admSec('pending','⏳',AL('Cuentas pendientes de aprobación','Accounts pending approval'),pend,admPending(D),{open:true,warn:true}):''}
    ${admSec('offers','💰',tr('recentOffers'),liveOffers.length,admOffers(D),{open:openOffers>0})}
    ${S.caps&&S.caps.investor?admSec('companies','🏢',S.caps.companies?tr('companiesTitle'):tr('investorsTitle'),coN,investorAdminCard(),{hint:S.caps.companies?tr('companiesHint'):''}):''}
    ${admSec('homes','🏠',tr('listings'),D.listings.length,admListings(D))}
    ${admSec('showings','📅',AL('Solicitudes de visita','Showing requests'),liveShows.length,admShowings(D),{open:reqShow>0})}
    ${admSec('accounts','👥',tr('usersAgents'),D.users.length,admAccounts(D))}
+   ${invPend?'':admSec('investdel','🗑',AL('Eliminación de inversionistas','Investor account deletions'),0,admInvestorDeletes())}
    ${pend?'':admSec('pending','⏳',AL('Cuentas pendientes de aprobación','Accounts pending approval'),0,admPending(D))}
    ${admArchive(D)}
   </section>`;}
@@ -2534,7 +2569,7 @@ function bind(){const r=$('#app-root');
       if(q||st!=='ALL'){box.classList.remove('clip');const m=document.querySelector(`[data-admmore="${box.id}"]`);if(m)m.hidden=true;}
       let em=box.querySelector(':scope>.adm-nomatch');if(!n&&(q||st!=='ALL')){if(!em){em=document.createElement('p');em.className='adm-empty adm-nomatch';box.appendChild(em);}em.textContent=S.lang==='es'?'Nada coincide con la búsqueda.':'Nothing matches your search.';em.hidden=false;}else if(em)em.hidden=true;};
     r.addEventListener('input',e=>{const t=e.target;if(!t||!t.dataset||!t.dataset.admfilter)return;const box=document.getElementById(t.dataset.admfilter);if(box){box.dataset.q=t.value;admApply(box);}});
-    r.addEventListener('click',e=>{const j=e.target.closest&&e.target.closest('[data-admjump]');if(j){e.preventDefault();const sec=document.getElementById('adm-'+j.dataset.admjump);if(sec){if(sec.tagName==='DETAILS'&&!sec.open)sec.open=true;const y=sec.getBoundingClientRect().top+window.scrollY-((document.querySelector('.adm-nav')||{}).offsetHeight||0)-(document.querySelector('.app-header')||{offsetHeight:0}).offsetHeight-8;window.scrollTo({top:Math.max(0,y),behavior:'smooth'});}return;}
+    r.addEventListener('click',e=>{const j=e.target.closest&&e.target.closest('[data-admjump]');if(j){e.preventDefault();jumpAdminSection(j.dataset.admjump);return;}
       const mo=e.target.closest&&e.target.closest('[data-admmore]');if(mo){const box=document.getElementById(mo.dataset.admmore);if(box)box.classList.remove('clip');ADM_OPEN.homesAll=true;mo.hidden=true;return;}
       const c=e.target.closest&&e.target.closest('[data-admstatus]');if(c){const box=document.getElementById(c.dataset.admlist);if(!box)return;box.dataset.st=c.dataset.admstatus;c.parentNode.querySelectorAll('[data-admstatus]').forEach(b=>b.classList.toggle('on',b===c));admApply(box);}});
   }
@@ -2563,7 +2598,7 @@ function bind(){const r=$('#app-root');
        modal(`<h2>⚖️ ${S.lang==='es'?'Comparación de Casas':'Side-by-Side Comparison'}</h2><div style="display:grid;grid-template-columns:repeat(${it.length},1fr);gap:12px">${it.map(l=>`<div class="card" style="padding:10px"><img src="${esc(l.photoUrl||'listing-placeholder.svg')}" referrerpolicy="no-referrer" onerror="window.imgFallback&&window.imgFallback(this)" style="width:100%;height:120px;object-fit:cover;border-radius:8px"><h4 style="margin:8px 0">${title(l)}</h4>
        <div style="font-size:13px;line-height:1.8">${tr('price')}: <b>${S.money(l.askingPrice)}</b><br>${tr('down')}: <b>${S.money(l.downPayment)}</b><br>${tr('monthly')}: <b>${S.money(l.monthlyPayment)}</b><br>${l.beds??'—'} ${tr('bdShort')} · ${l.baths??'—'} ${tr('baShort')}<br>${l.sqft?(+l.sqft).toLocaleString()+' '+tr('sqftUnit'):''}${l.sqft&&l.askingPrice?'<br>$'+Math.round(l.askingPrice/100/l.sqft)+tr('perSqft'):''}</div></div>`).join('')}</div>`);return;}
    }
-   const t=e.target.closest('[data-cosel],[data-coremove],[data-counassign],[data-codelete],[data-tab],[data-lang],[data-open],[data-fav],[data-acc],[data-rej],[data-ctr],[data-reset],[data-save],[data-client],[data-register],[data-login],[data-shareclear],[data-copylink],[data-calmode],[data-calnav],[data-showacc],[data-showden],[data-showcan],[data-showmsg],[data-approve],[data-decline],[data-inspsched],[data-inspcancel],[data-menu],[data-menuclose],[data-bell],[data-alertclose],[data-pushon],[data-pushoff],[data-pushtest],[data-msgbubble],[data-msgclose],[data-msgpeer],[data-msgback],[data-msgsend],[data-msgnew],[data-feedback],[data-checkin],[data-checkout],[data-activity],[data-metric],[data-views],[data-favs],[data-openmap],[data-mapscope],[data-closed],[data-cldate],[data-clcomm],[data-clclose],[data-clfell],[data-editown],[data-unassign],[data-offdel],[data-udel],[data-invdel],[data-rejdel],[data-alertdel],[data-alertclear],#logout,#forgot');
+   const t=e.target.closest('[data-cosel],[data-coremove],[data-counassign],[data-codelete],[data-tab],[data-lang],[data-open],[data-fav],[data-acc],[data-rej],[data-ctr],[data-reset],[data-save],[data-client],[data-register],[data-login],[data-shareclear],[data-copylink],[data-calmode],[data-calnav],[data-showacc],[data-showden],[data-showcan],[data-showmsg],[data-approve],[data-decline],[data-inspsched],[data-inspcancel],[data-menu],[data-menuclose],[data-bell],[data-alertclose],[data-pushon],[data-pushoff],[data-pushtest],[data-msgbubble],[data-msgclose],[data-msgpeer],[data-msgback],[data-msgsend],[data-msgnew],[data-feedback],[data-checkin],[data-checkout],[data-activity],[data-metric],[data-views],[data-favs],[data-openmap],[data-mapscope],[data-closed],[data-cldate],[data-clcomm],[data-clclose],[data-clfell],[data-editown],[data-unassign],[data-offdel],[data-udel],[data-invdel],[data-invdelok],[data-invdelno],[data-rejdel],[data-alertdel],[data-alertclear],#logout,#forgot');
    if(!t)return;
    e.preventDefault();
    try{
@@ -2627,12 +2662,29 @@ function bind(){const r=$('#app-root');
        if(!confirm(S.lang==='es'?`¿Eliminar la oferta de ${who||'este cliente'}${where?' en '+where:''}?\nSe borra la oferta y sus datos de cierre. El estado de la casa no cambia y los documentos del cliente se conservan. Esto no se puede deshacer.`:`Delete ${who||'this client'}'s offer${where?' on '+where:''}?\nThe offer and its closing details are removed. The home's status does not change and the client's documents are kept. This cannot be undone.`))return;
        t.disabled=true;t.textContent=S.lang==='es'?'Eliminando…':'Deleting…';
        await S.adminDeleteOffer(d.offdel);alert(S.lang==='es'?'Oferta eliminada.':'Offer deleted.');return render();}
+     if(d.invdelok){const req=(S.investorDeletes||[]).find(x=>x.id===d.invdelok);if(!req)return;
+       const who=`${(req.target&&req.target.name)||''} <${(req.target&&req.target.email)||''}>`;
+       const typed=prompt(S.lang==='es'?`Aprobar la eliminación de la cuenta de inversionista de ${who}.\nEsto no se puede deshacer. Escribe su correo o DELETE para confirmar:`:`Approve deletion of the investor account of ${who}.\nThis cannot be undone. Type their email or DELETE to confirm:`);
+       if(typed==null)return;const typedVal=String(typed).trim();const email=String((req.target&&req.target.email)||'').trim().toLowerCase();
+       if(typedVal.toUpperCase()!=='DELETE'&&typedVal.toLowerCase()!==email){alert(S.lang==='es'?'El texto no coincide. No se eliminó nada.':'The text does not match. Nothing was deleted.');return;}
+       t.disabled=true;t.textContent=S.lang==='es'?'Aprobando…':'Approving…';
+       await S.approveInvestorDelete(d.invdelok,typedVal);alert(S.lang==='es'?'Cuenta eliminada.':'Account deleted.');return render();}
+     if(d.invdelno){const req=(S.investorDeletes||[]).find(x=>x.id===d.invdelno);if(!req)return;
+       const who=`${(req.target&&req.target.name)||''} <${(req.target&&req.target.email)||''}>`;
+       if(!confirm(S.lang==='es'?`¿Rechazar la solicitud para eliminar a ${who}? La cuenta se queda.`:`Reject the request to delete ${who}? The account stays.`))return;
+       t.disabled=true;t.textContent=S.lang==='es'?'Rechazando…':'Rejecting…';
+       await S.rejectInvestorDelete(d.invdelno);alert(S.lang==='es'?'Solicitud rechazada. La cuenta no se eliminó.':'Request rejected. The account was not deleted.');return render();}
      if(d.udel||d.invdel||d.rejdel){const id=d.udel||d.invdel||d.rejdel;const u=S.data.users.find(x=>x.id===id);if(!u)return;
        let extra={};
        if(d.rejdel){if(!confirm(S.lang==='es'?`¿Rechazar y eliminar la cuenta de ${u.name||''} <${u.email||''}>?\nEsto no se puede deshacer.`:`Decline and delete the account of ${u.name||''} <${u.email||''}>?\nThis cannot be undone.`))return;}
        else{extra=adminConfirmDelete(u);if(!extra)return;}
        t.disabled=true;t.textContent=S.lang==='es'?'Eliminando…':'Deleting…';
-       if(u.role==='INVESTOR'||d.invdel||(extra&&extra.investor))await S.adminDeleteInvestor(id);else await S.adminDeleteUser(id,extra.confirmAdmin);alert(S.lang==='es'?'Cuenta eliminada.':'Account deleted.');return render();}
+       if(u.role==='INVESTOR'||d.invdel||(extra&&extra.investor)){
+         const j=await S.adminDeleteInvestor(id,extra.confirmEmail);
+         if(j&&j.pending){alert(S.lang==='es'?(j.alreadyPending?'Ya hay una solicitud pendiente de aprobación para esta cuenta.':'Solicitud enviada. La cuenta no se elimina hasta que el administrador principal la apruebe.'):(j.alreadyPending?'A deletion request for this account is already pending approval.':'Request sent. The account is not deleted until the owner admin approves it.'));return render();}
+         alert(S.lang==='es'?'Cuenta eliminada.':'Account deleted.');return render();
+       }
+       await S.adminDeleteUser(id,extra.confirmAdmin);alert(S.lang==='es'?'Cuenta eliminada.':'Account deleted.');return render();}
      if(d.approve){await S.setApproval(d.approve,'APPROVED');return render();}if(d.decline){if(confirm(S.lang==='es'?'¿Rechazar esta cuenta?':'Decline this account?')){await S.setApproval(d.decline,'REJECTED');render();}return;}if(d.inspsched){const v=($('#insp-'+d.inspsched)||{}).value;if(!v)return alert(S.lang==='es'?'Selecciona fecha y hora':'Pick a date and time');S.setInspection(d.inspsched,v);return render();}if(d.inspcancel){if(confirm(S.lang==='es'?'¿Cancelar la inspección?':'Cancel the inspection?')){S.setInspection(d.inspcancel,null);render();}return;}if(d.acc)return S.respondOffer(d.acc,'ACCEPTED');if(d.rej)return S.respondOffer(d.rej,'REJECTED');
      if(d.ctr){const p=prompt(tr('promptCounterPrice')),dn=prompt(tr('promptCounterDown')),mo=prompt(tr('promptCounterMonthly')),n=prompt(tr('promptAdminNotes'))||'';if(p)S.respondOffer(d.ctr,'COUNTERED',{counterPrice:p,counterDown:dn,counterMonthly:mo,adminNotes:n});return;}
      if(d.reset)return openAdminResetModal(d.reset);
@@ -2713,6 +2765,6 @@ function checkResetUrlParams(){
 
 document.addEventListener('keydown',e=>{if(e.key!=='Escape'||!msgOpen)return;msgOpen=false;render();});
 window.LegacyUI={render:()=>render(),go:(t)=>go(t),esc:v=>esc(v),openChat:(peerId,name)=>{if(name){S.tourPeerNames=S.tourPeerNames||{};S.tourPeerNames[peerId]=name;}msgOpen=true;alertOpen=false;msgNew=false;msgPeer=peerId;msgStickBottom=true;render();},tab:()=>tab,openContact:(id,msg)=>openContactSheet(id,msg)};
-S.on(render);window.addEventListener('hashchange',()=>{const parsed=parseAppHash();if(parsed.deal)rememberDeal(parsed.deal);if(parsed.tab!=='admin-invite')resetAdminInvite();tab=parsed.tab||'inventory';render();});
+S.on(render);window.addEventListener('hashchange',()=>{const parsed=parseAppHash();if(parsed.deal)rememberDeal(parsed.deal);if(parsed.tab!=='admin-invite')resetAdminInvite();tab=parsed.tab||'inventory';render();if(tab==='admin'&&/investdel=1/.test(location.hash||''))setTimeout(()=>jumpAdminSection('investdel'),60);});
 S.load().then(()=>{render();checkResetUrlParams();maybePromptCriteria();}).catch(e=>{document.documentElement.lang=S.lang;$('#app-root').innerHTML='<p style="padding:20px">'+esc(tr('loadFail'))+': '+esc(e.message)+'</p>';}).then(()=>{try{window.legacySplashHide&&window.legacySplashHide()}catch(_){}});
 })();

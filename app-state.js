@@ -790,8 +790,9 @@ S.clearReadAlerts=async()=>{
   if(j&&Array.isArray(j.digests))S.digests=j.digests;
   notify();return j;
 };
-S.canAdminDelete=()=>!!(S.isAdmin()&&S.caps&&S.caps.version>=26);
-S.isMainAdmin=u=>String(u&&u.email||'').trim().toLowerCase()==='fer.okc94@gmail.com';
+S.canAdminDelete=()=>!!(S.isAdmin()&&S.caps&&S.caps.version>=26&&!(S.caps&&S.caps.investor_delete===false));
+S.isOwnerAdmin=()=>!!(S._me&&S._me.isOwner)||!!(S.user&&S.user.isOwner);
+S.isMainAdmin=u=>!!(u&&(u.isOwner||(S._me&&S._me.isOwner&&S._me.id===u.id)));
 function forgetLocally(ids){
   S.data.deletedIds=[...new Set([...(S.data.deletedIds||[]),...ids.filter(Boolean).map(String)])];
   applyTombstones(S.data);
@@ -811,13 +812,44 @@ S.adminDeleteUser=async(userId,confirmAdmin)=>{
   forgetLocally([userId,...ap]);
   notify();return j;
 };
-S.adminDeleteInvestor=async userId=>{
+S.adminDeleteInvestor=async(userId,confirmText)=>{
   if(!S.isAdmin())throw new Error('Admins only');
-  const j=await api('admin_investor_delete',{userId});
+  const body={userId};
+  if(confirmText)body.confirmEmail=confirmText;
+  const j=await api('admin_investor_delete',body);
+  if(j&&j.pending){
+    await S.refreshInvestorDeletes();
+    notify();return j;
+  }
   forgetLocally([userId]);
   try{if(S.companyAdmin)S.companyAdmin=await api('company_admin');}catch(e){}
+  await S.refreshInvestorDeletes();
   notify();return j;
 };
+S.refreshInvestorDeletes=async()=>{
+  if(!S.isAdmin()){S.investorDeletes=[];return S.investorDeletes;}
+  try{
+    const j=await api('admin_investor_delete_requests');
+    S.investorDeletes=j&&Array.isArray(j.requests)?j.requests:[];
+    if(j&&typeof j.isOwner==='boolean'&&S._me)S._me.isOwner=j.isOwner;
+  }catch(e){if(!Array.isArray(S.investorDeletes))S.investorDeletes=[];}
+  return S.investorDeletes;
+};
+S.approveInvestorDelete=async(requestId,confirmText)=>{
+  if(!S.isOwnerAdmin())throw new Error('Admins only');
+  const j=await api('admin_investor_delete_approve',{requestId,confirmEmail:confirmText||''});
+  if(j&&j.userId)forgetLocally([j.userId]);
+  try{if(S.companyAdmin)S.companyAdmin=await api('company_admin');}catch(e){}
+  await S.refreshInvestorDeletes();
+  notify();return j;
+};
+S.rejectInvestorDelete=async(requestId,note)=>{
+  if(!S.isOwnerAdmin())throw new Error('Admins only');
+  const j=await api('admin_investor_delete_reject',{requestId,note:note||''});
+  await S.refreshInvestorDeletes();
+  notify();return j;
+};
+S.pendingInvestorDeleteFor=userId=> (S.investorDeletes||[]).find(r=>r&&r.status==='REQUESTED'&&r.target&&r.target.id===userId);
 S.saveFeedback=async(showingId,fields)=>{
   const j=await api('showing_feedback_save',Object.assign({showingId},fields||{}));
   if(j&&j.unavailable)throw new Error(S.t('ops.unavailable'));
@@ -871,7 +903,8 @@ S.load=async()=>{
   if(S.user&&!S.data.users.some(u=>u.id===S.user.id))S.data.users.push(S.user);
   applyPreferredLang((S.user&&S.user.preferredLang)||(S._me&&S._me.preferredLang));
   try{await refreshPortal();}catch(e){}
-  try{if(S.user&&S._me){if(S._me.role)S.user.role=S._me.role;if(S._me.approvalStatus)S.user.approvalStatus=S._me.approvalStatus;if(S._me.investorProfile)S.user.investorProfile=S._me.investorProfile;if(S._me.preferredLang)S.user.preferredLang=S._me.preferredLang;}}catch(e){}
+  try{if(S.isAdmin())await S.refreshInvestorDeletes();}catch(e){}
+  try{if(S.user&&S._me){if(S._me.role)S.user.role=S._me.role;if(S._me.approvalStatus)S.user.approvalStatus=S._me.approvalStatus;if(S._me.investorProfile)S.user.investorProfile=S._me.investorProfile;if(S._me.preferredLang)S.user.preferredLang=S._me.preferredLang;if(S._me.isOwner)S.user.isOwner=true;}}catch(e){}
   applyPreferredLang((S.user&&S.user.preferredLang)||(S._me&&S._me.preferredLang));
   try{await refreshInvestor();}catch(e){}
   try{await refreshClosings(true);}catch(e){}
@@ -916,6 +949,8 @@ async function pollSupabase(opts){
     const calChanged=JSON.stringify(nextCal)!==JSON.stringify(S.approvedShowingsCalendar||[]);
     if(todayChanged){S.todayApprovedShowings=nextToday;changed=true;}
     if(calChanged){S.approvedShowingsCalendar=nextCal;changed=true;}
+    if(st.me&&typeof st.me.isOwner==='boolean'){if(S._me)S._me.isOwner=st.me.isOwner;if(S.user&&S._me&&S.user.id===S._me.id)S.user.isOwner=st.me.isOwner;}
+    if(Array.isArray(st.investorDeletes)){const nextDel=st.investorDeletes;if(JSON.stringify(nextDel)!==JSON.stringify(S.investorDeletes||[])){S.investorDeletes=nextDel;changed=true;}}
     try{if(await refreshPortal({fromPoll:true}))changed=true;}catch(e){}
     try{if(await refreshMsgUnreadPolled(!!(opts&&opts.forceMsg)))changed=true;}catch(e){}
     try{if(await markVisibleThreadRead())changed=true;}catch(e){}
@@ -973,6 +1008,7 @@ async function adoptSession(j){
   try{localStorage.setItem(TOKEN_KEY,j.token);}catch(e){}
   const st=j.state||{};
   S._me=st.me||j.user;
+  S.investorDeletes=Array.isArray(st.investorDeletes)?st.investorDeletes:(S.investorDeletes||[]);
   applyPreferredLang(S._me&&S._me.preferredLang);
   let merged=S.data;
   if(st.kv)merged=merge(merged,st.kv);
@@ -985,6 +1021,7 @@ async function adoptSession(j){
   if(!u){u=S._me;S.data.users.push(u);}else Object.assign(u,S._me);
   setUser(u);
   try{await refreshPortal();}catch(e){}
+  try{if(S.isAdmin())await S.refreshInvestorDeletes();}catch(e){}
   try{await refreshInvestor();}catch(e){}
   try{await refreshClosings(true);}catch(e){}
   try{await refreshProgress(true);}catch(e){}
