@@ -321,6 +321,40 @@ function fileBtn(label,p,docType){return `<label class="btn-card">${label}<input
 function dtForm(op,p,label,extra){return `<form class="tour-form tour-inline" data-tflowf="${op}" data-toffer="${esc(p.offerId)}"><label>${L('Fecha','Date')}<input type="date" name="date" min="${chicagoDay(new Date())}" required></label><label>${L('Hora','Time')}<select name="time">${timeOptions('10:00')}</select></label>${extra||''}<button type="submit" class="btn-card primary">${label}</button></form>`;}
 const DOCS_REVIEW=['En revisión del vendedor','In review by the seller','🔎'];
 const SLOT_LBL={ID:['Identificación (ID)','ID (photo ID)'],INCOME:['Comprobantes de ingreso','Proof of income']};
+// Camera rolls and storage keys (uuid.jpeg, IMG_5625.png) are not useful as link text. A real name stays.
+function fileStem(name){return String(name||'').replace(/^.*[\\/]/,'').replace(/\.[^.]+$/,'').replace(/\s*\(\d+\)\s*$/,'').trim();}
+function generatedFileName(name){
+  const base=fileStem(name);if(!base)return true;
+  if(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(base))return true;
+  if(/^[0-9a-f]{16,}$/i.test(base))return true;
+  if(/^\d{8,}$/.test(base))return true;
+  if(/^(img|dsc|dscn|pxl|mvimg|pict|photo|image|vid|video)([_\-\s]?[a-z]?\d.*)?$/i.test(base))return true;
+  if(/^(screenshot|screen[\s_-]?shot|captura(\s+de\s+pantalla)?)\b/i.test(base))return true;
+  if(/^whatsapp[\s_-]/i.test(base))return true;
+  if(/^\d{8}[_-]\d{4,8}$/.test(base))return true;
+  return false;
+}
+function shortFileLabel(name,kind,n){
+  const raw=String(name||'').trim();if(raw&&!generatedFileName(raw))return raw;
+  const i=n||1;
+  if(kind==='ID')return i>1?`ID ${i}`:'ID';
+  if(kind==='INCOME')return L(`Ingreso ${i}`,`Income ${i}`);
+  if(kind==='DEPOSIT')return i>1?L(`Comprobante ${i}`,`Proof ${i}`):L('Comprobante','Proof');
+  if(kind==='CONTRACT')return i>1?L(`Contrato ${i}`,`Contract ${i}`):L('Contrato','Contract');
+  return L(`Archivo ${i}`,`File ${i}`);
+}
+function labelIndex(files,kindOf){
+  const seen={};
+  return (files||[]).map(f=>{
+    const raw=String((f&&f.name)||'').trim();if(raw&&!generatedFileName(raw))return 0;
+    const k=kindOf?kindOf(f):'f';seen[k]=(seen[k]||0)+1;return seen[k];
+  });
+}
+function fileAnchor(f,kind,n,icon,cls){
+  const raw=String((f&&f.name)||'').trim(),label=shortFileLabel(raw,kind,n);
+  const title=raw&&label!==raw?` title="${esc(raw)}"`:'',cl=cls?` class="${esc(cls)}"`:'';
+  return `<a href="#"${cl} data-opendoc="${esc(f.docId)}"${title}>${icon||'📄'} ${esc(label)}</a>`;
+}
 // v54: documents are per buyer. Each buyer uploads and replaces only their own ID + income; seller/Admin see them grouped by person.
 // Admin and the offer's own agent can upload for any buyer ("Subir por el comprador") and remove (🗑️, soft delete) / restore a buyer's file.
 const DS_ME=()=>(S.user&&S.user.id)||'';
@@ -330,17 +364,17 @@ function docPeopleBox(p,role){
   const approved=!!p.docsApprovedAt,locked=approved||p.invalidatedAt||p.decision==='DENIED';
   const ppl=(p.docPeople||[]).slice();
   const byLbl=f=>f&&f.by==='AGENT'?L('subido por el agente','uploaded by the agent'):f&&f.by==='ADMIN'?L('subido por el Admin','uploaded by Admin'):'';
-  const fileA=(f,canDel)=>`<span class="ds-file"><a href="#" data-opendoc="${esc(f.docId)}">📄 ${esc(f.name||L('archivo','file'))}</a>${byLbl(f)&&f.owner!==f.upBy?`<small class="ds-by">${esc(byLbl(f))}</small>`:''}${canDel?`<button type="button" class="ds-del" data-tdocdel="${esc(f.docId)}" data-toffer="${esc(p.offerId)}" data-tdname="${esc(f.name||'')}" title="${esc(L('Eliminar','Delete'))}" aria-label="${esc(L('Eliminar','Delete'))}">🗑️</button>`:''}</span>`;
+  const fileA=(f,canDel,kind,n)=>`<span class="ds-file">${fileAnchor(f,kind,n,'📄')}${byLbl(f)&&f.owner!==f.upBy?`<small class="ds-by">${esc(byLbl(f))}</small>`:''}${canDel?`<button type="button" class="ds-del" data-tdocdel="${esc(f.docId)}" data-toffer="${esc(p.offerId)}" data-tdname="${esc(f.name||'')}" title="${esc(L('Eliminar','Delete'))}" aria-label="${esc(L('Eliminar','Delete'))}">🗑️</button>`:''}</span>`;
   const up=(slot,label,replace,multi,cls,forId)=>`<label class="btn-card${cls?' '+cls:''}">${label}<input type="file" hidden accept="image/*,application/pdf"${multi?' multiple':''} data-tslot="${slot}" data-trepl="${replace?1:0}" data-tlid="${esc(p.listingId)}" data-toffer="${esc(p.offerId)}"${forId?` data-tfor="${esc(forId)}"`:''}></label>`;
   const row=(x,slot,canUp,forId)=>{const has=slot==='ID'?(x.ID?[x.ID]:[]):(x.INCOME||[]);const ok=has.length>0;const canDel=helper&&!locked;
-    const fileA0=f=>fileA(f,canDel);const pb=forId?'📎 '+L('Subir por el comprador','Upload for the buyer'):'';
+    const idx=labelIndex(has),fileA0=(f,i)=>fileA(f,canDel,slot,idx[i]||1);const pb=forId?'📎 '+L('Subir por el comprador','Upload for the buyer'):'';
     const btns=canUp&&!locked?`<div class="tour-btns ds-btns">${slot==='ID'?up('ID',ok?'🔁 '+(forId?L('Reemplazar por el comprador','Replace for the buyer'):L('Reemplazar','Replace')):(pb||'📎 '+L('Subir ID','Upload ID')),ok,false,ok?'':'primary',forId):ok?up('INCOME','➕ '+(forId?L('Subir otro por el comprador','Upload another for the buyer'):L('Agregar otro','Add another')),false,true,'',forId)+up('INCOME','🔁 '+L('Reemplazar todo','Replace all'),true,true,'',forId):up('INCOME',pb||'📎 '+L('Subir comprobantes','Upload proof'),false,true,'primary',forId)}</div>`:'';
     if(ok&&approved)return `<div class="ds-slot ok">${foldLine('✅',`${slot==='ID'?'🪪':'💼'} ${esc(L(...SLOT_LBL[slot]))}`,L('Aprobado','Approved'),p.docsApprovedAt,`<div class="ds-files">${has.map(fileA0).join('')}</div>`,'ds-fold')}</div>`;
     return `<div class="ds-slot ${ok?'ok':'miss'}"><div class="ds-h"><b>${slot==='ID'?'🪪':'💼'} ${esc(L(...SLOT_LBL[slot]))}</b><span class="ds-st">${ok?(approved?'✅ '+L('Aprobado','Approved'):'✅ '+L('Subido','Uploaded')):'⏳ '+L('Falta','Missing')}</span></div>${ok?`<div class="ds-files">${has.map(fileA0).join('')}</div>`:''}${slot==='INCOME'&&!ok&&canUp&&!locked?`<small>${L('Puedes subir varios archivos (talones de pago, estados de cuenta, carta de empleo).','You can upload several files (pay stubs, bank statements, employment letter).')}</small>`:''}${btns}</div>`;};
   const who=x=>esc(x.name||L('Comprador','Buyer'))+(x.kind==='AGENT'?' · '+L('Agente','Agent'):'')+(x.userId===me?' ('+L('tú','you')+')':'');
   const st=x=>`🪪 ${x.ID?'✅':'⏳'} · 💼 ${(x.INCOME||[]).length?'✅':'⏳'}`;
   const gone=x=>helper&&!locked?(p.docRemoved||[]).filter(f=>f.owner===x.userId):[];
-  const goneB=x=>{const g=gone(x);return g.length?`<details class="ds-gone"><summary>🗑️ ${L('Eliminados','Removed')} (${g.length})</summary>${g.map(f=>`<div class="ds-gone-i"><span>${f.slot==='ID'?'🪪':'💼'} ${esc(f.name||L('archivo','file'))}</span><button type="button" class="btn-card" data-tdocres="${esc(f.docId)}" data-toffer="${esc(p.offerId)}">↩️ ${L('Restaurar','Restore')}</button></div>`).join('')}</details>`:'';};
+  const goneB=x=>{const g=gone(x);if(!g.length)return '';const idx=labelIndex(g,f=>f.slot==='ID'?'ID':'INCOME');return `<details class="ds-gone"><summary>🗑️ ${L('Eliminados','Removed')} (${g.length})</summary>${g.map((f,i)=>`<div class="ds-gone-i"><span>${f.slot==='ID'?'🪪':'💼'} ${esc(shortFileLabel(f.name,f.slot==='ID'?'ID':'INCOME',idx[i]||1))}</span><button type="button" class="btn-card" data-tdocres="${esc(f.docId)}" data-toffer="${esc(p.offerId)}">↩️ ${L('Restaurar','Restore')}</button></div>`).join('')}</details>`;};
   const group=(x,canUp,forId)=>`<div class="ds-person"><div class="ds-ph"><b>👤 ${who(x)}</b><span class="ds-pst">${st(x)}</span></div>${row(x,'ID',canUp,forId)}${row(x,'INCOME',canUp,forId)}${goneB(x)}</div>`;
   let body='';
   if(client){
@@ -365,12 +399,12 @@ function docSlotsBox(p,role){
   const seller=role==='SELLER'||role==='ADMIN',buyer=role==='AGENT'||role==='CLIENT';
   const legacy=p.docsUploadedAt&&!sl.ID&&!(sl.INCOME||[]).length;
   const approved=!!p.docsApprovedAt,locked=approved||p.invalidatedAt||p.decision==='DENIED';
-  const fileA=f=>`<a href="#" data-opendoc="${esc(f.docId)}">📄 ${esc(f.name||L('archivo','file'))}</a>`;
   const up=(slot,label,replace,multi,cls)=>`<label class="btn-card${cls?' '+cls:''}">${label}<input type="file" hidden accept="image/*,application/pdf"${multi?' multiple':''} data-tslot="${slot}" data-trepl="${replace?1:0}" data-tlid="${esc(p.listingId)}" data-toffer="${esc(p.offerId)}"></label>`;
   const row=(slot)=>{const has=slot==='ID'?(sl.ID?[sl.ID]:[]):(sl.INCOME||[]);const ok=has.length>0;
+    const idx=labelIndex(has),filesHtml=ok?`<div class="ds-files">${has.map((f,i)=>fileAnchor(f,slot,idx[i]||1,'📄')).join('')}</div>`:'';
     const btns=buyer&&!locked?`<div class="tour-btns ds-btns">${slot==='ID'?up('ID',ok?'🔁 '+L('Reemplazar','Replace'):'📎 '+L('Subir ID','Upload ID'),ok,false,ok?'':'primary'):ok?up('INCOME','➕ '+L('Agregar otro','Add another'),false,true,'')+up('INCOME','🔁 '+L('Reemplazar todo','Replace all'),true,true,''):up('INCOME','📎 '+L('Subir comprobantes','Upload proof'),false,true,'primary')}</div>`:'';
-    if(ok&&approved)return `<div class="ds-slot ok">${foldLine('✅',`${slot==='ID'?'🪪':'💼'} ${esc(L(...SLOT_LBL[slot]))}`,L('Aprobado','Approved'),p.docsApprovedAt,`<div class="ds-files">${has.map(fileA).join('')}</div>`,'ds-fold')}</div>`;
-    return `<div class="ds-slot ${ok?'ok':'miss'}"><div class="ds-h"><b>${slot==='ID'?'🪪':'💼'} ${esc(L(...SLOT_LBL[slot]))}</b><span class="ds-st">${ok?(approved?'✅ '+L('Aprobado','Approved'):'✅ '+L('Subido','Uploaded')):'⏳ '+L('Falta','Missing')}</span></div>${ok?`<div class="ds-files">${has.map(fileA).join('')}</div>`:''}${slot==='INCOME'&&!ok&&buyer&&!locked?`<small>${L('Puedes subir varios archivos (talones de pago, estados de cuenta, carta de empleo).','You can upload several files (pay stubs, bank statements, employment letter).')}</small>`:''}${btns}</div>`;};
+    if(ok&&approved)return `<div class="ds-slot ok">${foldLine('✅',`${slot==='ID'?'🪪':'💼'} ${esc(L(...SLOT_LBL[slot]))}`,L('Aprobado','Approved'),p.docsApprovedAt,filesHtml,'ds-fold')}</div>`;
+    return `<div class="ds-slot ${ok?'ok':'miss'}"><div class="ds-h"><b>${slot==='ID'?'🪪':'💼'} ${esc(L(...SLOT_LBL[slot]))}</b><span class="ds-st">${ok?(approved?'✅ '+L('Aprobado','Approved'):'✅ '+L('Subido','Uploaded')):'⏳ '+L('Falta','Missing')}</span></div>${filesHtml}${slot==='INCOME'&&!ok&&buyer&&!locked?`<small>${L('Puedes subir varios archivos (talones de pago, estados de cuenta, carta de empleo).','You can upload several files (pay stubs, bank statements, employment letter).')}</small>`:''}${btns}</div>`;};
   let msg='';
   if(approved)msg=`<p class="tour-done">✅ ${L('Documentos aprobados por el vendedor.','Documents approved by the seller.')}</p>`;
   else if(p.docsUploadedAt)msg=`<p class="tour-done">🔎 <b>${L('En revisión','In review')}</b> — ${L('ID y comprobantes completos. El plazo de 12 horas se detuvo; ahora el vendedor los revisa.','ID and proof of income complete. The 12-hour clock stopped; the seller is reviewing them.')}</p>`;
@@ -381,7 +415,7 @@ function docSlotsBox(p,role){
   return `<div class="ds-box">${rej}${row('ID')}${row('INCOME')}${msg}${sb}${seller?`<small class="ds-priv">🔒 ${L('Archivos privados: solo los ven el cliente, su agente, el vendedor y el Admin. Los enlaces vencen en 2 minutos.','Private files: only the client, their agent, the seller and Admin can see them. Links expire in 2 minutes.')}</small>`:''}</div>`;
 }
 // v39 (7:25 PM): the $1,000 proof files open through the same private 2-minute links as step 1 (client, their agent, seller, Admin).
-function depositFiles(p,brief){const fs=(p&&p.depositDocs)||[];if(!fs.length)return '';return `<div class="ds-files dep-files">${fs.map(f=>`<a href="#" data-opendoc="${esc(f.docId)}">💵 ${esc(f.name||L('Comprobante','Proof'))}</a>`).join('')}</div>${brief?'':`<small class="ds-priv">🔒 ${L('Archivo privado: lo ven el cliente, su agente, el vendedor y el Admin. El enlace vence en 2 minutos.','Private file: the client, their agent, the seller and Admin can see it. The link expires in 2 minutes.')}</small>`}`;}
+function depositFiles(p,brief){const fs=(p&&p.depositDocs)||[];if(!fs.length)return '';const idx=labelIndex(fs);return `<div class="ds-files dep-files">${fs.map((f,i)=>fileAnchor(f,'DEPOSIT',idx[i]||1,'💵')).join('')}</div>${brief?'':`<small class="ds-priv">🔒 ${L('Archivo privado: lo ven el cliente, su agente, el vendedor y el Admin. El enlace vence en 2 minutos.','Private file: the client, their agent, the seller and Admin can see it. The link expires in 2 minutes.')}</small>`}`;}
 function depositBox(p,role){
   if(!p||!(p.depositDocs||[]).length)return '';
   const seller=role==='SELLER'||role==='ADMIN';
@@ -614,19 +648,16 @@ function stepBlurb(p,role){
   const st=STATUS_LABEL[c.status]||STATUS_LABEL.PENDING,lab=STEP_LABEL[c.key]||['Este paso','This step'];
   return P(`${lab[0]}. ${st[0]}.`,`${lab[1]}. ${st[1]}.`);
 }
-function offerFacts(p,kind){
-  const label=kind==='sent'?L('Oferta enviada','Offer sent'):L('Oferta inicial','Initial offer');
-  const at=p&&(p.offerAt||p.dueAt),amt=amountLine(p),bits=[];
-  if(at)bits.push(`${label} · ${esc(when(at))}`);
-  if(amt)bits.push(`<b>${esc(amt)}</b>`);
-  return bits.length?`<p class="ops-meta">${bits.join(' · ')}</p>`:'';
-}
-function offerDetailsFold(p,extra,kind){
+function sellerName(p){const o=p&&p.owner;if(!o)return '';return o.companyName||(o.investorOnly?L('Inversionista asignado','Assigned investor'):L('Administrador','Administrator'));}
+// Opened details stay two short lines. Price stays on the toggle. Status and files stay out of this block.
+function offerDetailsFold(p){
   if(!p)return '';
-  const body=`${extra||''}${offerFacts(p,kind)}${decisionLine(p)}${homeStatusLine(p)}`;
-  if(!String(body).trim())return '';
+  const name=sellerName(p),at=p.offerAt||p.dueAt,lines=[];
+  if(name)lines.push(`${L('Vendedor','Seller')}: <b>${esc(name)}</b>`);
+  if(at)lines.push(`${L('Oferta inicial','Initial offer')}: ${esc(when(at))}`);
+  if(!lines.length)return '';
   const amt=amountLine(p);
-  return fold('odet-'+p.offerId,`<span class="lf-main"><b>${L('Detalles de la oferta','Offer details')}</b>${amt?`<small>${esc(amt)}</small>`:''}</span>`,body,{cls:'oc-details'});
+  return fold('odet-'+p.offerId,`<span class="lf-main"><b>${L('Detalles de la oferta','Offer details')}</b>${amt?`<small>${esc(amt)}</small>`:''}</span>`,`<p class="ops-meta">${lines.join('<br>')}</p>`,{cls:'oc-details'});
 }
 function offerCard(t,h,o){
   const p=o.pipeline;const live=!o.invalidatedAt&&!(p&&p.decision==='DENIED');
@@ -636,7 +667,7 @@ function offerCard(t,h,o){
   const voidBox=p.invalidatedAt?(t.role==='AGENT'?`<div class="tour-btns"><button type="button" class="btn-card primary" data-tresume="${esc(o.offerId)}" data-tlid="${esc(h.id)}">🔄 ${L('Reanudar oferta','Resume offer')}</button><button type="button" class="btn-card btn-del" data-tarch="${esc(o.offerId)}">🗑️ ${L('Eliminar oferta','Delete offer')}</button></div><p class="ops-meta">${L('Reanudar abre la oferta para revisarla y enviarla de nuevo: vuelve al dueño como nueva, tiene que pre-aprobarla otra vez y los plazos y condiciones empiezan de cero.','Resume opens the offer so you can review it and send it again: it goes back to the owner as new, they must pre-approve it again, and the clocks and conditions start over.')}</p>`:`<p class="ops-meta">${L('Tu agente puede reanudarla o eliminarla.','Your agent can resume it or delete it.')}</p>`):'';
   const dl=offerDue(p),nx=offerNext(p);
   const sum=`<span class="lf-ico" aria-hidden="true">💰</span><span class="lf-main"><b>${L('Oferta','Offer')}${amountLine(p)?' · '+esc(money(p.amount&&p.amount.price)):''}</b><small>${nx}</small></span><span class="lf-tags">${offerChip(p,o)}${dl?cdSpan(dl):''}</span>`;
-  const top=`<p class="oc-step-sum">${esc(stepBlurb(p,t.role))}</p>${offerDetailsFold(p,'','sent')}`;
+  const top=`<p class="oc-step-sum">${esc(stepBlurb(p,t.role))}</p>${offerDetailsFold(p)}`;
   if(p.invalidatedAt)return fold('offer-'+o.offerId,sum,`${top}${voidBox}${ocBox(o.offerId,t.role)}`,{cls:'tour-offer'+focusOffer(o.offerId),id:'offer-'+o.offerId,force:hashHas('offer='+o.offerId)});
   return fold('offer-'+o.offerId,sum,`${top}${counterBox(p,t.role)}<h4>${L('Próximos pasos','Next steps')}</h4>${checklist(p,t.role)}${ups}${closingFlowBox(p,t.role)}${ocBox(o.offerId,t.role)}`,{cls:'tour-offer'+focusOffer(o.offerId),id:'offer-'+o.offerId,force:hashHas('offer='+o.offerId)});
 }
@@ -654,20 +685,18 @@ function dealBox(offerId){
   if(!p)return '';
   const btn=`<div class="tour-btns"><button type="button" class="btn-card" data-tgooffer="${esc(offerId)}">📂 ${L('Abrir el trato','Open the deal')}</button></div>`;
   if(p.invalidatedAt||p.decision==='DENIED')return `<div class="deal-box">${decisionLine(p)}</div>${btn}`;
-  return `<div class="deal-box"><p class="oc-step-sum">${esc(stepBlurb(p,role))}</p>${offerDetailsFold(p,'','sent')}${counterBox(p,role)}<h4>${L('Próximos pasos','Next steps')}</h4>${checklist(p,role)}${closingFlowBox(p,role)}</div>${btn}`;
+  return `<div class="deal-box"><p class="oc-step-sum">${esc(stepBlurb(p,role))}</p>${offerDetailsFold(p)}${counterBox(p,role)}<h4>${L('Próximos pasos','Next steps')}</h4>${checklist(p,role)}${closingFlowBox(p,role)}</div>${btn}`;
 }
 function sellerSection(){
   const so=(data&&data.sellerOffers)||[];if(!so.length)return '';
   return `<section class="card tour-card"><h2>💰 ${S.isAdmin()?L('Ofertas de citas (vendedor / Admin)','Showing offers (seller / Admin)'):L('Ofertas en tus casas','Offers on your homes')}</h2>${so.map(p=>{
     const btns=p.invalidatedAt||p.decision==='DENIED'?'':!p.decision?(p.counter&&p.counter.status==='OPEN'?counterBox(p,'SELLER'):`${counterBox(p,'SELLER')}<div class="tour-btns"><button type="button" class="btn-card primary" data-tdecide="${esc(p.offerId)}" data-tdv="approve">✅ ${L('Pre-aprobar','Pre-approve')}</button><button type="button" class="btn-card" data-spctr="${esc(p.offerId)}">↩️ ${L('Contraofertar','Counter')}</button><button type="button" class="btn-card btn-del" data-tdecide="${esc(p.offerId)}" data-tdv="deny">✕ ${L('Negar','Deny')}</button></div>`)
-      :p.decision==='PRE_APPROVED'?`<div class="tour-btns">${p.depositProofAt&&!p.depositApprovedAt?`<button type="button" class="btn-card primary" data-tcond="${esc(p.offerId)}" data-tcw="deposit">✅ ${L('Aprobar depósito de $1,000','Approve $1,000 deposit')}</button>`:''}${p.docsUploadedAt&&!p.docsApprovedAt?`<span class="ops-meta">📎 ${L('Documentos listos: revísalos en el paso 1 abajo.','Documents ready: review them in step 1 below.')}</span>`:''}${!p.depositProofAt&&!p.docsUploadedAt?`<span class="ops-meta">${L('Esperando el comprobante del depósito o los documentos.','Waiting for the deposit proof or the documents.')}</span>`:''}</div>`:'';
-    const docs=(p.documents||[]).length?`<p class="ops-meta">📎 ${(p.documents||[]).map(x=>esc((x.docType==='DEPOSIT_PROOF'?'💵 ':'')+x.name)).join(' · ')}</p>`:'';
+      :p.decision==='PRE_APPROVED'?(()=>{const dep=p.depositProofAt&&!p.depositApprovedAt?`<button type="button" class="btn-card primary" data-tcond="${esc(p.offerId)}" data-tcw="deposit">✅ ${L('Aprobar depósito de $1,000','Approve $1,000 deposit')}</button>`:'';const wait=!p.depositProofAt&&!p.docsUploadedAt?`<span class="ops-meta">${L('Esperando el comprobante del depósito o los documentos.','Waiting for the deposit proof or the documents.')}</span>`:'';return dep||wait?`<div class="tour-btns">${dep}${wait}</div>`:'';})():'';
     const dl=offerDue(p);
     const sum=`<span class="lf-ico" aria-hidden="true">🏠</span><span class="lf-main"><b>${esc(p.address)}</b><small>${esc(money(p.amount&&p.amount.price))}${offerNext(p)?' · '+offerNext(p):''}</small></span><span class="lf-tags">${offerChip(p)}${dl?cdSpan(dl):''}</span>`;
     const role=S.isAdmin()?'ADMIN':'SELLER';
-    const sellerLine=p.owner?`<p class="ops-meta">🏢 ${L('Vendedor','Seller')}: <b>${esc(p.owner.companyName||(p.owner.investorOnly?L('Inversionista asignado','Assigned investor'):L('Administrador','Administrator')))}</b>${p.owner.byDefault?' · '+L('por defecto (casa sin vendedor asignado; el Admin puede moverla a otra compañía en Compañías)','default (home without an assigned seller; Admin can move it to another company under Companies)'):''}</p>`:'';
-    const top=`<h3>${esc(p.address)}${p.city?', '+esc(p.city):''}</h3><p class="oc-step-sum">${esc(stepBlurb(p,role))}</p>${offerDetailsFold(p,sellerLine,'initial')}`;
-    return fold('sell-'+p.offerId,sum,`${top}${btns}${docs}${checklist(p,role)}${closingFlowBox(p,role)}`,{cls:'tour-sell'+focusOffer(p.offerId),id:'offer-'+p.offerId,force:hashHas('offer='+p.offerId)||(!p.decision&&!(p.counter&&p.counter.status==='OPEN'))});}).join('')}</section>`;
+    const top=`<h3>${esc(p.address)}${p.city?', '+esc(p.city):''}</h3><p class="oc-step-sum">${esc(stepBlurb(p,role))}</p>${offerDetailsFold(p)}`;
+    return fold('sell-'+p.offerId,sum,`${top}${btns}${checklist(p,role)}${closingFlowBox(p,role)}`,{cls:'tour-sell'+focusOffer(p.offerId),id:'offer-'+p.offerId,force:hashHas('offer='+p.offerId)||(!p.decision&&!(p.counter&&p.counter.status==='OPEN'))});}).join('')}</section>`;
 }
 function findOffer(id){for(const t of ((data&&data.tours)||[]).concat(addedTours(),looseTours()))for(const o of t.offers||[])if(o.offerId===id)return o;const so=((data&&data.sellerOffers)||[]).find(x=>x.offerId===id);return so?{offerId:id,pipeline:so}:null;}
 function clientDocsCard(){
@@ -969,7 +998,8 @@ function closingFlowBox(p,role,opts={}){
   const emB=(p.depositDocs||[]).length?`${p.depositApprovedAt?chip('✅ '+L('Aprobado','Approved'),'ok'):chip('🔎 '+L('Por verificar','To verify'),'warn')}${depositFiles(p,true)}${role==='ADMIN'&&!p.depositApprovedAt&&!p.invalidatedAt?`<button type="button" class="btn-card primary cf-wide" data-tcond="${id}" data-tcw="deposit">✅ ${L('Aprobar depósito de $1,000','Approve $1,000 deposit')}</button>`:''}`:`<small>⏳ ${L('Aún no se sube el comprobante de $1,000','The $1,000 proof is not uploaded yet')}</small>`;
   // Final contract
   const ks=p.contractDocs||[];
-  const ctB=`${ks.map(k=>`<a href="#" class="dep-file" data-opendoc="${esc(k.docId)}">📄 ${esc(k.name||L('Contrato final','Final contract'))}</a>`).join('')}${!ks.length?`<small>${L('Aún no hay contrato','No contract yet')}</small>`:''}${!closed&&role!=='CLIENT'?`<label class="btn-card cf-up">📤 ${ks.length?L('Subir otra versión','Upload another version'):L('Subir contrato final','Upload final contract')}<input type="file" hidden accept="image/*,application/pdf" data-cfcontract="${id}" data-listing="${esc(p.listingId)}"></label>`:''}`;
+  const ctIdx=labelIndex(ks);
+  const ctB=`${ks.map((k,i)=>fileAnchor(k,'CONTRACT',ctIdx[i]||1,'📄','dep-file')).join('')}${!ks.length?`<small>${L('Aún no hay contrato','No contract yet')}</small>`:''}${!closed&&role!=='CLIENT'?`<label class="btn-card cf-up">📤 ${ks.length?L('Subir otra versión','Upload another version'):L('Subir contrato final','Upload final contract')}<input type="file" hidden accept="image/*,application/pdf" data-cfcontract="${id}" data-listing="${esc(p.listingId)}"></label>`:''}`;
   const status=closed?`<p class="tour-done cf-note">🎉 ${L('Trato cerrado. La casa queda Vendida.','Deal closed. The home is Sold.')}${p.homeStatus&&p.homeStatus.simulated||opts.test?' '+L('(prueba: el estado real de la casa no cambia)','(test: the real home status does not change)'):''}</p>`
     :canStatus?`<div class="cf-acts"><button type="button" class="btn-card primary" data-cfclose="${id}" ${p.approvalsDone?'':'disabled'}>🏁 ${L('Cerrar trato (Vendida)','Close deal (Sold)')}</button><button type="button" class="btn-card danger" data-cffell="${id}">✕ ${L('Se cayó el trato','Fell through')}</button></div>${p.approvalsDone?'':`<small class="ops-meta">🔒 ${L('Cerrar trato se activa cuando estén aprobados documentos y depósito.','Close deal unlocks once documents and deposit are approved.')}</small>`}`
     :role==='AGENT'?`<small class="ops-meta">🔒 ${L('Solo el dueño (vendedor) o el administrador marcan la casa como vendida o el trato como caído.','Only the owner (seller) or the administrator mark the home sold or the deal as fell through.')}</small>`:'';

@@ -2229,6 +2229,7 @@ details.lf-fold{min-width:0;max-width:100%}
 .oc-step-sum{margin:4px 0 8px;font-size:15px;line-height:1.45;color:#0f172a}
 .oc-details.lf-fold{margin:2px 0 8px;padding:0;border:0;background:transparent}
 .oc-details>.lf-body{padding-top:6px}
+.oc-details>.lf-body .ops-meta{margin:0;line-height:1.45}
 .tour-check-i.s-na .lf-done-fold{background:#f8fafc;border-color:#e2e8f0}
 .tour-check-i.s-na .lf-done-fold .lfd-t small{color:#475569}
 .cf-row.cf-row-done{display:block}
