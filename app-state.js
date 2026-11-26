@@ -1068,6 +1068,9 @@ S.emailVerify=async(action,email,code)=>{
 S.loginAfterVerify=()=>S.user;
 S.forgotPassword=async email=>{await api('forgot',{email});return true;};
 S.resetPassword=async(email,codeIn,pw)=>{const j=await api('reset',{email,code:codeIn,password:pw});return adoptSession(j);};
+S.previewAdminInvite=async token=>{return api('admin_invite_preview',{token});};
+S.acceptAdminInvite=async(token,pw)=>{const j=await api('admin_invite_accept',{token,password:pw});return adoptSession(j);};
+S.createAdminInvite=async email=>{if(!S.isAdmin())throw new Error('Admins only');return api('admin_invite_create',{email});};
 S.changePassword=async(cur,pw)=>{await api('change_password',{current:cur,password:pw});};
 S.adminResetPassword=async(userId,pw)=>{if(!S.isAdmin())throw new Error('Admins only');await api('admin_reset',{userId,password:pw});};
 S.updateProfile=p=>{Object.assign(S.user,p,{updatedAt:now()});const ap=S.agentProfile(S.user);

@@ -132,6 +132,13 @@ const L10N={
     forgotConfirmPw:'Confirm new password (8+)',
     forgotSubmitBtn:'Save New Password & Sign In',
     pwMismatch:'Passwords do not match.',
+    adminInviteTitle:'Set your admin password',
+    adminInviteLoading:'Opening your invitation…',
+    adminInviteInvalid:'This invite link is invalid or has expired.',
+    adminInviteEmail:'This invitation is for',
+    adminInvitePw:'Create a password (8+ characters)',
+    adminInviteConfirm:'Confirm password (8+)',
+    adminInviteSubmit:'Create password and enter',
     registerTitle:'Create Account',
     roleBuyer:'Buyer (General Public)',
     roleAgent:'Licensed Agent',
@@ -367,6 +374,13 @@ const L10N={
     forgotConfirmPw:'Confirmar nueva contraseña (8+)',
     forgotSubmitBtn:'Guardar Contraseña e Iniciar Sesión',
     pwMismatch:'Las contraseñas no coinciden.',
+    adminInviteTitle:'Crea tu contraseña de administrador',
+    adminInviteLoading:'Abriendo tu invitación…',
+    adminInviteInvalid:'Este enlace de invitación no es válido o ya venció.',
+    adminInviteEmail:'Esta invitación es para',
+    adminInvitePw:'Crea una contraseña (mínimo 8 caracteres)',
+    adminInviteConfirm:'Confirmar contraseña (8+)',
+    adminInviteSubmit:'Crear contraseña y entrar',
     registerTitle:'Crear Cuenta',
     roleBuyer:'Comprador (Público General)',
     roleAgent:'Agente con Licencia',
@@ -1870,6 +1884,56 @@ function openListing(id){const l=S.listing(id);if(!l)return;if(!(S.isInvestor()&
   on('#shareF',v=>S.sendMessage({toUserId:ag.id,listingId:id,kind:'SHARE_HOUSE',body:v.body}));
   const ra=m.querySelector('#reqAcc');if(ra)ra.onclick=wrap(()=>{S.sendMessage({toUserId:ag.id,listingId:id,kind:'REQUEST_ACCESS',body:tr('requestAccess')});alert(tr('requestedAlert'));});}
 
+
+let INV={status:'idle',token:'',email:'',welcome:null,error:''};
+function adminInviteToken(){
+  const h=String(location.hash||'').replace(/^#/,'').trim();
+  const parts=h.split(/[&?]/);
+  if(parts[0]!=='admin-invite')return '';
+  for(let i=1;i<parts.length;i++){
+    const p=parts[i];
+    if(p.slice(0,2)==='t='){try{return decodeURIComponent(p.slice(2));}catch(e){return p.slice(2);}}
+  }
+  return '';
+}
+function resetAdminInvite(){INV={status:'idle',token:'',email:'',welcome:null,error:''};}
+function welcomeText(w){
+  if(!w)return '';
+  const primary=S.lang==='es'?(w.es||w.en):(w.en||w.es);
+  const other=S.lang==='es'?(w.en||''):(w.es||'');
+  let html=`<p style="font-size:15px;color:#0f172a;margin:0 0 10px 0">${esc(primary)}</p>`;
+  if(other&&other!==primary)html+=`<p style="font-size:13px;color:#475569;margin:0 0 12px 0">${esc(other)}</p>`;
+  return html;
+}
+async function startAdminInvitePreview(){
+  const token=adminInviteToken();
+  INV={status:'loading',token,email:'',welcome:null,error:''};
+  if(!token){INV={status:'bad',token:'',email:'',welcome:null,error:tr('adminInviteInvalid')};return;}
+  try{
+    const j=await S.previewAdminInvite(token);
+    if(adminInviteToken()!==token)return;
+    INV={status:'ok',token,email:j.email||'',welcome:j.welcome||null,error:''};
+  }catch(e){
+    if(adminInviteToken()!==token)return;
+    INV={status:'bad',token,email:'',welcome:null,error:(e&&e.message)||tr('adminInviteInvalid')};
+  }
+  render();
+}
+function adminInvite(){
+  const token=adminInviteToken();
+  if(!token)return `<section class="card" style="padding:20px;margin:24px auto;max-width:520px"><h2>${tr('adminInviteTitle')}</h2><p style="color:#b91c1c">${tr('adminInviteInvalid')}</p></section>`;
+  if(INV.status==='idle'||INV.token!==token){startAdminInvitePreview();return `<section class="card" style="padding:20px;margin:24px auto;max-width:520px"><h2>${tr('adminInviteTitle')}</h2><p style="color:#475569">${tr('adminInviteLoading')}</p></section>`;}
+  if(INV.status==='loading')return `<section class="card" style="padding:20px;margin:24px auto;max-width:520px"><h2>${tr('adminInviteTitle')}</h2><p style="color:#475569">${tr('adminInviteLoading')}</p></section>`;
+  if(INV.status!=='ok')return `<section class="card" style="padding:20px;margin:24px auto;max-width:520px"><h2>${tr('adminInviteTitle')}</h2><p style="color:#b91c1c">${esc(INV.error||tr('adminInviteInvalid'))}</p></section>`;
+  return `<section class="card" style="padding:20px;margin:24px auto;max-width:520px"><h2>${tr('adminInviteTitle')}</h2>
+    ${welcomeText(INV.welcome)}
+    <p style="font-size:14px;color:#334155;margin:0 0 14px 0">${tr('adminInviteEmail')} <b>${esc(INV.email)}</b></p>
+    <form id="adminInviteF" style="display:grid;gap:10px">
+      <input name="pw" type="password" placeholder="${tr('adminInvitePw')}" minlength="8" required autocomplete="new-password">
+      <input name="pw2" type="password" placeholder="${tr('adminInviteConfirm')}" minlength="8" required autocomplete="new-password">
+      <button type="submit" style="padding:10px 14px;font-weight:600">${tr('adminInviteSubmit')}</button>
+    </form></section>`;
+}
 function auth(){return `<section style="display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:18px;padding:18px">
  <form id="loginF" class="card" style="padding:16px"><h2>${tr('loginTitle')}</h2><input name="email" type="email" placeholder="${tr('email')}" required><input name="password" type="password" placeholder="${tr('password')}" required><button>${tr('loginTitle')}</button>
  <p style="margin-top:10px"><a href="#" id="forgot" style="font-weight:600">${tr('forgotPw')}</a></p></form>
@@ -2422,7 +2486,7 @@ S.rerender=function(){render();};
 let agentLanded=!parseAppHash().tab&&!/\/(login|register|forgot-password|reset-password|admin|dashboard|calendar|guides)/i.test(location.pathname)?0:1;
 function render(){if(!agentLanded&&S.user){agentLanded=1;if(tab==='inventory'&&!shareId()&&window.LegacyTours&&LegacyTours.agentDashVisible&&LegacyTours.agentDashVisible()){tab='agenthome';try{history.replaceState(null,'',location.pathname+location.search+'#agenthome');}catch(e){}}else if((tab==='inventory'||tab==='dashboard')&&!shareId()&&(window.LegacyTours&&LegacyTours.sellerDashVisible&&LegacyTours.sellerDashVisible()&&!S.isAdmin())){tab='sellerhome';try{history.replaceState(null,'',location.pathname+location.search+'#sellerhome');}catch(e){}}}captureMsgScroll();document.documentElement.lang=S.lang;syncMsgTitle();const root=$('#app-root');if(!S.data)return;if(map){try{map.stop();map.off();map.remove();}catch(e){}map=null;}
   const mapFull=tab==='map';document.documentElement.classList.toggle('lof-map-on',mapFull);if(mapFull){headerCompact=false;if(window.scrollY)window.scrollTo(0,0);}
-  const body={inventory,guides,dashboard,admin,auth,calendar:calendarView,'investor-tx':investorTx,'investor-map':investorMap,favorites:favoritesView,map:mapView,tours:()=>window.LegacyTours?LegacyTours.view():'',myagent:()=>window.LegacyTours&&LegacyTours.agentView?LegacyTours.agentView():'',agenthome:()=>window.LegacyTours&&LegacyTours.agentDashboard&&LegacyTours.agentDashVisible()?LegacyTours.agentDashboard():inventory(),sellerhome:()=>window.LegacyTours&&LegacyTours.sellerPanel&&LegacyTours.sellerDashVisible()?LegacyTours.sellerPanel():inventory()}[tab]||inventory;root.innerHTML=header()+`<main>${body()}</main><footer class="app-footer" style="padding:18px;font-size:12px;text-align:center">© Legacy - Owner Finance · Brokerage By: KLC Real Estate, LLC${footerLinks()}</footer>${tabBar()}`;bind();applyMsgScroll();if(tab==='inventory'&&(MAPOPEN||!narrowMQ.matches))drawMap();if(tab==='investor-map')drawInvestorMap();if(mapFull)drawFullMap();maybeOpenSharedDetail();highlightClosedDeal();}
+  const body={inventory,guides,dashboard,admin,auth,'admin-invite':adminInvite,calendar:calendarView,'investor-tx':investorTx,'investor-map':investorMap,favorites:favoritesView,map:mapView,tours:()=>window.LegacyTours?LegacyTours.view():'',myagent:()=>window.LegacyTours&&LegacyTours.agentView?LegacyTours.agentView():'',agenthome:()=>window.LegacyTours&&LegacyTours.agentDashboard&&LegacyTours.agentDashVisible()?LegacyTours.agentDashboard():inventory(),sellerhome:()=>window.LegacyTours&&LegacyTours.sellerPanel&&LegacyTours.sellerDashVisible()?LegacyTours.sellerPanel():inventory()}[tab]||inventory;root.innerHTML=header()+`<main>${body()}</main><footer class="app-footer" style="padding:18px;font-size:12px;text-align:center">© Legacy - Owner Finance · Brokerage By: KLC Real Estate, LLC${footerLinks()}</footer>${tabBar()}`;bind();applyMsgScroll();if(tab==='inventory'&&(MAPOPEN||!narrowMQ.matches))drawMap();if(tab==='investor-map')drawInvestorMap();if(mapFull)drawFullMap();maybeOpenSharedDetail();highlightClosedDeal();}
 function bind(){const r=$('#app-root');
   {const setH=()=>{const h=document.querySelector('.app-header');if(h)document.documentElement.style.setProperty('--hdr-h',h.offsetHeight+'px');};setH();if(!window.__admHdr){window.__admHdr=1;window.addEventListener('scroll',()=>requestAnimationFrame(setH),{passive:true});window.addEventListener('resize',setH);}}
   if(!r.dataset.admBound){r.dataset.admBound='1';
@@ -2557,6 +2621,7 @@ function bind(){const r=$('#app-root');
    }catch(err){alert(err.message);}
   };
   const sub=(id,fn)=>{const el=$(id);if(el)el.onsubmit=wrap(()=>fn(fd(el)));};
+  sub('#adminInviteF',async v=>{const token=adminInviteToken();if(!token)throw new Error(tr('adminInviteInvalid'));if(v.pw!==v.pw2)throw new Error(tr('pwMismatch'));const u=await S.acceptAdminInvite(token,v.pw);resetAdminInvite();go(u&&u.role==='ADMIN'?'admin':'dashboard');});
   sub('#loginF',async v=>{const u=await S.login(v.email,v.password);if(u&&u.needsVerify)return openVerifyEmail(u.email,false);go(u&&u.role==='ADMIN'?'admin':(window.LegacyTours&&LegacyTours.agentDashVisible&&LegacyTours.agentDashVisible()?'agenthome':(window.LegacyTours&&LegacyTours.sellerDashVisible&&LegacyTours.sellerDashVisible()&&!S.isAdmin())?'sellerhome':'dashboard'));maybePromptCriteria();});
   sub('#regF',async v=>{if(v.role==='INVESTOR'&&!(v.businessName&&v.contactMethod&&v.contactValue&&v.representativeName))throw new Error(S.lang==='es'?'Ingresa el nombre del negocio, el método de contacto y el nombre del representante.':'Enter the business name, preferred contact method, and the representative\'s name.');const u=await S.register(v);if(u&&u.needsVerify)return openVerifyEmail(u.email,true);go(u&&u.role==='ADMIN'?'admin':'dashboard');maybePromptCriteria();});
   sub('#coNewF',async v=>{await S.companyAction('company_create',{name:v.name,userId:v.userId});render();});
@@ -2609,6 +2674,6 @@ function checkResetUrlParams(){
 
 document.addEventListener('keydown',e=>{if(e.key!=='Escape'||!msgOpen)return;msgOpen=false;render();});
 window.LegacyUI={render:()=>render(),go:(t)=>go(t),esc:v=>esc(v),openChat:(peerId,name)=>{if(name){S.tourPeerNames=S.tourPeerNames||{};S.tourPeerNames[peerId]=name;}msgOpen=true;alertOpen=false;msgNew=false;msgPeer=peerId;msgStickBottom=true;render();},tab:()=>tab,openContact:(id,msg)=>openContactSheet(id,msg)};
-S.on(render);window.addEventListener('hashchange',()=>{const parsed=parseAppHash();if(parsed.deal)rememberDeal(parsed.deal);tab=parsed.tab||'inventory';render();});
+S.on(render);window.addEventListener('hashchange',()=>{const parsed=parseAppHash();if(parsed.deal)rememberDeal(parsed.deal);if(parsed.tab!=='admin-invite')resetAdminInvite();tab=parsed.tab||'inventory';render();});
 S.load().then(()=>{render();checkResetUrlParams();maybePromptCriteria();}).catch(e=>{document.documentElement.lang=S.lang;$('#app-root').innerHTML='<p style="padding:20px">'+esc(tr('loadFail'))+': '+esc(e.message)+'</p>';}).then(()=>{try{window.legacySplashHide&&window.legacySplashHide()}catch(_){}});
 })();
