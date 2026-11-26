@@ -238,7 +238,7 @@ function view(){
   if(lastErr&&!data)return head+`<p class="tour-warn" style="margin:18px">${esc(lastErr)}</p></div>`;
   const mine=(data.tours||[]);const live=mine.filter(t=>['REQUESTED','ACCEPTED'].includes(t.status)||t.feedbackDue&&!['CANCELLED','EXPIRED','DECLINED'].includes(t.status));const past=mine.filter(t=>!live.includes(t));
   const sf=(data.sellerFeedback||[]);
-  return head+(isClient()?cartSection():'')+openSection()+sellerSection()+(S.isAdmin()?adminRemovalsSection():'')+
+  return head+(isClient()?cartSection():'')+openSection()+sellerSection()+followedSection()+(S.isAdmin()?adminRemovalsSection():'')+
    `<section class="tour-list"><h2>${S.isAdmin()?L('Todas las citas con carrito','All cart showings'):L('Mis citas','My showings')}</h2>${live.map(tourCard).join('')||`<p class="ops-meta" style="padding:0 18px">${L('No tienes citas próximas.','No upcoming showings.')}</p>`}
    ${past.length?`<details class="card tour-card"><summary>${L('Citas anteriores','Past showings')} (${past.length})</summary>${past.map(tourCard).join('')}</details>`:''}</section>`+
    (sf.length?`<section class="card tour-card"><h2>💬 ${L('Comentarios de visitas a tus casas','Showing feedback on your homes')}</h2><ul>${sf.map(f=>`<li><b>${esc(f.address||'')}, ${esc(f.city||'')}</b> · ${f.authorRole==='CLIENT'?L('Cliente','Client'):L('Agente','Agent')} ${f.rating?'★'.repeat(f.rating):''} — ${esc(f.comments||'')}</li>`).join('')}</ul></section>`:'')+`</div>`;
@@ -429,13 +429,13 @@ function decisionLine(p){
 function offerCard(t,h,o){
   const p=o.pipeline;const live=!o.invalidatedAt&&!(p&&p.decision==='DENIED');
   const head=p&&p.invalidatedAt?`<div class="tour-warn">❌ <b>${L('Oferta anulada','Offer voided')}</b> · ${esc(when(p.offerAt))}${amountLine(p)?' · '+esc(amountLine(p)):''}</div>`:`<div class="tour-done">✅ <b>${L('Oferta enviada','Offer sent')}</b> · ${esc(when(p?p.offerAt:o.dueAt))}${p&&amountLine(p)?' · '+esc(amountLine(p)):''}</div>`;
-  if(!p)return `<div class="tour-offer">${head}</div>`;
+  if(!p)return `<div class="tour-offer">${head}${ocBox(o.offerId,t.role)}</div>`;
   const ups=live&&t.role!=='ADMIN'?`<div class="tour-btns">${!p.depositProofAt?`<label class="btn-card">💵 ${L('Subir comprobante del depósito ($1,000)','Upload deposit proof ($1,000)')}<input type="file" hidden accept="image/*,application/pdf" data-tdep="${esc(h.id)}" data-toffer="${esc(o.offerId)}"></label>`:''}</div>`:'';
   const voidBox=p.invalidatedAt?(t.role==='AGENT'?`<div class="tour-btns"><button type="button" class="btn-card primary" data-tresume="${esc(o.offerId)}" data-tlid="${esc(h.id)}">🔄 ${L('Reanudar oferta','Resume offer')}</button><button type="button" class="btn-card btn-del" data-tarch="${esc(o.offerId)}">🗑️ ${L('Eliminar oferta','Delete offer')}</button></div><p class="ops-meta">${L('Reanudar abre la oferta para revisarla y enviarla de nuevo: vuelve al dueño como nueva, tiene que pre-aprobarla otra vez y los plazos y condiciones empiezan de cero.','Resume opens the offer so you can review it and send it again: it goes back to the owner as new, they must pre-approve it again, and the clocks and conditions start over.')}</p>`:`<p class="ops-meta">${L('Tu agente puede reanudarla o eliminarla.','Your agent can resume it or delete it.')}</p>`):'';
   const dl=offerDue(p),nx=offerNext(p);
   const sum=`<span class="lf-ico" aria-hidden="true">💰</span><span class="lf-main"><b>${L('Oferta','Offer')}${amountLine(p)?' · '+esc(money(p.amount&&p.amount.price)):''}</b><small>${nx}</small></span><span class="lf-tags">${offerChip(p,o)}${dl?cdSpan(dl):''}</span>`;
-  if(p.invalidatedAt)return fold('offer-'+o.offerId,sum,`${head}${decisionLine(p)}${voidBox}`,{cls:'tour-offer'+focusOffer(o.offerId),id:'offer-'+o.offerId,force:hashHas('offer='+o.offerId)});
-  return fold('offer-'+o.offerId,sum,`${head}${decisionLine(p)}${counterBox(p,t.role)}${homeStatusLine(p)}<h4>${L('Próximos pasos','Next steps')}</h4>${checklist(p,t.role)}${ups}${closingFlowBox(p,t.role)}`,{cls:'tour-offer'+focusOffer(o.offerId),id:'offer-'+o.offerId,force:hashHas('offer='+o.offerId)});
+  if(p.invalidatedAt)return fold('offer-'+o.offerId,sum,`${head}${decisionLine(p)}${voidBox}${ocBox(o.offerId,t.role)}`,{cls:'tour-offer'+focusOffer(o.offerId),id:'offer-'+o.offerId,force:hashHas('offer='+o.offerId)});
+  return fold('offer-'+o.offerId,sum,`${head}${decisionLine(p)}${counterBox(p,t.role)}${homeStatusLine(p)}<h4>${L('Próximos pasos','Next steps')}</h4>${checklist(p,t.role)}${ups}${closingFlowBox(p,t.role)}${ocBox(o.offerId,t.role)}`,{cls:'tour-offer'+focusOffer(o.offerId),id:'offer-'+o.offerId,force:hashHas('offer='+o.offerId)});
 }
 function sellerSection(){
   const so=(data&&data.sellerOffers)||[];if(!so.length)return '';
@@ -808,6 +808,8 @@ function clientPanel(full){
   const card=(id,icon,title,n,body,btn)=>`<section class="card cd-card" id="${id}"><div class="cd-card-h"><h3><span aria-hidden="true">${icon}</span> ${title}</h3>${n!=null?`<span class="ad-count">${n}</span>`:''}</div>${body}${btn?`<div class="cd-foot">${btn}</div>`:''}</section>`;
   const showsB=upcoming.length?`<ul class="cd-list">${upcoming.slice(0,3).map(t=>`<li><button type="button" class="cd-row" data-adtour="${esc(t.id)}"><span class="cd-date"><b>${esc(shortDay(t.startsAt))}</b><small>${esc(timeOf(t.startsAt))}</small></span><span class="lf-main"><b>${shortAddr(t.homes[0])}${t.homes.length>1?' +'+(t.homes.length-1):''}</b><small>${t.agent?'🤝 '+esc(t.agent.name||''):L('Buscando agente','Finding an agent')}</small></span>${statusPill(t.status)}</button></li>`).join('')}</ul>`:`<p class="ad-empty">${L('No tienes citas próximas.','No upcoming showings.')}</p>`;
   const offB=offers.length||legacy.length?`<ul class="ad-list">${offers.map(({o,p,h})=>{const dl=offerDue(p),ns=nextStepOf(p);return `<li class="ad-fold">`+fold('cdo-'+o.offerId,`${h.photo?`<img src="${esc(h.photo)}" alt="" loading="lazy" onerror="this.remove()">`:''}<span class="lf-main"><b>${shortAddr(h)}</b><small>${esc(money(p.amount&&p.amount.price))}${ns?' · '+esc(ns.label):''}</small></span><span class="lf-tags">${offerChip(p,o)}${dl?cdSpan(dl):''}</span>`,`<p class="ops-meta">${esc(offerStep(p))}</p>${p.decision==='PRE_APPROVED'&&!p.invalidatedAt?`<div class="ad-prog" role="img" aria-label="${esc(L('Paso','Step')+' '+(ns?ns.n:TOT(p))+'/'+TOT(p))}">${DOTS(p).map(i=>`<span class="${ns&&i<ns.n||!ns?'on':ns&&i===ns.n?'cur':''}"></span>`).join('')}</div>`:''}<div class="cd-btns">${go(o.offerId)}</div>`,{cls:'ad-deal-f'})+`</li>`;}).join('')}${legacy.map(o=>{const l=(S.listing&&S.listing(o.listingId))||{};return `<li class="ad-fold"><div class="lf-sum cd-static"><span class="lf-main"><b>${shortAddr(l)}</b><small>${S.money?S.money(o.offerPrice):''}</small></span>${chip(esc(String(o.status||'').replace('_',' ').toLowerCase()),'info')}</div></li>`;}).join('')}</ul>`:`<p class="ad-empty">${L('Aún no tienes ofertas. Tu agente hace la oferta después de la cita.','No offers yet. Your agent makes the offer after the showing.')}</p>`;
+  const fol=(data&&data.followedOffers)||[],folN=fol.length; // v47: offers this client follows (view-only)
+  const folB=folN?`<h4 class="oc-h">👥 ${L('Ofertas que sigues (solo para ver)','Offers you follow (view-only)')}</h4><ul class="ad-list">${fol.map(f=>`<li><button type="button" class="cd-row" data-tgooffer="${esc(f.offerId)}">${f.home&&f.home.photo?`<img src="${esc(f.home.photo)}" alt="" loading="lazy" onerror="this.remove()">`:''}<span class="lf-main"><b>${shortAddr(f.home)}</b><small>${esc(f.pipeline?amountLine(f.pipeline):amountLine({amount:f.amount}))}${f.agent?' · 🤝 '+esc(f.agent.name||''):''}</small></span>${ocChip(f)}</button></li>`).join('')}</ul>`:'';
   const favs=((S.data&&S.data.favorites)||[]).filter(f=>f.userId===u.id).map(f=>S.listing&&S.listing(f.listingId)).filter(Boolean);
   const ph=l=>(Array.isArray(l.photoUrls)&&l.photoUrls[0])||l.photoUrl||'listing-placeholder.svg';
   const favB=favs.length?`<div class="cd-favs">${favs.slice(0,4).map(l=>`<button type="button" class="cd-fav" data-open="${esc(l.id)}"><img src="${esc(ph(l))}" alt="" loading="lazy" onerror="this.onerror=null;this.src='listing-placeholder.svg'"><span>${esc(String(l.address||'').split(',')[0])}</span></button>`).join('')}</div>`:`<p class="ad-empty">${L('Toca ❤️ en una casa para guardarla aquí.','Tap ❤️ on a home to save it here.')}</p>`;
@@ -819,7 +821,7 @@ function clientPanel(full){
   const more=`<details class="card cd-profile lf-fold" data-fold="cd-profile"${FOLD['cd-profile']?' open':''} id="cd-profile"><summary class="lf-sum"><span class="lf-ico" aria-hidden="true">⚙️</span><span class="lf-main"><b>${L('Mi perfil, mensajes y documentos','My profile, messages and documents')}</b><small>${L('Datos, contraseña, búsqueda, carpeta','Details, password, search, folder')}</small></span><span class="lf-chev" aria-hidden="true">⌄</span></summary><div class="lf-body">${full||''}</div></details>`;
   return `<div class="tour-wrap ad-wrap cd-wrap">${hero}
     ${card('cd-shows','📅',L('Mis citas','My showings'),upcoming.length,showsB,`<button type="button" class="btn-card" data-tab="tours">${L('Ver todas','See all')}</button>`)}
-    ${card('cd-offers','💰',L('Mis ofertas','My offers'),offers.length+legacy.length,offB,'')}
+    ${card('cd-offers','💰',L('Mis ofertas','My offers'),offers.length+legacy.length+folN,folN&&!(offers.length||legacy.length)?folB:offB+folB,'')}
     <div class="cd-two">${card('cd-favs','❤️',L('Favoritas','Favorites'),favs.length,favB,favs.length?`<button type="button" class="btn-card" data-tab="favorites">${L('Ver todas','See all')}</button>`:'')}
     ${card('cd-agent','🤝',L('Mi agente','My agent'),null,agB,a?`<button type="button" class="btn-card" data-tab="myagent">${L('Ver perfil','See profile')}</button>`:`<button type="button" class="btn-card" data-tab="myagent">🤝 ${L('Conectar con mi agente','Connect with my agent')}</button>`)}</div>
     ${card('cd-docs','📂',L('Documentos','Documents'),null,docB,`<button type="button" class="btn-card" data-cdprofile="1">${L('Abrir mi carpeta','Open my folder')}</button>`)}
@@ -981,7 +983,78 @@ function adminRemovalsSection(){
     <button type="button" class="btn-card" data-tremfresh="1">↻ ${L('Actualizar','Refresh')}</button></section>`;
 }
 
+/* ---------- v47: clients that follow an offer (read-only) ----------
+   The agent who made the offer, or Admin, adds a client (one of the agent's clients, or any client account by email).
+   The client sees the offer read-only (status, counteroffer, steps, timeline) and gets the same notices. Server: offer_clients_* (api v47). */
+const OC_ST={SUBMITTED:['Enviada','Sent','#2563eb'],COUNTERED:['Contraoferta','Counteroffer','#d97706'],ACCEPTED:['Aceptada','Accepted','#16a34a'],PENDING:['Pendiente','Pending','#d97706'],REJECTED:['No aceptada','Not accepted','#dc2626'],DECLINED:['No aceptada','Not accepted','#dc2626'],INVALIDATED:['Anulada','Voided','#dc2626'],CLOSED:['Cerrada','Closed','#475569'],FELL_THROUGH:['Se cayó','Fell through','#dc2626'],WITHDRAWN:['Retirada','Withdrawn','#64748b'],CANCELLED:['Cancelada','Cancelled','#64748b']};
+const ocOn=()=>!!(data&&data.offerClientsReady);
+const ocList=id=>((data&&data.offerClients)||{})[id]||[];
+function ocBox(offerId,role){
+  if(!(role==='AGENT'||role==='ADMIN')||!ocOn())return '';const cs=ocList(offerId);
+  return `<div class="oc-box"><p class="ops-meta">👥 ${cs.length?`${L('Clientes que siguen esta oferta','Clients following this offer')}: <b>${cs.map(c=>esc(c.name||c.email)).join(', ')}</b>`:L('Puedes agregar a un cliente para que siga esta oferta (solo para ver).','You can add a client so they can follow this offer (view-only).')}</p><div class="tour-btns"><button type="button" class="btn-card" data-tocl="${esc(offerId)}">👥 ${L('Agregar cliente','Add client')}${cs.length?` (${cs.length})`:''}</button></div></div>`;
+}
+async function openOfferClients(offerId){
+  const m=sheet(`<h3>👥 ${L('Clientes de esta oferta','Clients on this offer')}</h3><div class="oc-sheet"><p class="ops-meta">${L('Cargando…','Loading…')}</p></div>`);
+  const box=m.querySelector('.oc-sheet');
+  const draw=async()=>{let r;try{r=await call('offer_clients_list',{offerId});}catch(e){box.innerHTML=`<p class="tour-warn">${esc(e.message||String(e))}</p>`;return;}
+    const cs=r.clients||[],cands=r.candidates||[];
+    box.innerHTML=`<p class="ops-meta">${L('El cliente verá esta oferta en su cuenta (estado, contraofertas y pasos) y recibirá los mismos avisos. Solo puede verla: no puede cambiarla, aceptarla ni contraofertar.','The client will see this offer in their account (status, counteroffers and steps) and get the same notices. View-only: they can’t change, accept or counter it.')}</p>
+      ${r.tourClient?`<p class="ops-meta">🤝 ${L('Cliente de la oferta','Offer client')}: <b>${esc(r.tourClient.name||r.tourClient.email)}</b></p>`:''}
+      <h4>${L('Siguen la oferta','Following')} (${cs.length})</h4>
+      ${cs.length?`<ul class="oc-list">${cs.map(c=>`<li><span class="lf-main"><b>${esc(c.name||'—')}</b><small>${esc(c.email||'')}</small></span><button type="button" class="btn-card btn-del" data-toclrm="${esc(c.id)}">✕ ${L('Quitar','Remove')}</button></li>`).join('')}</ul>`:`<p class="ad-empty">${L('Nadie todavía.','Nobody yet.')}</p>`}
+      ${cs.length<(r.max||10)?`<form class="tour-form oc-add" novalidate>
+        ${cands.length?`<label>${L('Tus clientes','Your clients')}<select name="clientId"><option value="">—</option>${cands.map(c=>`<option value="${esc(c.id)}">${esc(c.name||c.email)}${c.email?' · '+esc(c.email):''}</option>`).join('')}</select></label><p class="ops-meta">${L('o búscalo por su correo:','or find them by email:')}</p>`:''}
+        <label>${L('Correo del cliente','Client email')}<input name="email" type="email" inputmode="email" autocomplete="off" maxlength="200" placeholder="${esc(L('correo@ejemplo.com','name@example.com'))}"></label>
+        <div class="tour-btns"><button type="submit" class="btn-card primary">👥 ${L('Agregar cliente','Add client')}</button></div><p class="tour-warn oc-err" hidden></p></form>`:''}`;
+    box.querySelectorAll('[data-toclrm]').forEach(b=>b.addEventListener('click',()=>{if(!confirm(L('¿Quitar a este cliente de la oferta? Ya no la verá.','Remove this client from the offer? They will no longer see it.')))return;act(async()=>{await call('offer_clients_remove',{offerId,clientId:b.dataset.toclrm});await draw();load(true);});}));
+    const f=box.querySelector('.oc-add');if(f)f.addEventListener('submit',e=>{e.preventDefault();const err=f.querySelector('.oc-err');const clientId=f.clientId?f.clientId.value:'',email=String(f.email.value||'').trim();
+      if(!clientId&&!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)){err.hidden=false;err.textContent=L('Elige un cliente o escribe un correo válido.','Choose a client or type a valid email.');return;}
+      act(async()=>{try{const j=await call('offer_clients_add',clientId?{offerId,clientId}:{offerId,email});await draw();load(true);if(j&&j.already)alert(L('Ese cliente ya sigue esta oferta.','That client already follows this offer.'));}catch(x){err.hidden=false;err.textContent=x.message||String(x);}});});
+  };
+  draw();
+}
+document.addEventListener('click',e=>{const b=e.target.closest&&e.target.closest('[data-tocl]');if(!b)return;e.preventDefault();e.stopPropagation();openOfferClients(b.dataset.tocl);},true);
+function ocTimeline(f){
+  const p=f.pipeline,ev=[];const add=(at,ic,es,en)=>{if(at)ev.push({at,ic,t:L(es,en)});};
+  add(p?p.offerAt:f.createdAt,'💰','Oferta enviada','Offer sent');
+  if(p){
+    if(p.counter){add(p.counter.at,'↩️','El dueño hizo una contraoferta: '+amountLine({amount:p.counter}),'The owner made a counteroffer: '+amountLine({amount:p.counter}));
+      if(p.counter.status==='ACCEPTED')add(p.counter.answeredAt,'🤝','Contraoferta aceptada','Counteroffer accepted');if(p.counter.status==='DECLINED')add(p.counter.answeredAt,'✕','Contraoferta rechazada','Counteroffer declined');}
+    if(p.decision==='PRE_APPROVED')add(p.decisionAt,'✅','El dueño pre-aprobó la oferta','The owner pre-approved the offer');
+    if(p.decision==='DENIED')add(p.decisionAt,'❌','El dueño no aceptó la oferta','The owner did not accept the offer');
+    add(p.docsUploadedAt,'📎','Documentos entregados','Documents delivered');add(p.docsApprovedAt,'✅','Documentos aprobados','Documents approved');
+    add(p.depositProofAt,'💵','Comprobante del depósito enviado','Deposit proof sent');add(p.depositApprovedAt,'✅','Depósito aprobado','Deposit approved');
+    if(p.homeStatus)add(p.homeStatus.at,'🏠','La casa pasó a Pendiente','The home went to Pending');
+    add(p.inspectionReportAt,'🔍','Inspección terminada','Inspection done');add(p.inspectionWaivedAt,'🔍','Sin inspección','Inspection waived');
+    ((p.trr&&p.trr.history)||[]).forEach(h=>add(h.at,'📝','TRR: '+({SUBMIT:'enviado',WAIVE:'no se negocia',ACCEPT:'aceptado',REJECT:'rechazado',COUNTER:'contraoferta',ACCEPT_COUNTER:'contraoferta aceptada'}[h.kind]||h.kind),'TRR: '+({SUBMIT:'sent',WAIVE:'not negotiated',ACCEPT:'accepted',REJECT:'rejected',COUNTER:'countered',ACCEPT_COUNTER:'counter accepted'}[h.kind]||h.kind)));
+    if(p.closing&&p.closing.agreed)add(p.closing.proposedAt,'🗓️','Fecha de cierre acordada: '+shortDay(p.closing.at),'Closing date agreed: '+shortDay(p.closing.at));
+    add(p.fundsApprovedAt,'🏦','Fondos del cierre aprobados','Closing funds approved');add(p.dealClosedAt,'🎉','Trato cerrado','Deal closed');
+    add(p.invalidatedAt,'❌','Oferta anulada (vencida)','Offer voided (expired)');
+  }else{
+    if(f.counter&&f.status==='COUNTERED')add(f.respondedAt,'↩️','Contraoferta: '+amountLine({amount:f.counter}),'Counteroffer: '+amountLine({amount:f.counter}));
+    else if(f.status!=='SUBMITTED'){const s=OC_ST[f.status]||[f.status,f.status];add(f.respondedAt,'📌',s[0],s[1]);}
+  }
+  ev.sort((a,b)=>String(a.at).localeCompare(String(b.at)));
+  return ev.length?`<ol class="oc-timeline">${ev.map(x=>`<li><span aria-hidden="true">${x.ic}</span> <b>${esc(x.t)}</b><br><small>${esc(when(x.at))}</small></li>`).join('')}</ol>`:'';
+}
+function ocChip(f){const p=f.pipeline;if(p)return offerChip(p,{});const s=OC_ST[f.status]||[f.status,f.status,'#64748b'];return `<span class="tour-pill" style="background:${s[2]}">${esc(L(s[0],s[1]))}</span>`;}
+function ocReadOnlySteps(p){return `<ol class="tour-check">${(p.checklist||[]).map(c=>{const st=STATUS_LABEL[c.status]||STATUS_LABEL.PENDING;return `<li class="tour-check-i s-${String(c.status).toLowerCase()}"><div><span>${st[2]} <b>${c.n}) ${esc(L(...STEP_LABEL[c.key]))}</b><br><small>${esc(L(st[0],st[1]))}</small></span></div></li>`;}).join('')}</ol>`;}
+function followCard(f){
+  const h=f.home||{},p=f.pipeline,amt=p?amountLine(p):amountLine({amount:f.amount});
+  const sum=`<span class="lf-ico" aria-hidden="true">👥</span><span class="lf-main"><b>${shortAddr(h)||esc(L('Casa','Home'))}</b><small>${esc(amt)}${p&&offerNext(p)?' · '+offerNext(p):''}</small></span><span class="lf-tags">${ocChip(f)}</span>`;
+  const ctr=p?counterBox(p,'FOLLOWER'):(f.status==='COUNTERED'&&f.counter?`<p class="ops-meta">↩️ <b>${L('Contraoferta','Counteroffer')}</b>: ${esc(amountLine({amount:f.counter}))}</p>`:'');
+  const body=`<p class="ops-meta">👀 ${L('Solo para ver: tu agente maneja esta oferta.','View-only: your agent handles this offer.')}</p>
+    <h3>🏠 ${homeLine(h)}</h3>${amt?`<p class="ops-meta">💰 ${L('Oferta','Offer')}: <b>${esc(amt)}</b></p>`:''}
+    ${p?decisionLine(p):''}${ctr}${p?homeStatusLine(p):''}
+    ${p&&(p.checklist||[]).length?`<h4>${L('Pasos','Steps')}</h4>${ocReadOnlySteps(p)}`:''}
+    <h4>🕒 ${L('Historial','Timeline')}</h4>${ocTimeline(f)||`<p class="ad-empty">—</p>`}
+    ${f.agent?`<h4>${L('Agente','Agent')}</h4>${personCard(f.agent,true)}`:''}`;
+  return fold('follow-'+f.offerId,sum,body,{cls:'card tour-card tour-offer oc-follow'+focusOffer(f.offerId),id:'offer-'+f.offerId,force:hashHas('offer='+f.offerId)});
+}
+function followedSection(){const fs=(data&&data.followedOffers)||[];if(!fs.length)return '';
+  return `<section class="tour-list oc-followed"><h2>👥 ${L('Ofertas que sigues','Offers you follow')}</h2><p class="ops-meta" style="padding:0 18px">${L('Te agregaron a estas ofertas para que les des seguimiento. Solo son para ver.','You were added to these offers so you can follow them. They are view-only.')}</p>${fs.map(followCard).join('')}</section>`;}
 window.LegacyTours={
+  offerClientsBox:id=>{load(false);return ocBox(id,S.isAdmin()?'ADMIN':'AGENT');},followedOffers:()=>((data&&data.followedOffers)||[]),
   clientMode:()=>isClient()||!S.user,
   navVisible:()=>!!S.user&&(isClient()||isAgent()||S.isAdmin()||(S.isInvestor&&S.isInvestor()&&!S.isPendingApproval(S.user))),
   navLabel:()=>isClient()?'🛒 '+L('Carrito y citas','Cart & showings'):isAgent()?'🔔 '+L('Citas de clientes','Client showings'):S.isAdmin()?'🛒 '+L('Citas con carrito','Cart showings'):'💬 '+L('Comentarios de visitas','Showing feedback'),
