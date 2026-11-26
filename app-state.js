@@ -1434,10 +1434,10 @@ S.uploadProblem=(file,imageOnly)=>{
   if(!file.size||file.size>UPLOAD_MAX)return es?'El archivo debe pesar menos de 15 MB.':'The file must be smaller than 15 MB.';
   return '';
 };
-S.uploadDocument=async(file,{listingId,docType,offerId,replace}={})=>{
+S.uploadDocument=async(file,{listingId,docType,offerId,replace,forUserId}={})=>{
   if(!S.user)throw new Error(S.lang==='es'?'Inicia sesión primero':'Please log in');
   const bad=S.uploadProblem(file,false);if(bad)throw new Error(bad);
-  const meta={name:file.name,size:file.size,type:S.uploadMime(file),docType:docType||'GENERAL',listingId:listingId||null,offerId:offerId||null,replace:!!replace};
+  const meta={name:file.name,size:file.size,type:S.uploadMime(file),docType:docType||'GENERAL',listingId:listingId||null,offerId:offerId||null,replace:!!replace};if(forUserId)meta.forUserId=String(forUserId); // v54: the offer's agent files for one buyer
   const init=await api('document_upload_init',meta);
   if(!init||!init.ok)throw new Error(S.lang==='es'?'La subida de documentos aún no está disponible.':'Document upload is not available yet.');
   const put=await fetch(init.signedUrl,{method:'PUT',headers:{'Content-Type':init.mime||meta.type,'x-upsert':'false'},body:file});

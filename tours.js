@@ -103,7 +103,8 @@ async function load(force){
   if(!S.user||loading)return;if(!force&&data&&Date.now()-loadedAt<20000)return;
   loading=true;try{data=await call('tour_list');lastErr='';(data.tours||[]).forEach(t=>{const p=t.role==='CLIENT'?t.agent:t.client;if(p&&p.id&&p.name){S.tourPeerNames=S.tourPeerNames||{};S.tourPeerNames[p.id]=p.name;}});}
   catch(e){lastErr=e.message||String(e);}finally{loading=false;loadedAt=Date.now();}
-  if(UI()&&(['tours','myagent','agenthome'].includes(UI().tab())||(UI().tab()==='dashboard'&&isClient())))rerender();
+  const ae0=document.activeElement,typing=!!(ae0&&/INPUT|SELECT|TEXTAREA/.test(ae0.tagName)&&ae0.type!=='file');
+  if(UI()&&(['tours','myagent','agenthome'].includes(UI().tab())||(UI().tab()==='dashboard'&&isClient())||(UI().tab()==='dashboard'&&(isAgent()||S.isAdmin())&&!typing)))rerender(); // v54: agent/Admin "Mis Ofertas" shows the deal
   else if(UI()&&UI().tab()==='admin'){const sig=JSON.stringify(((data&&data.sellerOffers)||[]).map(o=>[o.offerId,o.decision,o.counter&&o.counter.status,o.invalidatedAt,(o.checklist||[]).map(c=>c.status).join('')]));const ae=document.activeElement;if(sig!==adminSig&&!(ae&&/INPUT|SELECT|TEXTAREA/.test(ae.tagName))){adminSig=sig;rerender();}else adminSig=sig;}
 }
 let adminSig='';
@@ -320,8 +321,48 @@ function fileBtn(label,p,docType){return `<label class="btn-card">${label}<input
 function dtForm(op,p,label,extra){return `<form class="tour-form tour-inline" data-tflowf="${op}" data-toffer="${esc(p.offerId)}"><label>${L('Fecha','Date')}<input type="date" name="date" min="${chicagoDay(new Date())}" required></label><label>${L('Hora','Time')}<select name="time">${timeOptions('10:00')}</select></label>${extra||''}<button type="submit" class="btn-card primary">${label}</button></form>`;}
 const DOCS_REVIEW=['En revisión del vendedor','In review by the seller','🔎'];
 const SLOT_LBL={ID:['Identificación (ID)','ID (photo ID)'],INCOME:['Comprobantes de ingreso','Proof of income']};
+// v54: documents are per buyer. Each buyer uploads and replaces only their own ID + income; seller/Admin see them grouped by person.
+// Admin and the offer's own agent can upload for any buyer ("Subir por el comprador") and remove (🗑️, soft delete) / restore a buyer's file.
+const DS_ME=()=>(S.user&&S.user.id)||'';
+function docPeopleBox(p,role){
+  const seller=role==='SELLER'||role==='ADMIN',agent=role==='AGENT',client=role==='CLIENT',me=DS_ME();
+  const helper=agent||role==='ADMIN'; // Admin or this offer's agent (the server checks again)
+  const approved=!!p.docsApprovedAt,locked=approved||p.invalidatedAt||p.decision==='DENIED';
+  const ppl=(p.docPeople||[]).slice();
+  const byLbl=f=>f&&f.by==='AGENT'?L('subido por el agente','uploaded by the agent'):f&&f.by==='ADMIN'?L('subido por el Admin','uploaded by Admin'):'';
+  const fileA=(f,canDel)=>`<span class="ds-file"><a href="#" data-opendoc="${esc(f.docId)}">📄 ${esc(f.name||L('archivo','file'))}</a>${byLbl(f)&&f.owner!==f.upBy?`<small class="ds-by">${esc(byLbl(f))}</small>`:''}${canDel?`<button type="button" class="ds-del" data-tdocdel="${esc(f.docId)}" data-toffer="${esc(p.offerId)}" data-tdname="${esc(f.name||'')}" title="${esc(L('Eliminar','Delete'))}" aria-label="${esc(L('Eliminar','Delete'))}">🗑️</button>`:''}</span>`;
+  const up=(slot,label,replace,multi,cls,forId)=>`<label class="btn-card${cls?' '+cls:''}">${label}<input type="file" hidden accept="image/*,application/pdf"${multi?' multiple':''} data-tslot="${slot}" data-trepl="${replace?1:0}" data-tlid="${esc(p.listingId)}" data-toffer="${esc(p.offerId)}"${forId?` data-tfor="${esc(forId)}"`:''}></label>`;
+  const row=(x,slot,canUp,forId)=>{const has=slot==='ID'?(x.ID?[x.ID]:[]):(x.INCOME||[]);const ok=has.length>0;const canDel=helper&&!locked;
+    const fileA0=f=>fileA(f,canDel);const pb=forId?'📎 '+L('Subir por el comprador','Upload for the buyer'):'';
+    const btns=canUp&&!locked?`<div class="tour-btns ds-btns">${slot==='ID'?up('ID',ok?'🔁 '+(forId?L('Reemplazar por el comprador','Replace for the buyer'):L('Reemplazar','Replace')):(pb||'📎 '+L('Subir ID','Upload ID')),ok,false,ok?'':'primary',forId):ok?up('INCOME','➕ '+(forId?L('Subir otro por el comprador','Upload another for the buyer'):L('Agregar otro','Add another')),false,true,'',forId)+up('INCOME','🔁 '+L('Reemplazar todo','Replace all'),true,true,'',forId):up('INCOME',pb||'📎 '+L('Subir comprobantes','Upload proof'),false,true,'primary',forId)}</div>`:'';
+    if(ok&&approved)return `<div class="ds-slot ok">${foldLine('✅',`${slot==='ID'?'🪪':'💼'} ${esc(L(...SLOT_LBL[slot]))}`,L('Aprobado','Approved'),p.docsApprovedAt,`<div class="ds-files">${has.map(fileA0).join('')}</div>`,'ds-fold')}</div>`;
+    return `<div class="ds-slot ${ok?'ok':'miss'}"><div class="ds-h"><b>${slot==='ID'?'🪪':'💼'} ${esc(L(...SLOT_LBL[slot]))}</b><span class="ds-st">${ok?(approved?'✅ '+L('Aprobado','Approved'):'✅ '+L('Subido','Uploaded')):'⏳ '+L('Falta','Missing')}</span></div>${ok?`<div class="ds-files">${has.map(fileA0).join('')}</div>`:''}${slot==='INCOME'&&!ok&&canUp&&!locked?`<small>${L('Puedes subir varios archivos (talones de pago, estados de cuenta, carta de empleo).','You can upload several files (pay stubs, bank statements, employment letter).')}</small>`:''}${btns}</div>`;};
+  const who=x=>esc(x.name||L('Comprador','Buyer'))+(x.kind==='AGENT'?' · '+L('Agente','Agent'):'')+(x.userId===me?' ('+L('tú','you')+')':'');
+  const st=x=>`🪪 ${x.ID?'✅':'⏳'} · 💼 ${(x.INCOME||[]).length?'✅':'⏳'}`;
+  const gone=x=>helper&&!locked?(p.docRemoved||[]).filter(f=>f.owner===x.userId):[];
+  const goneB=x=>{const g=gone(x);return g.length?`<details class="ds-gone"><summary>🗑️ ${L('Eliminados','Removed')} (${g.length})</summary>${g.map(f=>`<div class="ds-gone-i"><span>${f.slot==='ID'?'🪪':'💼'} ${esc(f.name||L('archivo','file'))}</span><button type="button" class="btn-card" data-tdocres="${esc(f.docId)}" data-toffer="${esc(p.offerId)}">↩️ ${L('Restaurar','Restore')}</button></div>`).join('')}</details>`:'';};
+  const group=(x,canUp,forId)=>`<div class="ds-person"><div class="ds-ph"><b>👤 ${who(x)}</b><span class="ds-pst">${st(x)}</span></div>${row(x,'ID',canUp,forId)}${row(x,'INCOME',canUp,forId)}${goneB(x)}</div>`;
+  let body='';
+  if(client){
+    const mine=ppl.find(x=>x.userId===me)||{userId:me,name:'',kind:'CLIENT',ID:null,INCOME:[],missing:['ID','INCOME']};
+    const others=ppl.filter(x=>x.userId!==me);
+    body=`<div class="ds-person ds-mine"><div class="ds-ph"><b>👤 ${L('Tus documentos','Your documents')}</b><span class="ds-pst">${st(mine)}</span></div>${row(mine,'ID',true,'')}${row(mine,'INCOME',true,'')}${locked?'':`<small>${L('Cada comprador sube sus propios documentos. Lo que suba otro comprador no reemplaza los tuyos.','Each buyer uploads their own documents. What another buyer uploads never replaces yours.')}</small>`}</div>`
+      +(others.length?`<div class="ds-others"><small>${L('Otros compradores en esta oferta','Other buyers on this offer')}</small>${others.map(x=>`<div class="ds-oth"><span>👤 ${who(x)}</span><span>${st(x)}</span></div>`).join('')}</div>`:'');
+  }else if(agent){body=ppl.map(x=>group(x,true,x.kind==='AGENT'?'':x.userId)).join('');}
+  else if(role==='ADMIN')body=ppl.map(x=>group(x,x.kind!=='AGENT',x.kind==='AGENT'?'':x.userId)).join('');
+  else body=ppl.map(x=>group(x,false,'')).join('');
+  let msg='';
+  if(approved)msg=`<p class="tour-done">✅ ${L('Documentos aprobados por el vendedor.','Documents approved by the seller.')}</p>`;
+  else if(p.docsUploadedAt)msg=`<p class="tour-done">🔎 <b>${L('En revisión','In review')}</b> — ${L('ID y comprobantes completos. El plazo de 12 horas se detuvo; ahora el vendedor los revisa.','ID and proof of income complete. The 12-hour clock stopped; the seller is reviewing them.')}</p>`;
+  else if(!locked){const miss=(p.docsMissing||['ID','INCOME']).map(k=>L(...SLOT_LBL[k]));msg=`<p class="tour-warn">⏳ ${L('Falta','Missing')}: <b>${esc(miss.join(L(' y ',' and ')))}</b>. ${L('La sección 1 se completa cuando estén los dos.','Step 1 is complete once both are uploaded.')}${p.docsDueAt?` ${L('El plazo sigue corriendo','The clock is still running')}: ${cdSpan(p.docsDueAt)}`:' '+L('El plazo de 12 horas empieza cuando el dueño pre-apruebe la oferta.','The 12-hour clock starts when the owner pre-approves the offer.')}</p>`;}
+  const rej=p.docsRejectedAt&&!p.docsUploadedAt&&!approved?`<p class="tour-warn">↩️ <b>${L('El vendedor pidió corregir los documentos','The seller asked to fix the documents')}</b>: ${esc(p.docsRejectNote||'')}<br><small>${L('Vuelve a subir tu ID y tu comprobante de ingresos.','Upload your ID and proof of income again.')}</small></p>`:'';
+  const sb=seller&&p.docsUploadedAt&&!approved&&!locked&&p.decision==='PRE_APPROVED'?`<div class="tour-btns"><button type="button" class="btn-card primary" data-tcond="${esc(p.offerId)}" data-tcw="docs">✅ ${L('Aprobar documentos','Approve documents')}</button><button type="button" class="btn-card btn-del" data-tdocrej="${esc(p.offerId)}">↩️ ${L('Rechazar (pedir corrección)','Reject (ask to fix)')}</button></div>`:'';
+  return `<div class="ds-box">${rej}${body}${msg}${sb}${seller?`<small class="ds-priv">🔒 ${L('Archivos privados: solo los ven los compradores, su agente, el vendedor y el Admin. Los enlaces vencen en 2 minutos.','Private files: only the buyers, their agent, the seller and Admin can see them. Links expire in 2 minutes.')}</small>`:''}</div>`;
+}
 function docSlotsBox(p,role){
-  if(!p)return '';const sl=p.docSlots||{ID:null,INCOME:[]};const seller=role==='SELLER'||role==='ADMIN',buyer=role==='AGENT'||role==='CLIENT';
+  if(!p)return '';const sl=p.docSlots||{ID:null,INCOME:[]};
+  if(Array.isArray(p.docPeople)&&p.docPeople.length&&!(p.docsUploadedAt&&!sl.ID&&!(sl.INCOME||[]).length))return docPeopleBox(p,role);
+  const seller=role==='SELLER'||role==='ADMIN',buyer=role==='AGENT'||role==='CLIENT';
   const legacy=p.docsUploadedAt&&!sl.ID&&!(sl.INCOME||[]).length;
   const approved=!!p.docsApprovedAt,locked=approved||p.invalidatedAt||p.decision==='DENIED';
   const fileA=f=>`<a href="#" data-opendoc="${esc(f.docId)}">📄 ${esc(f.name||L('archivo','file'))}</a>`;
@@ -599,6 +640,22 @@ function offerCard(t,h,o){
   if(p.invalidatedAt)return fold('offer-'+o.offerId,sum,`${top}${voidBox}${ocBox(o.offerId,t.role)}`,{cls:'tour-offer'+focusOffer(o.offerId),id:'offer-'+o.offerId,force:hashHas('offer='+o.offerId)});
   return fold('offer-'+o.offerId,sum,`${top}${counterBox(p,t.role)}<h4>${L('Próximos pasos','Next steps')}</h4>${checklist(p,t.role)}${ups}${closingFlowBox(p,t.role)}${ocBox(o.offerId,t.role)}`,{cls:'tour-offer'+focusOffer(o.offerId),id:'offer-'+o.offerId,force:hashHas('offer='+o.offerId)});
 }
+// v54: the deal (step summary, collapsible steps, per-buyer documents) inside the agent's Cuenta → Mis Ofertas row.
+// Only the offer's own agent (the offer is in their tour data as AGENT) or Admin (seller view) get it; anyone else gets ''.
+function dealBox(offerId){
+  if(!S.user||!offerId)return '';
+  const adm=!!(S.isAdmin&&S.isAdmin());if(!isAgent()&&!adm)return '';
+  load(false);
+  if(!data)return `<p class="ops-meta">⏳ ${L('Cargando el avance de la oferta…','Loading the offer progress…')}</p>`;
+  let t=null,o=null;
+  for(const tt of ((data.tours)||[]).concat(looseTours()))for(const oo of tt.offers||[])if(oo.offerId===offerId&&tt.role==='AGENT'&&oo.pipeline){t=tt;o=oo;}
+  let p=o&&o.pipeline,role=p?'AGENT':'';
+  if(!p&&adm){const so=((data.sellerOffers)||[]).find(x=>x.offerId===offerId);if(so){p=so;role='ADMIN';}}
+  if(!p)return '';
+  const btn=`<div class="tour-btns"><button type="button" class="btn-card" data-tgooffer="${esc(offerId)}">📂 ${L('Abrir el trato','Open the deal')}</button></div>`;
+  if(p.invalidatedAt||p.decision==='DENIED')return `<div class="deal-box">${decisionLine(p)}</div>${btn}`;
+  return `<div class="deal-box"><p class="oc-step-sum">${esc(stepBlurb(p,role))}</p>${offerDetailsFold(p,'','sent')}${counterBox(p,role)}<h4>${L('Próximos pasos','Next steps')}</h4>${checklist(p,role)}${closingFlowBox(p,role)}</div>${btn}`;
+}
 function sellerSection(){
   const so=(data&&data.sellerOffers)||[];if(!so.length)return '';
   return `<section class="card tour-card"><h2>💰 ${S.isAdmin()?L('Ofertas de citas (vendedor / Admin)','Showing offers (seller / Admin)'):L('Ofertas en tus casas','Offers on your homes')}</h2>${so.map(p=>{
@@ -623,7 +680,7 @@ function clientDocsCard(){
 /* ---------- events ---------- */
 async function act(fn){if(busy)return;busy=true;try{await fn();}catch(e){alert(e.message||String(e));}finally{busy=false;}}
 document.addEventListener('click',e=>{
-  const t=e.target.closest&&e.target.closest('[data-tgooffer],[data-tctr],[data-tcart],[data-tbook],[data-tcartdel],[data-tgo],[data-taccept],[data-tmove],[data-tauto],[data-tics],[data-tcancel],[data-tchat],[data-tfbopen],[data-tofferfor],[data-tdecline],[data-tmore],[data-task],[data-tprop],[data-tpans],[data-tdecide],[data-tcond],[data-tflow],[data-ttrr],[data-ttrrd],[data-tclchg],[data-tresume],[data-tarch],[data-tdocrej]');if(!t)return;
+  const t=e.target.closest&&e.target.closest('[data-tdocdel],[data-tdocres],[data-tgooffer],[data-tctr],[data-tcart],[data-tbook],[data-tcartdel],[data-tgo],[data-taccept],[data-tmove],[data-tauto],[data-tics],[data-tcancel],[data-tchat],[data-tfbopen],[data-tofferfor],[data-tdecline],[data-tmore],[data-task],[data-tprop],[data-tpans],[data-tdecide],[data-tcond],[data-tflow],[data-ttrr],[data-ttrrd],[data-tclchg],[data-tresume],[data-tarch],[data-tdocrej]');if(!t)return;
   const d=t.dataset;
   if(d.tresume){openResume(d.tresume);return;}
   if(d.tarch){if(!confirm(L('¿Eliminar esta oferta? Se quita de tu lista (queda en el historial).','Delete this offer? It is removed from your list (it stays in the history).')))return;act(async()=>{await call('tour_offer_archive',{offerId:d.tarch});await load(true);});return;}
@@ -655,6 +712,8 @@ document.addEventListener('click',e=>{
   if(d.tclchg){const m=sheet(`<h3>📅 ${L('Proponer otra fecha de cierre','Propose another closing date')}</h3><form class="tour-form" id="tourClF"><fieldset class="tour-reasons"><legend><b>${L('¿Por qué no te queda? (obligatorio)','Why doesn’t it work? (required)')}</b></legend>${CLOSING_REASONS.map(r=>`<label class="tour-reason"><input type="radio" name="code" value="${r[0]}" required> ${esc(L(r[1],r[2]))}</label>`).join('')}</fieldset><label class="tour-other" hidden>${L('Escribe la razón','Write the reason')}<textarea name="rtext" rows="2" maxlength="500"></textarea></label><label>${L('Nueva fecha','New date')}<input type="date" name="date" min="${chicagoDay(new Date())}" required></label><label>${L('Hora','Time')}<select name="time">${timeOptions('10:00')}</select></label><p class="ops-meta">${L('Las aprobaciones se reinician hasta que todos estén de acuerdo.','Approvals reset until everyone agrees.')}</p><div class="tour-btns"><button type="submit" class="btn-card primary">📨 ${L('Proponer','Propose')}</button></div></form>`);
     const f=m.querySelector('#tourClF'),oth=f.querySelector('.tour-other');f.addEventListener('change',()=>{oth.hidden=f.code.value!=='OTHER';f.rtext.required=f.code.value==='OTHER';});
     f.addEventListener('submit',ev=>{ev.preventDefault();const v=Object.fromEntries(new FormData(f));act(async()=>{await call('tour_offer_flow',{offerId:d.tclchg,op:'closing_propose',when:`${v.date}T${v.time}`,reasonCode:v.code,reasonText:v.code==='OTHER'?(v.rtext||''):''});m.remove();await load(true);});});return;}
+  if(d.tdocdel){if(!confirm(L('¿Eliminar este archivo de los documentos del comprador?','Remove this file from the buyer’s documents?')+(d.tdname?'\n'+d.tdname:'')+'\n'+L('Se puede restaurar después.','It can be restored later.')))return;return act(async()=>{await call('tour_offer_doc_remove',{offerId:d.toffer,docId:d.tdocdel});await load(true);});}
+  if(d.tdocres){return act(async()=>{await call('tour_offer_doc_restore',{offerId:d.toffer,docId:d.tdocres});await load(true);});}
   if(d.tdocrej){const note=prompt(L('¿Qué debe corregir el comprador? (lo verá el cliente y su agente)','What should the buyer fix? (the client and their agent will see it)'),'');if(note===null)return;return act(async()=>{await call('tour_offer_docs_reject',{offerId:d.tdocrej,note});await load(true);});}
   if(d.tcond)return act(async()=>{await call('tour_offer_condition',{offerId:d.tcond,which:d.tcw});await load(true);});
   if(d.tctr){const ok=d.tca==='accept';const note=ok?'':prompt(L('¿Por qué la rechazas? (opcional; el dueño lo verá)','Why are you declining? (optional; the owner will see it)'),'');if(note===null)return;if(ok&&!confirm(L('¿Aceptar la contraoferta? Empiezan los plazos: 12 h documentos y 72 h depósito.','Accept the counteroffer? The clocks start: 12 h documents and 72 h deposit.')))return;return act(async()=>{await call('tour_offer_counter_answer',{offerId:d.tctr,answer:ok?'accept':'decline',note});await load(true);});}
@@ -680,7 +739,7 @@ document.addEventListener('change',e=>{
   if(t&&t.form&&t.form.id==='tourReqF'){const v=Object.fromEntries(new FormData(t.form));form={date:v.date,time:v.time,notes:v.notes||''};return;}
   if(t&&t.dataset&&t.dataset.tupt&&t.files&&t.files[0]){act(async()=>{await S.uploadDocument(t.files[0],{docType:t.dataset.tupt,listingId:t.dataset.tlid,offerId:t.dataset.toffer});await load(true);alert(L('Archivo subido.','File uploaded.'));});return;}
   if(t&&t.dataset&&t.dataset.tdep&&t.files&&t.files[0]){act(async()=>{await S.uploadDocument(t.files[0],{docType:'DEPOSIT_PROOF',listingId:t.dataset.tdep,offerId:t.dataset.toffer});await load(true);alert(L('Comprobante subido. El vendedor lo revisará.','Proof uploaded. The seller will review it.'));});return;}
-  if(t&&t.dataset&&t.dataset.tslot&&t.files&&t.files.length){const files=[...t.files],slot=t.dataset.tslot,repl=t.dataset.trepl==='1';act(async()=>{for(let i=0;i<files.length;i++){await S.uploadDocument(files[i],{docType:slot==='ID'?'OFFER_ID':'OFFER_INCOME',listingId:t.dataset.tlid,offerId:t.dataset.toffer,replace:repl&&i===0});}await load(true);const o=findOffer(t.dataset.toffer),p=o&&o.pipeline;alert(p&&p.docsUploadedAt?L('¡Listo! ID y comprobantes completos: la sección 1 pasó a En revisión.','Done! ID and proof of income complete: step 1 is now In review.'):L('Archivo subido. Falta','File uploaded. Still missing')+': '+((p&&p.docsMissing)||[]).map(k=>L(...SLOT_LBL[k])).join(L(' y ',' and ')));});return;}
+  if(t&&t.dataset&&t.dataset.tslot&&t.files&&t.files.length){const files=[...t.files],slot=t.dataset.tslot,repl=t.dataset.trepl==='1';act(async()=>{for(let i=0;i<files.length;i++){await S.uploadDocument(files[i],{docType:slot==='ID'?'OFFER_ID':'OFFER_INCOME',listingId:t.dataset.tlid,offerId:t.dataset.toffer,replace:repl&&i===0,forUserId:t.dataset.tfor||''});}await load(true);const o=findOffer(t.dataset.toffer),p=o&&o.pipeline;alert(p&&p.docsUploadedAt?L('¡Listo! ID y comprobantes completos: la sección 1 pasó a En revisión.','Done! ID and proof of income complete: step 1 is now In review.'):L('Archivo subido. Falta','File uploaded. Still missing')+': '+((p&&p.docsMissing)||[]).map(k=>L(...SLOT_LBL[k])).join(L(' y ',' and ')));});return;}
   if(t&&t.dataset&&t.dataset.tdoc&&t.files&&t.files[0]){act(async()=>{await S.uploadDocument(t.files[0],{docType:'OFFER_DOCS',listingId:t.dataset.tdoc,offerId:t.dataset.toffer});await load(true);alert(L('Documento subido.','Document uploaded.'));});}
 },true);
 
@@ -1330,7 +1389,7 @@ window.LegacyTours={
   clientActionRow:l=>{if(S.user)load(false);const c=inCart(l.id),conn=connectedAgent();return `<div class="lof-act-row"><button type="button" class="btn-card${c?'':' primary'}" data-tcart="${esc(l.id)}">${c?'✓ '+L('En tu carrito (quitar)','In your cart (remove)'):'🛒 '+L('Agregar al carrito','Add to cart')}</button><button type="button" class="btn-card" data-tbook="${esc(l.id)}">📅 ${L('Solicitar cita','Request showing')}</button></div><p class="ops-meta tour-note">${conn?L('Junta las casas en tu carrito y envíalas a tu agente. Las ofertas las hace tu agente después de la visita.','Collect homes in your cart and send them to your agent. Your agent makes offers after the visit.'):L(`Junta hasta ${MAX} casas en tu carrito y pide una sola cita. El primer agente que acepte será tu agente. Las ofertas las hace tu agente después de la visita.`,`Collect up to ${MAX} homes in your cart and request one showing. The first agent to accept becomes your agent. Your agent makes offers after the visit.`)}</p>`;},
   offerSentCard:l=>{if(!S.user||!S.data)return '';const T=['REJECTED','WITHDRAWN','INVALIDATED','FELL_THROUGH','CANCELLED','DECLINED'];const o=(S.data.offers||[]).filter(x=>x&&x.listingId===l.id&&x.userId===S.user.id&&!T.includes(String(x.status||'').toUpperCase())).sort((a,b)=>String(b.createdAt||'').localeCompare(String(a.createdAt||'')))[0];
     if(!o)return '';return `<div class="tour-done">✅ <b>${L('Oferta enviada','Offer sent')}</b>${o.createdAt?' · '+esc(when(o.createdAt)):''}${money(o.offerPrice)?' · '+esc(money(o.offerPrice)):''} <button type="button" class="btn-card" data-tgo="1">${L('Ver próximos pasos','See next steps')}</button></div>`;},
-  agentNavVisible:()=>isClient(),agentDashVisible:()=>isAgent(),agentDashboard,agentAccount,clientDocsCard,sellerDashVisible,sellerPanel,sellerReload:()=>spLoad(true),clientPanel,closingFlowBox,stepChip,stepName,depositFiles,deadOfferIds:()=>(data&&data.deadOfferIds)||[],archive:()=>(data&&data.archive)||[],hiddenShowings:()=>(data&&data.hiddenShowings)||0,fold,tourOfferInfo:id=>{load(false);const o=findOffer(id);return o?(o.pipeline||o):null;},refreshAll:()=>{load(true);spLoad(true);},agentNavLabel:()=>'🤝 '+L('Mi agente','My agent'),agentView,
+  agentNavVisible:()=>isClient(),agentDashVisible:()=>isAgent(),agentDashboard,dealBox,agentAccount,clientDocsCard,sellerDashVisible,sellerPanel,sellerReload:()=>spLoad(true),clientPanel,closingFlowBox,stepChip,stepName,depositFiles,deadOfferIds:()=>(data&&data.deadOfferIds)||[],archive:()=>(data&&data.archive)||[],hiddenShowings:()=>(data&&data.hiddenShowings)||0,fold,tourOfferInfo:id=>{load(false);const o=findOffer(id);return o?(o.pipeline||o):null;},refreshAll:()=>{load(true);spLoad(true);},agentNavLabel:()=>'🤝 '+L('Mi agente','My agent'),agentView,
   view,refresh:()=>load(true),cart
 };
 })();
