@@ -2224,6 +2224,11 @@ details.lf-fold{min-width:0;max-width:100%}
 .lf-done-fold[open] .lfd-c{transform:rotate(180deg)}
 .lf-done-fold .lfd-b{padding:0 10px 10px}
 .tour-check-i.is-folded{display:block;padding:0;border:0;background:none}
+.tour-check-i.is-current{box-shadow:inset 3px 0 0 #2563eb}
+.tour-check-i.is-later .lf-done-fold,.lf-done-fold.step-later{background:#f8fafc;border-color:#e2e8f0}
+.oc-step-sum{margin:4px 0 8px;font-size:15px;line-height:1.45;color:#0f172a}
+.oc-details.lf-fold{margin:2px 0 8px;padding:0;border:0;background:transparent}
+.oc-details>.lf-body{padding-top:6px}
 .tour-check-i.s-na .lf-done-fold{background:#f8fafc;border-color:#e2e8f0}
 .tour-check-i.s-na .lf-done-fold .lfd-t small{color:#475569}
 .cf-row.cf-row-done{display:block}
