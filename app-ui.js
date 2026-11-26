@@ -1277,6 +1277,11 @@ function submitMsgComposer(){
   setTimeout(()=>{const b=document.querySelector('[data-msginput]');if(b&&msgTouch())try{b.focus({preventScroll:true});}catch(e){}},60);
 }
 function msgInitials(name){const p=String(name||'').replace(/[^\p{L}\p{N} ]/gu,' ').trim().split(/\s+/).filter(Boolean);return ((p[0]||'?').charAt(0)+(p.length>1?p[p.length-1].charAt(0):'')).toUpperCase();}
+function msgPeerAvatar(peerId,name,cls){
+  const P=(S.msgPeers||{})[peerId]||(S.msgReceipts&&S.msgReceipts.peer&&S.msgReceipts.peer.id===peerId?S.msgReceipts.peer:null);
+  if(P&&P.isAdmin)return `<span class="msg-av msg-av-logo${cls?' '+cls:''}" aria-hidden="true"><img src="legacy-logo.png" alt=""></span>`;
+  return msgAvatar(name,P&&P.avatarUrl,cls);
+}
 function msgAvatar(name,url,cls){
   const ini=`<span class="msg-av msg-av-ini${cls?' '+cls:''}" aria-hidden="true">${esc(msgInitials(name))}</span>`;
   if(!url||!/^https:\/\//.test(String(url)))return ini;
@@ -1307,8 +1312,9 @@ function msgThreadList(){
     const mine=g.last&&S.user&&g.last.fromUserId===S.user.id;
     const preview=((mine?tr('msg.you')+': ':'')+String(g.last&&g.last.body||'')).replace(/\s+/g,' ').trim();
     const short=preview.length>90?preview.slice(0,89)+'…':preview;
-    return `<button type="button" class="msg-row${n?' is-unread':''}" data-msgpeer="${esc(g.peerId)}"><span class="msg-row-top"><span class="msg-name">${n?'<i class="msg-dot" aria-hidden="true"></i>':''}${esc(msgPeerName(g.peerId))}</span><span class="msg-when">${esc(msgWhen(g.lastAt))}</span></span><span class="msg-row-bot"><span class="msg-preview">${esc(short)}</span>${n?`<span class="msg-chip">${esc(msgCountLabel(n))}</span>`:''}</span></button>`;
+    return `<button type="button" class="msg-row msg-row-av${n?' is-unread':''}" data-msgpeer="${esc(g.peerId)}">${msgPeerAvatar(g.peerId,msgPeerName(g.peerId),'msg-av-row')}<span class="msg-row-main"><span class="msg-row-top"><span class="msg-name">${n?'<i class="msg-dot" aria-hidden="true"></i>':''}${esc(msgPeerName(g.peerId))}</span><span class="msg-when">${esc(msgWhen(g.lastAt))}</span></span><span class="msg-row-bot"><span class="msg-preview">${esc(short)}</span>${n?`<span class="msg-chip">${esc(msgCountLabel(n))}</span>`:''}</span></span></button>`;
   }).join(''):`<p class="msg-empty">${esc(tr('msg.empty'))}</p>`;
+  if(rows.length&&S.refreshMsgPeers)S.refreshMsgPeers(rows.map(g=>g.peerId)).then(ch=>{if(!ch||!msgOpen||msgPeer)return;const a=document.activeElement;if(a&&(a.tagName==='TEXTAREA'||a.tagName==='INPUT'))return;render();});
   return `<div class="msg-head"><b>${esc(tr('msg.title'))}</b><span class="msg-head-actions"><button type="button" class="btn-card" data-msgnew="1">${esc(tr('msg.new'))}</button><button type="button" class="nav-pill" data-msgclose="1" aria-label="✕">✕</button></span></div><div class="msg-list">${body}</div>`;
 }
 function msgNewList(){
@@ -1324,12 +1330,12 @@ function msgChat(){
   const bubbles=msgs.map((m,i)=>{
     const mine=S.user&&m.fromUserId===S.user.id;
     const next=msgs[i+1],endRun=!next||next.fromUserId!==m.fromUserId;
-    const av=endRun?(mine?msgAvatar(S.user.name,meAv):msgAvatar(peerName,peerAv)):'<span class="msg-av msg-av-gap" aria-hidden="true"></span>';
+    const av=endRun?(mine?msgAvatar(S.user.name,meAv):msgPeerAvatar(msgPeer,peerName)):'<span class="msg-av msg-av-gap" aria-hidden="true"></span>';
     const rc=mine?msgReceipt(m):'';
     return `<div class="msg-line ${mine?'mine':'theirs'}${endRun?' run-end':''}">${mine?'':av}<div class="msg-col"><div class="msg-text">${msgHtml(m.body)}</div>${mine||endRun?`<div class="msg-meta"><time class="msg-time">${esc(msgWhen(m.createdAt))}</time>${rc}</div>`:''}</div>${mine?av:''}</div>`;
   }).join('')||`<p class="msg-empty">${esc(tr('msg.empty'))}</p>`;
   const draft=msgDraft[msgPeer]||'';
-  return `<div class="msg-head msg-head-chat"><button type="button" class="nav-pill" data-msgback="1" aria-label="${esc(tr('msg.back'))}">←</button><span class="msg-peer">${msgAvatar(peerName,peerAv,'msg-av-head')}<b>${esc(peerName)}</b></span><button type="button" class="nav-pill" data-msgclose="1" aria-label="✕">✕</button></div><div class="msg-chat" data-peer="${esc(msgPeer)}"><div class="msg-log"><div class="msg-log-in">${bubbles}</div></div><form class="msg-compose"><textarea data-msginput="1" rows="1" maxlength="4000" enterkeyhint="${msgTouch()?'enter':'send'}" placeholder="${esc(tr('msg.placeholder'))}" aria-label="${esc(tr('msg.placeholder'))}">${esc(draft)}</textarea><button type="button" class="btn-card primary" data-msgsend="1">${esc(tr('msg.send'))}</button></form></div>`;
+  return `<div class="msg-head msg-head-chat"><button type="button" class="nav-pill" data-msgback="1" aria-label="${esc(tr('msg.back'))}">←</button><span class="msg-peer">${msgPeerAvatar(msgPeer,peerName,'msg-av-head')}<b>${esc(peerName)}</b></span><button type="button" class="nav-pill" data-msgclose="1" aria-label="✕">✕</button></div><div class="msg-chat" data-peer="${esc(msgPeer)}"><div class="msg-log"><div class="msg-log-in">${bubbles}</div></div><form class="msg-compose"><textarea data-msginput="1" rows="1" maxlength="4000" enterkeyhint="${msgTouch()?'enter':'send'}" placeholder="${esc(tr('msg.placeholder'))}" aria-label="${esc(tr('msg.placeholder'))}">${esc(draft)}</textarea><button type="button" class="btn-card primary" data-msgsend="1">${esc(tr('msg.send'))}</button></form></div>`;
 }
 function msgPanel(){
   if(!(S.msgEnabled&&S.msgEnabled())||!msgOpen)return '';
