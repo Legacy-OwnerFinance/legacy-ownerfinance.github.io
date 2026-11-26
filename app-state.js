@@ -1273,7 +1273,7 @@ function tenureDays(l,camelEx,snakeEx,camelAccum,snakeAccum,camelSince,snakeSinc
 function tenureKind(status){
   const st=String(status||'').toUpperCase();
   if(st==='AVAILABLE')return 'active';
-  if(st==='PENDING'||st==='PENDING_NO_EM'||st==='PENDING_EM')return 'pending';
+  if(st==='PENDING'||st==='PENDING_EM')return 'pending';
   if(st==='SOLD'||st==='CLOSED')return 'sold';
   return 'none';
 }
@@ -1424,10 +1424,10 @@ S.openDocument=async id=>{
     if(w){w.location.href=j.url;}else{window.location.href=j.url;}
   }catch(e){if(w)w.close();throw e;}
 };
-S.STATUSES=['AVAILABLE','COMING_SOON','PENDING','PENDING_NO_EM','SOLD'];
-S.STATUS_LABEL={AVAILABLE:'Available',COMING_SOON:'Coming Soon',PENDING:'Pending',PENDING_NO_EM:'Pending/NoEM',SOLD:'Sold (3-Day)',CLOSED:'Sold (3-Day)'};
-S.STATUS_LABEL_ES={AVAILABLE:'Disponible',COMING_SOON:'Próximamente',PENDING:'Pendiente',PENDING_NO_EM:'Pendiente/Sin EM',SOLD:'Vendida (3 días)',CLOSED:'Vendida (3 días)'};
-S.statusText=st0=>{const st=st0==='PENDING_EM'?'PENDING':st0;return S.lang==='es'?(S.STATUS_LABEL_ES[st]||st):(S.STATUS_LABEL[st]||st);};
+S.STATUSES=['AVAILABLE','COMING_SOON','PENDING','SOLD']; // v50: Pending/NoEM retired (a home goes Pending automatically at 3/3 seller approvals)
+S.STATUS_LABEL={AVAILABLE:'Available',COMING_SOON:'Coming Soon',PENDING:'Pending',SOLD:'Sold (3-Day)',CLOSED:'Sold (3-Day)'};
+S.STATUS_LABEL_ES={AVAILABLE:'Disponible',COMING_SOON:'Próximamente',PENDING:'Pendiente',SOLD:'Vendida (3 días)',CLOSED:'Vendida (3 días)'};
+S.statusText=st0=>{const st=st0==='PENDING_EM'?'PENDING':st0==='PENDING_NO_EM'?'AVAILABLE':st0;return S.lang==='es'?(S.STATUS_LABEL_ES[st]||st):(S.STATUS_LABEL[st]||st);};
 S.setInspection=(offerId,at)=>{const o=S.data.offers.find(x=>x.id===offerId);if(!o)return;if(at){o.inspectionAt=at;o.inspectionStatus='SCHEDULED';}else{o.inspectionStatus='CANCELLED';o.inspectionAt=null;}o.updatedAt=now();S.save();};
 S.OFFER_COLOR={ACCEPTED:'#16a34a',REJECTED:'#dc2626',COUNTERED:'#d97706',SUBMITTED:'#64748b',CLOSED:'#0f766e',FELL_THROUGH:'#b91c1c'};
 S.setListingStatus=(lid,st)=>{
@@ -1453,7 +1453,7 @@ S.respondOffer=(oid,status,c={})=>{if(!S.isAdmin())throw new Error('Admins only'
   o.status=status;o.respondedAt=now();o.adminNotes=c.adminNotes||'';
   if(status==='COUNTERED'){o.counterPrice=+c.counterPrice*100;o.counterDown=+c.counterDown*100;o.counterMonthly=+c.counterMonthly*100;}
   const tourO=window.LegacyTours&&LegacyTours.tourOfferInfo&&LegacyTours.tourOfferInfo(oid);
-  if(status==='ACCEPTED'){const l=S.listing(o.listingId);const bu=(S.data.users||[]).find(u=>u.id===o.userId)||{};const isTest=/\+legacytest/i.test(String(bu.email||o.buyerEmail||''));/* v39: legacytest offers never move a real home (server enforces it too) *//* v39 (6:32 PM): a showing-flow offer only moves the home to Pending when the seller approves all 3 conditions */if(l&&!isTest&&!tourO){l.status='PENDING_NO_EM';sbUpsert('listings',listingToRow(l),'id');}if(isTest)o.simulatedHomeStatus='PENDING_NO_EM';o.docsUnlocked=true;}
+  if(status==='ACCEPTED'){const l=S.listing(o.listingId);const bu=(S.data.users||[]).find(u=>u.id===o.userId)||{};const isTest=/\+legacytest/i.test(String(bu.email||o.buyerEmail||''));/* v39: legacytest offers never move a real home (server enforces it too) *//* v39 (6:32 PM): a showing-flow offer only moves the home to Pending when the seller approves all 3 conditions *//* v50 (Fernando): accepting no longer moves the home; it goes Pending automatically once the offer meets the 3 conditions (accepted, documents, $1,000 EM proof) */o.docsUnlocked=true;}
   S.save();
   const up=sbUpsert('offers',{
     id:o.id,
