@@ -234,7 +234,7 @@ function view(){
   load(false);
   const head=`<div class="tour-wrap">${DEMO?`<p class="tour-warn">🧪 ${L('Modo demostración: nada se guarda ni se envía.','Demo mode: nothing is saved or sent.')}</p>`:''}`;
   if(!data&&!lastErr)return head+`<p style="padding:18px">${L('Cargando…','Loading…')}</p></div>`;
-  if(data&&data.unavailable)return head+(isClient()?cartSection():'')+`<section class="card tour-card"><p>⏳ ${L('Las citas con carrito se activan cuando Fernando apruebe el cambio de base de datos. Mientras tanto puedes armar tu carrito; para agendar llama o escribe al (405) 338-4124. Si ahí no está, pide una llamada con Fernando lo antes posible.','Cart showings turn on once Fernando approves the database change. You can build your cart meanwhile; to book, call or text (405) 338-4124. If that number cannot help, ask for a call with Fernando as soon as possible.')}</p></section></div>`;
+  if(data&&data.unavailable)return head+(isClient()?cartSection():'')+`<section class="card tour-card"><p>⏳ ${L('Las citas con carrito todavía no están activas. Mientras tanto puedes armar tu carrito; para agendar llama o escribe al (405) 338-4124 y pide que te llamemos lo antes posible.','Cart showings are not active yet. You can build your cart meanwhile; to book, call or text (405) 338-4124 and ask us to call you back as soon as possible.')}</p></section></div>`;
   if(lastErr&&!data)return head+`<p class="tour-warn" style="margin:18px">${esc(lastErr)}</p></div>`;
   const mine=(data.tours||[]);const live=mine.filter(t=>['REQUESTED','ACCEPTED'].includes(t.status)||t.feedbackDue&&!['CANCELLED','EXPIRED','DECLINED'].includes(t.status));const past=mine.filter(t=>!live.includes(t));
   const sf=(data.sellerFeedback||[]);
