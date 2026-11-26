@@ -2469,3 +2469,24 @@ details.lf-fold{min-width:0;max-width:100%}
 /* v49: offer invitations */
 .oc-inv{border:1px solid #e5d9b6;border-radius:12px;padding:12px 14px;margin:10px 0;background:#fffdf6}
 .oc-inv p{margin:0 0 8px}
+
+/* v52: Familia */
+.fm-mems,.fm-pends,.fm-homes,.fm-reqs{list-style:none;margin:0 0 10px;padding:0}
+.fm-mem{display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border)}
+.fm-mem>span{flex:1;min-width:0;display:flex;flex-direction:column}
+.fm-mem small,.fm-who summary small{color:var(--muted);font-size:12px}
+.fm-av{flex:0 0 36px;width:36px;height:36px;border-radius:50%;overflow:hidden;display:inline-flex;align-items:center;justify-content:center;background:#e7ddcc;color:var(--navy);font-weight:800;font-size:13px}
+.fm-av img{width:100%;height:100%;object-fit:cover}
+.fm-pend{padding:6px 0;display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.fm-form{display:flex;flex-wrap:wrap;gap:8px;align-items:flex-end;margin:8px 0}
+.fm-form label{flex:1 1 220px}
+.fm-h{margin:16px 0 6px}
+.fm-k{font-weight:700;font-size:13px;margin:10px 0 4px}
+.fm-who{border:1px solid var(--border);border-radius:12px;padding:8px 10px;margin:6px 0;background:var(--surface)}
+.fm-who summary{display:flex;align-items:center;gap:8px;cursor:pointer;list-style:none}
+.fm-who summary b{flex:1}
+.fm-home a{display:flex;gap:8px;align-items:center;padding:4px 0;color:inherit;text-decoration:none}
+.fm-home img{width:56px;height:42px;object-fit:cover;border-radius:6px;flex:0 0 auto}
+.fm-home span{display:flex;flex-direction:column;min-width:0}
+.fm-home small{color:var(--muted);font-size:12px}
+.fm-req{padding:4px 0;font-size:13px}

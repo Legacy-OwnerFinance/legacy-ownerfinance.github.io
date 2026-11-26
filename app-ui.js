@@ -2299,6 +2299,7 @@ function dashboardFull(opts={}){if(!S.user)return auth();if(S.isInvestor())retur
   if(alertsH)add('alerts','🔔',tr('alerts.dash'),null,pfUnwrap(alertsH));
   add('favs','❤️',tr('favorites'),favs.length,`${pfMore(favs.map(homeRow),5,`<p class="ad-empty">${tr('noneYet')}</p>`)}${favs.length?`<div class="cd-foot"><button type="button" class="btn-card" data-tab="favorites">❤️ ${S.lang==='es'?'Ver mis favoritas':'See my favorites'}</button></div>`:''}`);
   add('views','👀',tr('viewedHomes'),views.length,pfMore(views.map(homeRow),5,`<p class="ad-empty">${tr('noneYet')}</p>`));
+  if(isClient()&&window.LegacyTours&&LegacyTours.familySection)add('family','👨‍👩‍👧',pfL('Familia','Family'),LegacyTours.familyCount()||null,LegacyTours.familySection(),{hot:LegacyTours.familyHot(),sub:pfL('Busquen casa juntos','Search for a home together')});
   if(isClient())add('search','🏡',st('mySearch'),null,`${critSummary(critOf(u))}<button type="button" class="btn-card primary" data-editsearch="1">✏️ ${st('edit')}</button>`);
   add('docs','📂',tr('myDocFolder'),docs.length,docsB);
   if(ap)add('clients','👥',tr('myClients'),clients.length,clientsB);
@@ -2311,7 +2312,7 @@ function dashboardFull(opts={}){if(!S.user)return auth();if(S.isInvestor())retur
   const hero=`<header class="ad-hero pf-hero"><div class="pf-id"><img src="${esc(u.avatarUrl||'listing-placeholder.svg')}" alt="" class="pf-hero-av"><div class="pf-id-t"><p class="ad-kicker">👤 ${role}</p><h2>${esc(u.name||'')}</h2><p class="ad-date">${esc(u.email||'')}${ap&&ap.inviteCode?` · ${tr('yourInviteCode')} <b class="pf-code">${esc(ap.inviteCode)}</b>`:''}</p></div></div>
    <div class="pf-kpis">${kpi('favs','❤️',favs.length,pfL('Favoritas','Favorites'))}${kpi('offers','💰',activeO.length,pfL('Ofertas activas','Active offers'))}${kpi('msgs','✉️',unread,pfL('Sin leer','Unread'),unread>0)}${kpi('offers','🏁',nClosed,pfL('Cierres','Closings'))}</div>
    ${!S.isAdmin()&&window.LegacyTours&&LegacyTours.agentDashVisible&&LegacyTours.agentDashVisible()?`<div class="cd-btns pf-hero-btns"><button type="button" class="btn-card primary" data-tab="agenthome">📊 ${pfL('Mi panel','My dashboard')}</button></div>`:''}</header>`;
-  const navL={offers:pfL('Ofertas','Offers'),msgs:pfL('Mensajes','Messages'),shows:pfL('Visitas','Showings'),alerts:pfL('Alertas','Alerts'),favs:pfL('Favoritas','Favorites'),views:pfL('Vistas','Viewed'),search:pfL('Búsqueda','Search'),docs:pfL('Documentos','Documents'),clients:pfL('Clientes','Clients'),profile:pfL('Perfil','Profile')};
+  const navL={offers:pfL('Ofertas','Offers'),msgs:pfL('Mensajes','Messages'),shows:pfL('Visitas','Showings'),alerts:pfL('Alertas','Alerts'),favs:pfL('Favoritas','Favorites'),family:pfL('Familia','Family'),views:pfL('Vistas','Viewed'),search:pfL('Búsqueda','Search'),docs:pfL('Documentos','Documents'),clients:pfL('Clientes','Clients'),profile:pfL('Perfil','Profile')};
   const navOrder=['profile',...secs.map(s=>s.id).filter(x=>x!=='profile')];
   const nav=`<nav class="pf-nav" aria-label="${pfL('Secciones','Sections')}">${navOrder.map(id=>{const s=secs.find(x=>x.id===id);return `<button type="button" data-pfgo="pf-${id}"><span aria-hidden="true">${s.icon}</span> ${navL[id]||s.label}</button>`;}).join('')}</nav>`;
   return `<div class="tour-wrap ad-wrap pf-wrap">${pending}${hero}${nav}${secs.map(s=>s.html).join('')}</div>`;}
