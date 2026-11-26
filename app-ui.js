@@ -2465,11 +2465,15 @@ function admListings(D){
 }
 function admAccounts(D){
   const byName=(a,b)=>String(a.name||a.email||'').localeCompare(String(b.name||b.email||''));
-  const agents=D.users.filter(u=>u.role==='AGENT').sort(byName),users=D.users.filter(u=>u.role!=='AGENT').sort(byName);
+  const agents=D.users.filter(u=>u.role==='AGENT').sort(byName);
+  const investors=D.users.filter(u=>u.role==='INVESTOR').sort(byName);
+  const users=D.users.filter(u=>u.role!=='AGENT'&&u.role!=='INVESTOR').sort(byName);
   const rows=(list,ag)=>list.length?`<ul class="adm-people">${list.map(u=>{const ap=S.agentProfile(u);return `<li><span class="adm-av" aria-hidden="true">${esc(String(u.name||u.email||'?').trim().charAt(0).toUpperCase())}</span><div class="adm-pbody"><b>${esc(u.name||'—')}</b><small>${esc(u.email)}</small><small>${esc(roleLabel(u.role))} · ${approvalLabel(u)}${ag&&ap&&ap.inviteCode?` · ${tr('colInvite')}: <code>${esc(ap.inviteCode)}</code>`:''}</small></div><div class="adm-pacts"><button data-reset="${u.id}" class="adm-b ghost" title="${esc(tr('colResetPw'))}">🔑 ${tr('reset')}</button>${userDelCell(u)}</div></li>`;}).join('')}</ul>`:`<p class="adm-empty">${AL('No hay cuentas','No accounts')}</p>`;
+  const invRows=investors.length?`<ul class="adm-people">${investors.map(u=>{const st=investorCompanyStats(u);const names=st.companies.map(c=>c.name).filter(Boolean).join(' · ')||'—';return `<li><span class="adm-av" aria-hidden="true">${esc(String(u.name||u.email||'?').trim().charAt(0).toUpperCase())}</span><div class="adm-pbody"><b>${esc(u.name||'—')}</b><small>${esc(u.email)}</small><small>${esc(names)} · ${st.homes} ${AL('casas','homes')} · ${st.closed} ${tr('closedDeals')}</small></div><div class="adm-pacts">${investorDelCell(u)}</div></li>`;}).join('')}</ul>`:`<p class="adm-empty">${AL('No hay cuentas de inversionistas','No investor accounts')}</p>`;
   return `<input type="search" class="adm-search" data-admfilter="adm-people-wrap" placeholder="🔎 ${esc(AL('Buscar nombre o correo','Search name or email'))}"><div id="adm-people-wrap">
   <details class="acct-group" data-acct="users" ${ADM_OPEN.users?'open':''}><summary>👥 ${AL('Usuarios','Users')} <span class="acct-count">${users.length}</span></summary>${rows(users,false)}</details>
-  <details class="acct-group" data-acct="agents" ${ADM_OPEN.agents?'open':''}><summary>🪪 ${AL('Agentes','Agents')} <span class="acct-count">${agents.length}</span></summary>${rows(agents,true)}</details></div>`;
+  <details class="acct-group" data-acct="agents" ${ADM_OPEN.agents?'open':''}><summary>🪪 ${AL('Agentes','Agents')} <span class="acct-count">${agents.length}</span></summary>${rows(agents,true)}</details>
+  <details class="acct-group" data-acct="investors" ${ADM_OPEN.investors?'open':''}><summary>🏢 ${tr('investorsTitle')} <span class="acct-count">${investors.length}</span></summary>${invRows}</details></div>`;
 }
 function admin(){if(!S.isAdmin())return `<p style="padding:18px">${tr('adminsOnly')}</p>`;const D=S.data;
   const pend=D.users.filter(u=>u.approvalStatus==='PENDING').length;
