@@ -17,12 +17,13 @@
       deskNote:'On a computer, use the install icon in Chrome or Edge’s address bar.',
       installLink:'Install the app',privacyLink:'Privacy Policy',termsLink:'Terms of Use',deleteLink:'Delete my account',
       delTitle:'Delete my account',
-      delIntro:'This sends a request to delete your account and personal data. Your account is marked for deletion and our team will process it. We may keep limited records where the law requires it (for example, signed transaction documents).',
+      delIntro:'This permanently deletes your account and personal data right away (profile, favorites, viewed homes, messages, showing requests, uploaded documents). This cannot be undone. We may keep limited records only where the law requires it (for example, signed transaction documents).',
       delPw:'Your password',delReason:'Reason (optional)',
       delType:'Type DELETE to confirm',delWord:'DELETE',
-      delSubmit:'Request deletion',cancel:'Cancel',
+      delSubmit:'Delete my account',cancel:'Cancel',
       delNeedPw:'Please enter your password.',delNeedWord:'Please type DELETE to confirm.',
-      delSending:'Sending…',
+      delSending:'Deleting…',
+      delDeleted:'Your account and personal data were deleted. You will now be signed out.',
       delDone:'Your deletion request was received. We will confirm by email. You will now be signed out.',
       delAlready:'A deletion request for this account is already pending. You will now be signed out.',
       delUnavail:'Account deletion is not available yet. Please try again later.',
@@ -41,12 +42,13 @@
       deskNote:'En una computadora, usa el ícono de instalar en la barra de direcciones de Chrome o Edge.',
       installLink:'Instalar la app',privacyLink:'Política de privacidad',termsLink:'Términos de uso',deleteLink:'Eliminar mi cuenta',
       delTitle:'Eliminar mi cuenta',
-      delIntro:'Esto envía una solicitud para eliminar tu cuenta y tus datos personales. Tu cuenta queda marcada para eliminación y nuestro equipo la procesará. Podemos conservar registros limitados cuando la ley lo exige (por ejemplo, documentos firmados de una transacción).',
+      delIntro:'Esto elimina para siempre tu cuenta y tus datos personales en este momento (perfil, favoritos, casas vistas, mensajes, solicitudes de visita, documentos subidos). No se puede deshacer. Podemos conservar registros limitados solo cuando la ley lo exige (por ejemplo, documentos firmados de una transacción).',
       delPw:'Tu contraseña',delReason:'Motivo (opcional)',
       delType:'Escribe ELIMINAR para confirmar',delWord:'ELIMINAR',
-      delSubmit:'Solicitar eliminación',cancel:'Cancelar',
+      delSubmit:'Eliminar mi cuenta',cancel:'Cancelar',
       delNeedPw:'Escribe tu contraseña.',delNeedWord:'Escribe ELIMINAR para confirmar.',
-      delSending:'Enviando…',
+      delSending:'Eliminando…',
+      delDeleted:'Tu cuenta y tus datos personales fueron eliminados. Ahora se cerrará tu sesión.',
       delDone:'Recibimos tu solicitud de eliminación. Te confirmaremos por correo. Ahora se cerrará tu sesión.',
       delAlready:'Ya hay una solicitud de eliminación pendiente para esta cuenta. Ahora se cerrará tu sesión.',
       delUnavail:'La eliminación de cuenta aún no está disponible. Inténtalo más tarde.',
@@ -168,7 +170,7 @@
       if(word!==t('delWord')){err.textContent=t('delNeedWord');return;}
       go.disabled=true;go.textContent=t('delSending');
       S.api('account_delete_request',{password:pw,reason:reason}).then(function(j){
-        if(j&&j.ok){alert(j.alreadyRequested?t('delAlready'):t('delDone'));S.logout();}
+        if(j&&j.ok){alert(j.deleted?t('delDeleted'):(j.alreadyRequested?t('delAlready'):t('delDone')));S.logout();}
         else{err.textContent=t('delUnavail');go.disabled=false;go.textContent=t('delSubmit');}
       }).catch(function(e){
         var code=e&&e.code;
