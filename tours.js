@@ -648,7 +648,7 @@ function stepBlurb(p,role){
   const st=STATUS_LABEL[c.status]||STATUS_LABEL.PENDING,lab=STEP_LABEL[c.key]||['Este paso','This step'];
   return P(`${lab[0]}. ${st[0]}.`,`${lab[1]}. ${st[1]}.`);
 }
-function sellerName(p){const o=p&&p.owner;if(!o)return '';return o.companyName||(o.investorOnly?L('Inversionista asignado','Assigned investor'):L('Administrador','Administrator'));}
+function sellerName(p){const o=p&&p.owner;if(!o)return '';const rec=String(o.ownerOfRecord||o.owner_of_record||'').trim();if(rec)return rec;return o.companyName||(o.investorOnly?L('Inversionista asignado','Assigned investor'):L('Administrador','Administrator'));}
 // Opened details stay two short lines. Price stays on the toggle. Status and files stay out of this block.
 function offerDetailsFold(p){
   if(!p)return '';
