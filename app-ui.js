@@ -713,7 +713,7 @@ function resetQueryActive(){
   }catch(e){return false;}
 }
 function propertyShareUrl(id){
-  return location.origin+'/?p='+encodeURIComponent(id);
+  return ((window.LegacyNative&&window.LegacyNative.origin)||location.origin)+'/?p='+encodeURIComponent(id);
 }
 function clearShareParam(){
   try{
@@ -965,7 +965,7 @@ function openForgotModal(prefillEmail=''){
 function openAdminResetModal(userId){
   const u=S.data.users.find(x=>x.id===userId);
   if(!u)return;
-  const resetUrl=`${location.origin}${location.pathname}?reset=${encodeURIComponent(u.email)}#auth`;
+  const resetUrl=`${(window.LegacyNative&&window.LegacyNative.isNative)?window.LegacyNative.origin+'/':location.origin+location.pathname}?reset=${encodeURIComponent(u.email)}#auth`;
   const m=modal(`<h2>${tr('colResetPw')}: ${esc(u.name)}</h2>
     <p style="font-size:14px;color:#475569">${esc(u.email)}</p>
     <form id="adminResetF" style="display:grid;gap:10px;margin-top:10px">
@@ -2010,7 +2010,7 @@ function investorGate(){
 function footerLinks(){
   const P=window.LegacyPwa;if(!P)return '';
   const canDelete=S.user&&S.user.role!=='ADMIN';
-  return `<div class="pwa-foot" style="margin-top:6px"><a href="/privacy.html" target="_blank" rel="noopener">${esc(P.t('privacyLink'))}</a> · <button type="button" data-install-app>${esc(P.t('installLink'))}</button>${canDelete?` · <button type="button" data-delete-account>${esc(P.t('deleteLink'))}</button>`:''}</div>`;
+  return `<div class="pwa-foot" style="margin-top:6px"><a href="/privacy.html" target="_blank" rel="noopener">${esc(P.t('privacyLink'))}</a> · <a href="/terms.html" target="_blank" rel="noopener">${esc(P.t('termsLink'))}</a> · <button type="button" data-install-app>${esc(P.t('installLink'))}</button>${canDelete?` · <button type="button" data-delete-account>${esc(P.t('deleteLink'))}</button>`:''}</div>`;
 }
 function accountDeleteCard(){
   const P=window.LegacyPwa;if(!P||!S.user||S.user.role==='ADMIN')return '';
