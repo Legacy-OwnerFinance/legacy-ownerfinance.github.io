@@ -1,7 +1,7 @@
 /* Legacy - Owner Finance service worker.
    Network-first for everything on this origin so users always get the newest app after a deploy;
    the cache is only a fallback when offline. Supabase/API/other origins are never touched. */
-const CACHE = 'legacy-of-shell-v3';
+const CACHE = 'legacy-of-shell-v4';
 const PRECACHE = ['/', '/app.html', '/privacy.html', '/terms.html', '/native.js', '/styles.css', '/favicon.ico', '/android-chrome-192x192.png', '/legacy-logo.png', '/splash-logo.webp', '/listing-placeholder.svg'];
 
 self.addEventListener('install', (e) => {
@@ -43,6 +43,17 @@ self.addEventListener('fetch', (e) => {
 });
 
 /* ---- Web Push: status-change alerts for approved agents ---- */
+function pushOpenUrl(d) {
+  const data = d && typeof d === 'object' ? d : {};
+  const offer = data.offerId || data.offer_id || data.deal || '';
+  const tour = data.tourId || data.tour_id || '';
+  const given = typeof data.url === 'string' ? data.url : '';
+  if (given && given !== '/' && given !== '/#' && given !== '#') return given;
+  if (offer) return '/?deal=' + encodeURIComponent(offer);
+  if (tour) return '/#tours&tour=' + encodeURIComponent(tour);
+  return given || '/';
+}
+
 self.addEventListener('push', (e) => {
   let d = {};
   try { d = e.data ? e.data.json() : {}; } catch (_) { d = { body: e.data ? e.data.text() : '' }; }
@@ -52,7 +63,7 @@ self.addEventListener('push', (e) => {
     icon: '/android-chrome-192x192.png',
     badge: '/favicon-32x32.png',
     lang: d.lang || undefined,
-    data: { url: d.url || '/' },
+    data: { url: pushOpenUrl(d) },
   };
   if (d.tag) { opts.tag = d.tag; opts.renotify = false; }
   e.waitUntil(self.registration.showNotification(title, opts));
