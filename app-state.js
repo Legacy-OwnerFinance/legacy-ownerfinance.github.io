@@ -1314,6 +1314,19 @@ function tenureDays(l,camelEx,snakeEx,camelAccum,snakeAccum,camelSince,snakeSinc
   if(explicit!=null)return explicit;
   return tenureFallbackDays(l,camelAccum,snakeAccum,camelSince,snakeSince);
 }
+// Current pending stint only. pending_days_accum is earlier completed pending time
+// (a home can leave Pending and come back). days_pending from the API adds that
+// old total to the open stint, which is why a home pending since yesterday can read as 8 days.
+function pendingOpenDays(l){
+  if(!l)return null;
+  const sinceRaw=(l.pendingSince!=null&&l.pendingSince!=='')?l.pendingSince:((l.pending_since!=null&&l.pending_since!=='')?l.pending_since:null);
+  const ymd=ctYmdOf(sinceRaw);
+  if(ymd){
+    const d=ctDaysBetween(ymd,S.chicagoYmd());
+    if(d!=null)return Math.max(0,d);
+  }
+  return tenureExplicit(l,'daysPending','days_pending');
+}
 function tenureKind(status){
   const st=String(status||'').toUpperCase();
   if(st==='AVAILABLE')return 'active';
@@ -1342,9 +1355,9 @@ S.listingTenure=l=>{
   }
   const daysActive=tenureDays(l,'daysActive','days_active','activeDaysAccum','active_days_accum','activeSince','active_since');
   if(kind==='pending'){
-    const daysPending=tenureDays(l,'daysPending','days_pending','pendingDaysAccum','pending_days_accum','pendingSince','pending_since');
+    const daysPending=pendingOpenDays(l);
     if(daysPending==null)return empty;
-    const text=S.t(daysPending===1?'tenure.pendingOne':'tenure.pending',{days:daysPending});
+    const text=daysPending===0?S.t('tenure.pendingToday'):S.t(daysPending===1?'tenure.pendingOne':'tenure.pending',{days:daysPending});
     const sub=(daysActive!=null&&daysActive>0)?S.t(daysActive===1?'tenure.activeDaysOne':'tenure.activeDays',{days:daysActive}):'';
     return {kind:'pending',text,sub};
   }
@@ -1360,7 +1373,7 @@ S.listingTenure=l=>{
 S.listingTenureDays=l=>{
   if(!l)return null;const kind=tenureKind(l.status);
   if(kind==='active'){const d=tenureDays(l,'daysActive','days_active','activeDaysAccum','active_days_accum','activeSince','active_since');return d==null?null:{kind,days:d};}
-  if(kind==='pending'){const d=tenureDays(l,'daysPending','days_pending','pendingDaysAccum','pending_days_accum','pendingSince','pending_since');return d==null?null:{kind,days:d};}
+  if(kind==='pending'){const d=pendingOpenDays(l);return d==null?null:{kind,days:d};}
   return null;
 };
 S.preferredYmd=at=>{const s=String(at||'').trim();if(!s)return '';if(/^\d{4}-\d{2}-\d{2}/.test(s)&&!/[zZ]|[+\-]\d{2}:?\d{2}$/.test(s))return s.slice(0,10);const d=new Date(s);if(isNaN(d.getTime()))return s.slice(0,10);return S.chicagoYmd(d);};

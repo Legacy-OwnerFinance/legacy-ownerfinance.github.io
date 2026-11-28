@@ -1,7 +1,7 @@
 /* Legacy - Owner Finance service worker.
    Network-first for everything on this origin so users always get the newest app after a deploy;
    the cache is only a fallback when offline. Supabase/API/other origins are never touched. */
-const CACHE = 'legacy-of-shell-v6';
+const CACHE = 'legacy-of-shell-v7';
 const PRECACHE = ['/', '/app.html', '/privacy.html', '/terms.html', '/native.js', '/billing.js', '/styles.css', '/favicon.ico', '/android-chrome-192x192.png', '/legacy-logo.png', '/splash-logo.webp', '/listing-placeholder.svg'];
 
 self.addEventListener('install', (e) => {
