@@ -961,7 +961,15 @@ const POP_TX={
     req:'Obligatorio',num:'Escribe una cantidad mayor a 0',downBig:'El enganche no puede ser mayor que el precio ofrecido',pickInsp:'Escoge Sí o No',past:'Escoge hoy o una fecha después',closePast:'Escoge una fecha futura',
     needAcct:'Necesitas una cuenta gratis',needOffer:'Crea tu cuenta gratis o entra para hacer una oferta en esta casa. Toma como un minuto.',needAppt:'Crea tu cuenta gratis o entra para solicitar una cita y ver esta casa.',create:'Crear cuenta',login:'Entrar',call:'O llámanos'}};
 const px=k=>(POP_TX[S.lang==='es'?'es':'en'][k]||k);
-function actionRow(l){if(window.LegacyTours&&LegacyTours.clientMode())return LegacyTours.clientActionRow(l);const sent=window.LegacyTours&&LegacyTours.offerSentCard?LegacyTours.offerSentCard(l):'';return `<div class="lof-act-row">${sent||`<button type="button" class="btn-card primary" data-offerpop="${esc(l.id)}">💰 ${px('offer')}</button>`}<button type="button" class="btn-card" data-showpop="${esc(l.id)}">📅 ${px('appt')}</button></div>`;}
+function actionRow(l){
+  if(window.LegacyTours&&LegacyTours.clientMode())return LegacyTours.clientActionRow(l);
+  const parts=window.LegacyTours&&LegacyTours.offerSentParts?LegacyTours.offerSentParts(l):null;
+  const note=parts?`<div class="tour-done offer-sent-note">${parts.note}</div>`:'';
+  const next=parts?`<button type="button" class="btn-card" data-tgo="1">${parts.nextLabel}</button>`:'';
+  const offer=`<button type="button" class="btn-card primary" data-offerpop="${esc(l.id)}">💰 ${px('offer')}</button>`;
+  const appt=`<button type="button" class="btn-card" data-showpop="${esc(l.id)}">📅 ${px('appt')}</button>`;
+  return `<div class="detail-actions">${note}<div class="lof-act-row">${next||offer}${appt}</div></div>`;
+}
 function chicagoToday(){try{const p=new Intl.DateTimeFormat('en-CA',{timeZone:'America/Chicago',year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(new Date());const g={};p.forEach(x=>g[x.type]=x.value);return `${g.year}-${g.month}-${g.day}`;}catch(e){return new Date().toISOString().slice(0,10);}}
 function closePop(){const o=document.querySelector('.lof-pop-bg');if(o)o.remove();document.removeEventListener('keydown',popKey);}
 function popKey(e){if(e.key==='Escape')closePop();}
@@ -2117,7 +2125,6 @@ function openListing(id){const l=S.listing(id);if(!l)return;if(!(S.isInvestor()&
   const ag=S.user&&S.agentFor(S.user);
   const m=modal(`<h2>${title(l)}</h2><div class="share-detail-row">${mapsBtn(l)}${shareBtn(l.id)}</div>${factChips(l)}${hookHtml(l)}${tenureHtml(l)}${galleryHtml(ph,esc(l.city||''))}
    ${l.photosUrl?`<a href="${esc(l.photosUrl)}" target="_blank" rel="noopener">${tr('morePhotos')}</a>`:''}
-   ${listingTracker(l)}
    <p>${tr('price')} <b>${S.money(l.askingPrice)}</b> · ${tr('down')} <b>${S.money(l.downPayment)}</b> · ${tr('monthly')} <b>${S.money(l.monthlyPayment)}</b> · ${l.termYears||'—'} ${tr('yrs')}</p>
    <p style="font-size:14px;color:#475569">${l.beds??'—'} ${tr('bdShort')} · ${l.baths??'—'} ${tr('baShort')} · ${l.sqft?l.sqft+' '+tr('sqftUnit'):''}</p>
    <p>${esc(l.description)}</p>
