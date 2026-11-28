@@ -43,6 +43,135 @@ function dashboardHash(deal){
   const id=String(deal||'').trim();
   return id?('dashboard&deal='+encodeURIComponent(id)):'dashboard';
 }
+const TARGET_KEY='legacy_open_target';
+function readSearchDeal(){
+  try{const q=new URLSearchParams(location.search).get('deal');return q?String(q).trim():'';}catch(e){return '';}
+}
+function hashParam(name){
+  const h=String(location.hash||'').replace(/^#/,'');
+  const m=new RegExp('(?:^|[?&])'+name+'=([^&]*)').exec(h);
+  if(!m)return '';
+  try{return decodeURIComponent(m[1]).trim();}catch(e){return String(m[1]||'').trim();}
+}
+function readTarget(){try{return JSON.parse(sessionStorage.getItem(TARGET_KEY)||'null')||null;}catch(e){return null;}}
+function writeTarget(t){try{if(!t)sessionStorage.removeItem(TARGET_KEY);else sessionStorage.setItem(TARGET_KEY,JSON.stringify(t));}catch(e){}}
+let linkFromThisLoad=false;
+function captureDeepLink(){
+  const q=readSearchDeal();
+  const offer=hashParam('offer');
+  const tour=hashParam('tour');
+  const parsed=parseAppHash();
+  if(!q&&!offer&&!tour&&!parsed.deal){
+    // Keep a link through the sign-in screen. Any other page drops it so a later visit is not pulled back.
+    if(parsed.tab!=='auth')writeTarget(null);
+    return;
+  }
+  linkFromThisLoad=true;
+  const offerId=q||offer||'';
+  const closedHint=!offerId&&parsed.deal?parsed.deal:'';
+  writeTarget({offerId,tourId:offerId?'':tour,closedHint,fallbackId:offerId||parsed.deal||'',byListing:false});
+  if(closedHint)rememberDeal(closedHint);
+  if(q){try{const u=new URL(location.href);if(u.searchParams.has('deal')){u.searchParams.delete('deal');history.replaceState(null,'',u.pathname+u.search+u.hash);}}catch(e){}}
+}
+function hasPendingDeepLink(){const t=readTarget();return !!(t&&(t.offerId||t.tourId||t.closedHint||t.fallbackId));}
+function dealWants(id){return !!id&&hashParam('offer')===String(id);}
+captureDeepLink();
+function dealDenied(){alert('You don’t have access to this deal, or it is no longer on your account. / No tienes acceso a este trato, o ya no está en tu cuenta.');}
+function closedDeal(id){return ((S.investorTx&&S.investorTx.closed)||[]).some(c=>c&&String(c.id)===String(id));}
+function visibleLegacyOffer(id){
+  const o=(S.data&&S.data.offers||[]).find(x=>x&&String(x.id)===String(id));
+  if(!o||!S.user)return null;
+  if(S.isAdmin&&S.isAdmin())return o;
+  if(o.userId===S.user.id)return o;
+  if(S.isAgent&&S.isAgent()&&S.clientsOf){const ids=new Set((S.clientsOf(S.user)||[]).map(c=>c&&c.id));if(ids.has(o.userId))return o;}
+  return null;
+}
+function visibleLegacyByListing(lid){
+  const list=(S.data&&S.data.offers||[]).filter(o=>o&&String(o.listingId)===String(lid)&&visibleLegacyOffer(o.id));
+  if(!list.length)return null;
+  return list.find(o=>!(S.isDeadOffer&&S.isDeadOffer(o)))||list[0];
+}
+function setAppHash(h){
+  agentLanded=1;
+  if((location.hash||'')==='#'+h){tab=(String(h).split(/[&?]/)[0])||'inventory';render();return;}
+  location.hash=h;
+}
+function openLegacyOffer(o){
+  if(S.isAdmin&&S.isAdmin()&&o.userId!==S.user.id){try{ADM_OPEN['sec-offers']=true;}catch(e){}setAppHash('admin&offer='+encodeURIComponent(o.id));return;}
+  setAppHash('dashboard&offer='+encodeURIComponent(o.id));
+}
+function applyLoc(loc){
+  if(!loc)return false;
+  if(loc.kind==='error'){alert(loc.message||'You don’t have access to this deal, or it is no longer on your account. / No tienes acceso a este trato, o ya no está en tu cuenta.');return true;}
+  if(loc.kind==='tour'&&loc.tourId){setAppHash('tours&tour='+encodeURIComponent(loc.tourId));return true;}
+  if(loc.kind==='offer'&&loc.id){setAppHash('tours&offer='+encodeURIComponent(loc.id));return true;}
+  return false;
+}
+async function openPendingDeepLink(){
+  const t=readTarget();
+  if(!t)return;
+  if(!S.user){if(tab!=='auth')go('auth');return;}
+  const listingMode=!!t.byListing;
+  if(t.tourId&&!t.offerId&&!listingMode&&!t.closedHint){setAppHash('tours&tour='+encodeURIComponent(t.tourId));return;}
+  const id=listingMode?String(t.fallbackId||''):String(t.offerId||'');
+  if(id){
+    const loc=window.LegacyTours&&LegacyTours.locateDeal?await LegacyTours.locateDeal(id):null;
+    if(applyLoc(loc))return;
+    const legacy=listingMode?visibleLegacyByListing(id):visibleLegacyOffer(id);
+    if(legacy){openLegacyOffer(legacy);return;}
+    if(closedDeal(id)){rememberDeal(id);setAppHash('dashboard&deal='+encodeURIComponent(id));return;}
+    writeTarget(null);
+    dealDenied();
+    return;
+  }
+  if(t.closedHint){
+    const hint=String(t.closedHint);
+    if(closedDeal(hint)){rememberDeal(hint);setAppHash('dashboard&deal='+encodeURIComponent(hint));return;}
+    const loc=window.LegacyTours&&LegacyTours.locateDeal?await LegacyTours.locateDeal(hint):null;
+    if(applyLoc(loc))return;
+    const legacy=visibleLegacyOffer(hint);
+    if(legacy){openLegacyOffer(legacy);return;}
+    writeTarget(null);
+    clearDeal();
+    dealDenied();
+  }
+}
+function openOfferLink(id){writeTarget({offerId:String(id||''),tourId:'',closedHint:'',fallbackId:String(id||''),byListing:false});return openPendingDeepLink();}
+function openTourLink(id){writeTarget({offerId:'',tourId:String(id||''),closedHint:'',fallbackId:'',byListing:false});return openPendingDeepLink();}
+function openListingLink(id){writeTarget({offerId:'',tourId:'',closedHint:'',fallbackId:String(id||''),byListing:true});return openPendingDeepLink();}
+let deepBooted=false;
+function bootDeepLink(){
+  if(deepBooted||!hasPendingDeepLink())return;
+  const onAuth=(location.hash||'').replace(/^#/,'')==='auth';
+  if(!linkFromThisLoad&&!onAuth)return;
+  deepBooted=true;
+  if(!S.user){if(tab!=='auth')go('auth');return;}
+  openPendingDeepLink();
+}
+function landAfterAuth(u,fallback){if(hasPendingDeepLink())return openPendingDeepLink();go(fallback);}
+let focusedDeal='';
+function focusDeal(force){
+  setTimeout(()=>{
+    const offer=hashParam('offer');
+    const tour=offer?'':hashParam('tour');
+    const key=(offer?'o:'+offer:'')+(tour?'t:'+tour:'');
+    if(!key)return;
+    let el=null;
+    if(offer){
+      el=document.getElementById('offer-'+offer);
+      if(!el){
+        const keys=['myo-'+offer,'admo-'+offer,'cdo-'+offer,'sp-'+offer,'spc-'+offer,'sell-'+offer];
+        for(let i=0;i<keys.length&&!el;i++){try{el=document.querySelector('[data-fold="'+CSS.escape(keys[i])+'"]');}catch(e){el=null;}}
+      }
+    }else if(tour)el=document.getElementById('tour-'+tour);
+    if(!el)return;
+    if(!force&&focusedDeal===key)return;
+    focusedDeal=key;
+    let n=el;while(n){if(n.tagName==='DETAILS')n.open=true;n=n.parentElement;}
+    el.classList.add('tour-focus');
+    try{el.scrollIntoView({behavior:'smooth',block:'start'});}catch(e){}
+  },180);
+}
 const initTab=()=>{
   const parsed=parseAppHash();
   if(parsed.deal)rememberDeal(parsed.deal);
@@ -1058,13 +1187,28 @@ function nfMenuBlock(){
   return `<div class="nf-menu"><button type="button" class="nav-pill nf-menu-main" data-nfopen="ALL" role="menuitem">🔔 ${nfL('Notificaciones','Notifications')}${tot?` <b class="nf-n">${tot}</b>`:''}</button>${chips.length?`<div class="nf-chips">${chips.join('')}</div>`:`<p class="nf-none">${nfL('Todo leído ✅','All caught up ✅')}</p>`}</div>`;
 }
 function nfWhen(at){const t=Date.parse(at||'');return t?new Date(t).toLocaleString(S.lang==='es'?'es-US':'en-US',{timeZone:'America/Chicago',month:'short',day:'numeric',hour:'numeric',minute:'2-digit'}):'';}
+function nfAct(i,attrs,icon,label){return `<button type="button" class="nav-pill primary" data-nfread="${esc(i.id)}" ${attrs}>${icon} ${label}</button>`;}
 function nfLink(i){
   const lid=i.listingId&&S.listing&&S.listing(i.listingId)?i.listingId:'';
   const home=lid?`<button type="button" class="nav-pill" data-nfread="${esc(i.id)}" data-open="${esc(lid)}">🏠 ${nfL('Ver casa','See home')}</button>`:'';
+  const oid=String(i.offerId||'').trim();
+  const tid=String(i.tourId||i.showingId||'').trim();
+  const listId=String(i.listingId||'').trim();
   let main='';
   if(i.group==='MSG'&&i.peerId)main=`<button type="button" class="nav-pill primary" data-nfread="${esc(i.id)}" data-nfchat="${esc(i.peerId)}" data-nfname="${esc(i.peerName||'')}">💬 ${nfL('Abrir chat','Open chat')}</button>`;
-  else if(i.group==='SHOW')main=`<button type="button" class="nav-pill primary" data-nfread="${esc(i.id)}" data-nfgo="tours">📅 ${nfL('Ver citas','See showings')}</button>`;
-  else if(i.group==='OFFER'||i.group==='CLOSE'){const t=S.isAdmin()?'admin':(window.LegacyTours&&LegacyTours.agentDashVisible&&LegacyTours.agentDashVisible())?'agenthome':(window.LegacyTours&&LegacyTours.sellerDashVisible&&LegacyTours.sellerDashVisible())?'sellerhome':'dashboard';main=`<button type="button" class="nav-pill primary" data-nfread="${esc(i.id)}" data-nfgo="${t}">${i.group==='CLOSE'?'🏁':'💰'} ${nfL('Ver oferta','See offer')}</button>`;}
+  else if(i.group==='SHOW'){
+    if(oid)main=nfAct(i,`data-nfdeal="${esc(oid)}"`, '📅', nfL('Ver cita','See showing'));
+    else if(tid)main=nfAct(i,`data-nftour="${esc(tid)}"`, '📅', nfL('Ver cita','See showing'));
+    else if(listId)main=nfAct(i,`data-nflisting="${esc(listId)}"`, '📅', nfL('Ver cita','See showing'));
+    else main=`<button type="button" class="nav-pill primary" data-nfread="${esc(i.id)}" data-nfgo="tours">📅 ${nfL('Ver citas','See showings')}</button>`;
+  }
+  else if(i.group==='OFFER'||i.group==='CLOSE'){
+    const icon=i.group==='CLOSE'?'🏁':'💰';
+    const label=nfL('Ver oferta','See offer');
+    if(oid)main=nfAct(i,`data-nfdeal="${esc(oid)}"`, icon, label);
+    else if(listId)main=nfAct(i,`data-nflisting="${esc(listId)}"`, icon, label);
+    else {const t=S.isAdmin()?'admin':(window.LegacyTours&&LegacyTours.agentDashVisible&&LegacyTours.agentDashVisible())?'agenthome':(window.LegacyTours&&LegacyTours.sellerDashVisible&&LegacyTours.sellerDashVisible())?'sellerhome':'dashboard';main=`<button type="button" class="nav-pill primary" data-nfread="${esc(i.id)}" data-nfgo="${t}">${icon} ${label}</button>`;}
+  }
   return `<div class="nf-acts">${main}${home}<button type="button" class="nav-pill" data-nfread="${esc(i.id)}" data-nfonly="1">✓ ${nfL('Leído','Read')}</button></div>`;
 }
 function nfItem(i){
@@ -1085,13 +1229,16 @@ function nfSection(){
   return `${bar}${testNote}${groups||(f==='ALL'?'':`<p class="alert-empty">${nfL('Nada pendiente aquí.','Nothing pending here.')}</p>`)}`;
 }
 document.addEventListener('click',async e=>{
-  const t=e.target.closest&&e.target.closest('[data-nfopen],[data-nffilter],[data-nfread],[data-nfall]');if(!t)return;
+  const t=e.target.closest&&e.target.closest('[data-nfopen],[data-nffilter],[data-nfread],[data-nfall],[data-nfdeal],[data-nftour],[data-nflisting]');if(!t)return;
   const d=t.dataset;
   if(d.nfopen){e.preventDefault();e.stopPropagation();NF_FILTER=d.nfopen;menuOpen=false;msgOpen=false;alertOpen=true;render();S.markAlertsRead&&S.markAlertsRead();const p=document.querySelector('.alert-panel');if(p)p.scrollTop=0;return;}
   if(d.nffilter){e.preventDefault();e.stopPropagation();NF_FILTER=d.nffilter;return render();}
   if(d.nfall){e.preventDefault();e.stopPropagation();await S.markNotifRead([],true);if(S.markAlertsRead)await S.markAlertsRead();render();return;}
+  if(d.nfread)S.markNotifRead([d.nfread],false).then(()=>{if(alertOpen)render();else paintMsgBadge();});
+  if(d.nfdeal){e.preventDefault();e.stopPropagation();alertOpen=false;return openOfferLink(d.nfdeal);}
+  if(d.nftour){e.preventDefault();e.stopPropagation();alertOpen=false;return openTourLink(d.nftour);}
+  if(d.nflisting){e.preventDefault();e.stopPropagation();alertOpen=false;return openListingLink(d.nflisting);}
   if(d.nfread){ // mark this one read, then follow its link (the normal handlers still run for data-open)
-    S.markNotifRead([d.nfread],false).then(()=>{if(alertOpen)render();else paintMsgBadge();});
     if(d.nfonly){e.preventDefault();e.stopPropagation();return render();}
     if(d.nfchat){e.preventDefault();e.stopPropagation();alertOpen=false;window.LegacyUI.openChat(d.nfchat,d.nfname||'');return;}
     if(d.nfgo){e.preventDefault();e.stopPropagation();alertOpen=false;return go(d.nfgo);}
@@ -1135,7 +1282,7 @@ function alertSheet(){
   const anyRead=(S.alerts||[]).some(a=>a.readAt)||(S.digests||[]).some(d=>d.readAt);
   const clearBtn=anyRead&&S.canDeleteAlerts&&S.canDeleteAlerts()?`<button type="button" class="nav-pill alert-clear" data-alertclear="1">🗑 ${S.lang==='es'?'Borrar vistas':'Clear seen'}</button>`:'';
   return `<section class="alert-panel" role="region" aria-label="${esc(tr('alerts.title'))}"><div class="alert-panel-head"><b>${nfState()?nfL('Notificaciones','Notifications'):tr('alerts.title')}</b><span class="alert-head-actions">${clearBtn}<button type="button" class="nav-pill" data-alertclose="1" aria-label="✕">✕</button></span></div>
-    ${nfState()?`<div class="nf-head-acts">${badgeTotal()||(nfState().test.length)?`<button type="button" class="nav-pill" data-nfall="1">✓ ${nfL('Marcar todo como leído','Mark all as read')}</button>`:''}</div>`:''}${nfSection()}${NF_FILTER!=='ALL'&&NF_FILTER!=='ALERT'&&nfState()?'':`${NF_FILTER==='ALL'&&nfState()?`<h4 class="nf-h">🏠 ${nfL('Casas (cambios de estado)','Homes (status changes)')} ${alertsUnreadN()?`<span class="ad-count">${alertsUnreadN()}</span>`:''}</h4>`:''}${pushBox()}${digestCards()}${items.length?items.map(a=>`<article class="alert-item ${a.readAt?'':'is-unread'}">${alertDelBtn(a)}<div class="alert-place">${alertPlace(a)}</div><div class="alert-meta">${a.oldStatus&&a.oldStatus!==a.newStatus?esc(S.statusText(a.oldStatus))+' → ':''}${esc(S.statusText(a.newStatus))} · ${esc(formatInstant(a.changedAt))}</div></article>`).join(''):`<p class="alert-empty">${tr('alerts.empty')}</p>`}`}
+    ${nfState()?`<div class="nf-head-acts">${badgeTotal()||(nfState().test.length)?`<button type="button" class="nav-pill" data-nfall="1">✓ ${nfL('Marcar todo como leído','Mark all as read')}</button>`:''}</div>`:''}${nfSection()}${NF_FILTER!=='ALL'&&NF_FILTER!=='ALERT'&&nfState()?'':`${NF_FILTER==='ALL'&&nfState()?`<h4 class="nf-h">🏠 ${nfL('Casas (cambios de estado)','Homes (status changes)')} ${alertsUnreadN()?`<span class="ad-count">${alertsUnreadN()}</span>`:''}</h4>`:''}${pushBox()}${digestCards()}${items.length?items.map(a=>`<article class="alert-item ${a.readAt?'':'is-unread'}">${alertDelBtn(a)}<div class="alert-place">${alertPlace(a)}</div><div class="alert-meta">${a.oldStatus&&a.oldStatus!==a.newStatus?esc(S.statusText(a.oldStatus))+' → ':''}${esc(S.statusText(a.newStatus))} · ${esc(formatInstant(a.changedAt))}</div>${a.listingId?`<div class="nf-acts"><button type="button" class="nav-pill primary" data-nflisting="${esc(a.listingId)}">${nfL('Ver trato','See deal')}</button></div>`:''}</article>`).join(''):`<p class="alert-empty">${tr('alerts.empty')}</p>`}`}
   </section>`;
 }
 const MSG_SKIP_KIND={OFFER_CONFIRMATION:1,SHOWING_CONFIRMATION:1};
@@ -2022,12 +2169,15 @@ function highlightClosedDeal(){
   if(tab!=='dashboard'||!S.user||!(S.isInvestor&&S.isInvestor()))return;
   const id=peekDeal();
   if(!id)return;
-  const sel='[data-deal="'+CSS.escape(id)+'"]';
-  const el=document.querySelector(sel)||document.getElementById('investor-closed-deals');
-  if(!el)return;
+  const known=((S.investorTx&&S.investorTx.closed)||[]).some(c=>c&&String(c.id)===String(id));
+  let el=null;
+  try{el=document.querySelector('[data-deal="'+CSS.escape(id)+'"]');}catch(e){el=null;}
+  if(!el&&!known)return;
+  const target=el||document.getElementById('investor-closed-deals');
+  if(!target)return;
   document.querySelectorAll('.inv-deal-highlight').forEach(n=>n.classList.remove('inv-deal-highlight'));
-  el.classList.add('inv-deal-highlight');
-  try{el.scrollIntoView({behavior:'smooth',block:'center'});}catch(e){}
+  target.classList.add('inv-deal-highlight');
+  try{target.scrollIntoView({behavior:'smooth',block:'center'});}catch(e){}
 }
 function investorGreetingHtml(){
   const u=S.user||{},prof=u.investorProfile||{};
@@ -2273,12 +2423,12 @@ function dashboardFull(opts={}){if(!S.user)return auth();if(S.isInvestor())retur
   const ph=l=>(Array.isArray(l.photoUrls)&&l.photoUrls[0])||l.photoUrl||'listing-placeholder.svg';
   const homeRow=l=>`<li><button type="button" class="pf-row" data-open="${esc(l.id)}"><img src="${esc(ph(l))}" alt="" loading="lazy" onerror="this.onerror=null;this.src='listing-placeholder.svg'"><span class="lf-main"><b>${title(l)}</b></span>${badge(l.status)}</button></li>`;
   // ----- offers (same content as before: tx docs, inspections, tracker, closing box with commission/final contract) -----
-  const offerLi=o=>{const l=S.listing(o.listingId)||{};const mine=o.userId===u.id;return `<li class="lf-li"><details class="lf-fold" data-fold="myo-${esc(o.id)}"${foldOpen('myo-'+o.id)?' open':''}><summary class="lf-sum"><span class="lf-main"><b>${esc(l.address||'—')}</b><small>${S.money(o.offerPrice)}${mine?'':` · ${esc(nm(o.userId))}`}</small></span>${offerBadge(o.status)}<span class="lf-chev" aria-hidden="true">⌄</span></summary><div class="lf-body">${mine?'':` <small>· ${cx('clientOffer')}: ${esc(nm(o.userId))}</small>`}${(()=>{/* v54: agent/Admin see the deal here (never an empty body) */const db=window.LegacyTours&&LegacyTours.dealBox?LegacyTours.dealBox(o.id):'';return db||`<p class="ops-meta">${S.money(o.offerPrice)}${o.downPayment!=null?` · ${tr('down')} ${S.money(o.downPayment)}`:''}${o.monthlyPayment!=null?` · ${S.money(o.monthlyPayment)}${tr('perMo')}`:''}${o.createdAt?` · ${esc(new Date(o.createdAt).toLocaleDateString(S.lang==='es'?'es-US':'en-US'))}`:''}</p>`;})()}
+  const offerLi=o=>{const l=S.listing(o.listingId)||{};const mine=o.userId===u.id;return `<li class="lf-li"><details class="lf-fold" id="offer-${esc(o.id)}" data-fold="myo-${esc(o.id)}"${(foldOpen('myo-'+o.id)||dealWants(o.id))?' open':''}><summary class="lf-sum"><span class="lf-main"><b>${esc(l.address||'—')}</b><small>${S.money(o.offerPrice)}${mine?'':` · ${esc(nm(o.userId))}`}</small></span>${offerBadge(o.status)}<span class="lf-chev" aria-hidden="true">⌄</span></summary><div class="lf-body">${mine?'':` <small>· ${cx('clientOffer')}: ${esc(nm(o.userId))}</small>`}${(()=>{/* v54: agent/Admin see the deal here (never an empty body) */const db=window.LegacyTours&&LegacyTours.dealBox?LegacyTours.dealBox(o.id):'';return db||`<p class="ops-meta">${S.money(o.offerPrice)}${o.downPayment!=null?` · ${tr('down')} ${S.money(o.downPayment)}`:''}${o.monthlyPayment!=null?` · ${S.money(o.monthlyPayment)}${tr('perMo')}`:''}${o.createdAt?` · ${esc(new Date(o.createdAt).toLocaleDateString(S.lang==='es'?'es-US':'en-US'))}`:''}</p>`;})()}
    ${o.status==='COUNTERED'?`<div style="color:#d97706">${tr('counterLabel')}: ${S.money(o.counterPrice)} / ${tr('down')} ${S.money(o.counterDown)} / ${S.money(o.counterMonthly)}${tr('perMo')}. ${esc(o.adminNotes)}</div>`:''}
    ${o.status==='ACCEPTED'&&mine?`<div class="tx-box" style="border:2px solid #16a34a;padding:8px;border-radius:8px;margin:6px 0"><b>${tr('txDocs')}</b>${S.TX_DOCS.map(t=>{const has=docs.find(d=>d.offerId===o.id&&d.docType===t.type);
      const docLabel=S.lang==='es'?(t.labelEs||t.label):t.label;
      return `<div>${docLabel}: ${has?'✅ '+esc(has.name):`<input type="file" accept="${S.UPLOAD_ACCEPT}" data-txdoc="${t.type}" data-offer="${o.id}" data-listing="${o.listingId}">`}</div>`;}).join('')}${(o.inspections&&!(S.closings[o.id]&&S.closings[o.id].inspectionsWaived))?(()=>{const rep=docs.find(d=>d.offerId===o.id&&d.docType==='INSPECTION_REPORT');return `<div style="margin-top:8px;padding:8px;border:1px dashed #0284c7;border-radius:8px"><b>🔍 ${S.lang==='es'?'Inspecciones':'Inspections'}</b><br>${o.inspectionStatus==='SCHEDULED'?`${S.lang==='es'?'Programada':'Scheduled'}: <b>${esc(new Date(o.inspectionAt).toLocaleString())}</b> <button type="button" data-inspcancel="${o.id}" style="background:#dc2626;color:#fff">${S.lang==='es'?'Cancelar inspección':'Cancel inspection'}</button>`:`${o.inspectionStatus==='CANCELLED'?`<i>${S.lang==='es'?'Inspección cancelada':'Inspection cancelled'}</i><br>`:''}${S.lang==='es'?'Fecha y hora':'Date & time'}: <input type="datetime-local" id="insp-${o.id}"> <button type="button" data-inspsched="${o.id}">${S.lang==='es'?'Programar':'Schedule'}</button>`}<div style="margin-top:6px">${S.lang==='es'?'Reporte de inspección':'Inspection report'}: ${rep?'✅ '+esc(rep.name):`<input type="file" accept="${S.UPLOAD_ACCEPT}" data-txdoc="INSPECTION_REPORT" data-offer="${o.id}" data-listing="${o.listingId}">`}</div></div>`;})():''}</div>`:''}${dealTracker(progOfOffer(o))}${closingPanel(o)}${mine&&S.isAgent&&S.isAgent()&&window.LegacyTours&&LegacyTours.offerClientsBox?LegacyTours.offerClientsBox(o.id):''}</div></details></li>`;};
-  const offB=offers.length?`${activeO.length?`<ul class="pf-offers">${activeO.map(offerLi).join('')}</ul>`:`<p class="ad-empty">${pfL('No tienes ofertas activas.','No active offers.')}</p>`}${closedO.length?`<details class="lf-fold pf-sub" data-fold="pf-offers-closed"${foldOpen('pf-offers-closed')?' open':''}><summary class="lf-sum"><span class="lf-ico" aria-hidden="true">🏁</span><span class="lf-main"><b>${pfL('Cerradas','Closed')}</b></span><span class="ad-count">${closedO.length}</span><span class="lf-chev" aria-hidden="true">⌄</span></summary><div class="lf-body"><ul class="pf-offers">${closedO.map(offerLi).join('')}</ul></div></details>`:''}`:`<p class="ad-empty">${tr('noneYet')}</p>`;
+  const offB=offers.length?`${activeO.length?`<ul class="pf-offers">${activeO.map(offerLi).join('')}</ul>`:`<p class="ad-empty">${pfL('No tienes ofertas activas.','No active offers.')}</p>`}${closedO.length?`<details class="lf-fold pf-sub" data-fold="pf-offers-closed"${(foldOpen('pf-offers-closed')||closedO.some(o=>dealWants(o.id)))?' open':''}><summary class="lf-sum"><span class="lf-ico" aria-hidden="true">🏁</span><span class="lf-main"><b>${pfL('Cerradas','Closed')}</b></span><span class="ad-count">${closedO.length}</span><span class="lf-chev" aria-hidden="true">⌄</span></summary><div class="lf-body"><ul class="pf-offers">${closedO.map(offerLi).join('')}</ul></div></details>`:''}`:`<p class="ad-empty">${tr('noneYet')}</p>`;
   // ----- messages: grouped by conversation, newest first; 5 per conversation and 3 conversations, the rest behind "Ver más" -----
   const conv=new Map();msgs.forEach(m=>{const peer=m.fromUserId===u.id?m.toUserId:m.fromUserId;const k=peer||'—';if(!conv.has(k))conv.set(k,[]);conv.get(k).push(m);});
   const when=m=>{const t=Date.parse(m.createdAt||'');return t?new Date(t).toLocaleString(S.lang==='es'?'es-US':'en-US',{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'}):'';};
@@ -2503,8 +2653,8 @@ function admOffers(D){
     const fp=window.LegacyTours&&LegacyTours.tourOfferInfo?LegacyTours.tourOfferInfo(o.id):null,flow=!!(fp&&fp.offerId);
     const decided=['ACCEPTED','CLOSED','FELL_THROUGH','INVALIDATED'].includes(String(o.status||'').toUpperCase())||(flow&&!!fp.decision);
     const addr=String(l.address||(fp&&fp.home&&fp.home.address)||'').split(',')[0].trim()||AL('Sin dirección','No address');
-    const fk='admo-'+o.id,op=foldOpen(fk)||(o.status==='SUBMITTED'&&!flow);
-    return `<details class="adm-card adm-offer lf-fold" data-fold="${esc(fk)}"${op?' open':''}><summary class="lf-sum"><span class="lf-main"><b>${esc(addr)}</b><small>${S.money(o.offerPrice)} · ${esc(u.name||'—')}</small></span>${flow&&LegacyTours.stepChip?LegacyTours.stepChip(fp):offerBadge(o.status)}<span class="lf-chev" aria-hidden="true">⌄</span></summary><div class="lf-body">
+    const fk='admo-'+o.id,op=foldOpen(fk)||dealWants(o.id)||(o.status==='SUBMITTED'&&!flow);
+    return `<details class="adm-card adm-offer lf-fold" id="offer-${esc(o.id)}" data-fold="${esc(fk)}"${op?' open':''}><summary class="lf-sum"><span class="lf-main"><b>${esc(addr)}</b><small>${S.money(o.offerPrice)} · ${esc(u.name||'—')}</small></span>${flow&&LegacyTours.stepChip?LegacyTours.stepChip(fp):offerBadge(o.status)}<span class="lf-chev" aria-hidden="true">⌄</span></summary><div class="lf-body">
       <div class="adm-kv"><span>👤 ${esc(u.name||'—')}</span><span>💲 <b>${S.money(o.offerPrice)}</b> · ${tr('down')} ${S.money(o.downPayment)} · ${S.money(o.monthlyPayment)}${tr('perMo')}</span>${o.status==='COUNTERED'?`<span class="adm-ctr">↩️ ${tr('counterLabel')}: ${S.money(o.counterPrice)} / ${S.money(o.counterDown)} / ${S.money(o.counterMonthly)}</span>`:''}</div>
       ${admTourLine(o)}
       ${window.LegacyTours&&LegacyTours.offerClientsBox?LegacyTours.offerClientsBox(o.id):''}
@@ -2616,9 +2766,9 @@ function maybeOpenSharedDetail(){
 }
 S.rerender=function(){render();};
 let agentLanded=!parseAppHash().tab&&!/\/(login|register|forgot-password|reset-password|admin|dashboard|calendar|guides)/i.test(location.pathname)?0:1;
-function render(){if(!agentLanded&&S.user){agentLanded=1;if(tab==='inventory'&&!shareId()&&window.LegacyTours&&LegacyTours.agentDashVisible&&LegacyTours.agentDashVisible()){tab='agenthome';try{history.replaceState(null,'',location.pathname+location.search+'#agenthome');}catch(e){}}else if((tab==='inventory'||tab==='dashboard')&&!shareId()&&(window.LegacyTours&&LegacyTours.sellerDashVisible&&LegacyTours.sellerDashVisible()&&!S.isAdmin())){tab='sellerhome';try{history.replaceState(null,'',location.pathname+location.search+'#sellerhome');}catch(e){}}}captureMsgScroll();document.documentElement.lang=S.lang;syncMsgTitle();const root=$('#app-root');if(!S.data)return;if(map){try{map.stop();map.off();map.remove();}catch(e){}map=null;}
+function render(){if(!agentLanded&&S.user){agentLanded=1;if(!hasPendingDeepLink()){if(tab==='inventory'&&!shareId()&&window.LegacyTours&&LegacyTours.agentDashVisible&&LegacyTours.agentDashVisible()){tab='agenthome';try{history.replaceState(null,'',location.pathname+location.search+'#agenthome');}catch(e){}}else if((tab==='inventory'||tab==='dashboard')&&!shareId()&&(window.LegacyTours&&LegacyTours.sellerDashVisible&&LegacyTours.sellerDashVisible()&&!S.isAdmin())){tab='sellerhome';try{history.replaceState(null,'',location.pathname+location.search+'#sellerhome');}catch(e){}}}}captureMsgScroll();document.documentElement.lang=S.lang;syncMsgTitle();const root=$('#app-root');if(!S.data)return;if(map){try{map.stop();map.off();map.remove();}catch(e){}map=null;}
   const mapFull=tab==='map';document.documentElement.classList.toggle('lof-map-on',mapFull);if(mapFull){headerCompact=false;if(window.scrollY)window.scrollTo(0,0);}
-  const body={inventory,guides,dashboard,admin,auth,'admin-invite':adminInvite,calendar:calendarView,'investor-tx':investorTx,'investor-map':investorMap,favorites:favoritesView,map:mapView,tours:()=>window.LegacyTours?LegacyTours.view():'',myagent:()=>window.LegacyTours&&LegacyTours.agentView?LegacyTours.agentView():'',agenthome:()=>window.LegacyTours&&LegacyTours.agentDashboard&&LegacyTours.agentDashVisible()?LegacyTours.agentDashboard():inventory(),sellerhome:()=>window.LegacyTours&&LegacyTours.sellerPanel&&LegacyTours.sellerDashVisible()?LegacyTours.sellerPanel():inventory()}[tab]||inventory;root.innerHTML=header()+`<main>${body()}</main><footer class="app-footer" style="padding:18px;font-size:12px;text-align:center">© Legacy - Owner Finance · Brokerage By: KLC Real Estate, LLC<span class="app-footer-disc" style="display:block;margin-top:6px;opacity:.85">${S.lang==='es'?'Legacy-Owner Finance LLC no es una corredora de bienes raíces. Las casas se anuncian, y los servicios de bienes raíces se prestan, por agentes con licencia en Oklahoma de KLC Real Estate, LLC.':'Legacy-Owner Finance LLC is not a real estate brokerage. Homes are advertised, and real estate services are provided, by Oklahoma-licensed agents of KLC Real Estate, LLC.'}</span>${footerLinks()}</footer>${tabBar()}`;bind();applyMsgScroll();if(tab==='inventory'&&(MAPOPEN||!narrowMQ.matches))drawMap();if(tab==='investor-map')drawInvestorMap();if(mapFull)drawFullMap();maybeOpenSharedDetail();highlightClosedDeal();}
+  const body={inventory,guides,dashboard,admin,auth,'admin-invite':adminInvite,calendar:calendarView,'investor-tx':investorTx,'investor-map':investorMap,favorites:favoritesView,map:mapView,tours:()=>window.LegacyTours?LegacyTours.view():'',myagent:()=>window.LegacyTours&&LegacyTours.agentView?LegacyTours.agentView():'',agenthome:()=>window.LegacyTours&&LegacyTours.agentDashboard&&LegacyTours.agentDashVisible()?LegacyTours.agentDashboard():inventory(),sellerhome:()=>window.LegacyTours&&LegacyTours.sellerPanel&&LegacyTours.sellerDashVisible()?LegacyTours.sellerPanel():inventory()}[tab]||inventory;root.innerHTML=header()+`<main>${body()}</main><footer class="app-footer" style="padding:18px;font-size:12px;text-align:center">© Legacy - Owner Finance · Brokerage By: KLC Real Estate, LLC<span class="app-footer-disc" style="display:block;margin-top:6px;opacity:.85">${S.lang==='es'?'Legacy-Owner Finance LLC no es una corredora de bienes raíces. Las casas se anuncian, y los servicios de bienes raíces se prestan, por agentes con licencia en Oklahoma de KLC Real Estate, LLC.':'Legacy-Owner Finance LLC is not a real estate brokerage. Homes are advertised, and real estate services are provided, by Oklahoma-licensed agents of KLC Real Estate, LLC.'}</span>${footerLinks()}</footer>${tabBar()}`;bind();applyMsgScroll();if(tab==='inventory'&&(MAPOPEN||!narrowMQ.matches))drawMap();if(tab==='investor-map')drawInvestorMap();if(mapFull)drawFullMap();maybeOpenSharedDetail();highlightClosedDeal();focusDeal();}
 function bind(){const r=$('#app-root');
   {const setH=()=>{const h=document.querySelector('.app-header');if(h)document.documentElement.style.setProperty('--hdr-h',h.offsetHeight+'px');};setH();if(!window.__admHdr){window.__admHdr=1;window.addEventListener('scroll',()=>requestAnimationFrame(setH),{passive:true});window.addEventListener('resize',setH);}}
   if(!r.dataset.admBound){r.dataset.admBound='1';
@@ -2771,8 +2921,8 @@ function bind(){const r=$('#app-root');
   };
   const sub=(id,fn)=>{const el=$(id);if(el)el.onsubmit=wrap(()=>fn(fd(el)));};
   sub('#adminInviteF',async v=>{const token=adminInviteToken();if(!token)throw new Error(tr('adminInviteInvalid'));if(v.pw!==v.pw2)throw new Error(tr('pwMismatch'));const u=await S.acceptAdminInvite(token,v.pw);resetAdminInvite();go(u&&u.role==='ADMIN'?'admin':'dashboard');});
-  sub('#loginF',async v=>{const u=await S.login(v.email,v.password);if(u&&u.needsVerify)return openVerifyEmail(u.email,false);go(u&&u.role==='ADMIN'?'admin':(window.LegacyTours&&LegacyTours.agentDashVisible&&LegacyTours.agentDashVisible()?'agenthome':(window.LegacyTours&&LegacyTours.sellerDashVisible&&LegacyTours.sellerDashVisible()&&!S.isAdmin())?'sellerhome':'dashboard'));maybePromptCriteria();});
-  sub('#regF',async v=>{if(v.role==='INVESTOR'&&!(v.businessName&&v.contactMethod&&v.contactValue&&v.representativeName))throw new Error(S.lang==='es'?'Ingresa el nombre del negocio, el método de contacto y el nombre del representante.':'Enter the business name, preferred contact method, and the representative\'s name.');const u=await S.register(v);if(u&&u.needsVerify)return openVerifyEmail(u.email,true);go(u&&u.role==='ADMIN'?'admin':'dashboard');maybePromptCriteria();});
+  sub('#loginF',async v=>{const u=await S.login(v.email,v.password);if(u&&u.needsVerify)return openVerifyEmail(u.email,false);landAfterAuth(u,u&&u.role==='ADMIN'?'admin':(window.LegacyTours&&LegacyTours.agentDashVisible&&LegacyTours.agentDashVisible()?'agenthome':(window.LegacyTours&&LegacyTours.sellerDashVisible&&LegacyTours.sellerDashVisible()&&!S.isAdmin()?'sellerhome':'dashboard')));maybePromptCriteria();});
+  sub('#regF',async v=>{if(v.role==='INVESTOR'&&!(v.businessName&&v.contactMethod&&v.contactValue&&v.representativeName))throw new Error(S.lang==='es'?'Ingresa el nombre del negocio, el método de contacto y el nombre del representante.':'Enter the business name, preferred contact method, and the representative\'s name.');const u=await S.register(v);if(u&&u.needsVerify)return openVerifyEmail(u.email,true);landAfterAuth(u,u&&u.role==='ADMIN'?'admin':'dashboard');maybePromptCriteria();});
   sub('#coNewF',async v=>{await S.companyAction('company_create',{name:v.name,userId:v.userId});render();});
   r.querySelectorAll('form[data-coadd]').forEach(f=>{f.onsubmit=wrap(async()=>{const id=String(new FormData(f).get('userId')||'');if(!id)return;await S.companyAction('company_member_add',{companyId:f.dataset.coadd,userId:id});render();});});
   r.querySelectorAll('form[data-coassign]').forEach(f=>{f.onsubmit=wrap(async()=>{const id=String(new FormData(f).get('listingId')||'');if(!id)return;await S.companyAction('company_assign',{companyId:f.dataset.coassign,listingIds:[id],unassignIds:[]});render();});});
@@ -2807,7 +2957,7 @@ function openVerifyEmail(email,justSent){
   m.querySelector('#evClose').onclick=()=>{m.remove();go('auth');};
   m.querySelector('#evResend').onclick=async()=>{const r=await S.emailVerify('send',email);if(r&&r.sent){msg('');alert(tr('evSent'));}else if(r&&r.verified)msg('');else err(r);};
   m.querySelector('#evF').onsubmit=async e=>{e.preventDefault();const code=new FormData(e.target).get('code');const r=await S.emailVerify('verify',email,code);
-    if(r&&(r.verified||r.enabled===false)){m.remove();alert(tr('evDone'));const u=S.loginAfterVerify(email);go(u?(u.role==='ADMIN'?'admin':'dashboard'):'auth');if(u)maybePromptCriteria();}else err(r);};
+    if(r&&(r.verified||r.enabled===false)){m.remove();alert(tr('evDone'));const u=S.loginAfterVerify(email);landAfterAuth(u,u?(u.role==='ADMIN'?'admin':'dashboard'):'auth');if(u)maybePromptCriteria();}else err(r);};
   
 }
 window.__openVerifyEmail=(e,s)=>openVerifyEmail(e,s);
@@ -2829,7 +2979,7 @@ function checkResetUrlParams(){
 }
 
 document.addEventListener('keydown',e=>{if(e.key!=='Escape'||!msgOpen)return;msgOpen=false;render();});
-window.LegacyUI={render:()=>render(),go:(t)=>go(t),esc:v=>esc(v),openChat:(peerId,name)=>{if(name){S.tourPeerNames=S.tourPeerNames||{};S.tourPeerNames[peerId]=name;}msgOpen=true;alertOpen=false;msgNew=false;msgPeer=peerId;msgStickBottom=true;render();/* v51 */if(S.markThreadRead)S.markThreadRead(peerId);if(S.refreshReceipts)S.refreshReceipts(peerId).then(ch=>{if(!ch||!msgOpen||msgPeer!==peerId)return;const a=document.activeElement;if(a&&a.tagName==='TEXTAREA')return;msgStickBottom=true;render();});},tab:()=>tab,openContact:(id,msg)=>openContactSheet(id,msg)};
-S.on(render);window.addEventListener('hashchange',()=>{const parsed=parseAppHash();if(parsed.deal)rememberDeal(parsed.deal);if(parsed.tab!=='admin-invite')resetAdminInvite();tab=parsed.tab||'inventory';render();if(tab==='admin'&&/investdel=1/.test(location.hash||''))setTimeout(()=>jumpAdminSection('investdel'),60);});
-S.load().then(()=>{render();checkResetUrlParams();maybePromptCriteria();}).catch(e=>{document.documentElement.lang=S.lang;$('#app-root').innerHTML='<p style="padding:20px">'+esc(tr('loadFail'))+': '+esc(e.message)+'</p>';}).then(()=>{try{window.legacySplashHide&&window.legacySplashHide()}catch(_){}});
+window.LegacyUI={render:()=>render(),go:(t)=>go(t),esc:v=>esc(v),focusDeal:(force)=>focusDeal(!!force),openDeal:(id)=>openOfferLink(id),openChat:(peerId,name)=>{if(name){S.tourPeerNames=S.tourPeerNames||{};S.tourPeerNames[peerId]=name;}msgOpen=true;alertOpen=false;msgNew=false;msgPeer=peerId;msgStickBottom=true;render();/* v51 */if(S.markThreadRead)S.markThreadRead(peerId);if(S.refreshReceipts)S.refreshReceipts(peerId).then(ch=>{if(!ch||!msgOpen||msgPeer!==peerId)return;const a=document.activeElement;if(a&&a.tagName==='TEXTAREA')return;msgStickBottom=true;render();});},tab:()=>tab,openContact:(id,msg)=>openContactSheet(id,msg)};
+S.on(render);window.addEventListener('hashchange',()=>{captureDeepLink();const parsed=parseAppHash();if(parsed.deal)rememberDeal(parsed.deal);if(parsed.tab!=='admin-invite')resetAdminInvite();tab=parsed.tab||'inventory';render();if(tab==='admin'&&/investdel=1/.test(location.hash||''))setTimeout(()=>jumpAdminSection('investdel'),60);});
+S.load().then(()=>{render();bootDeepLink();checkResetUrlParams();maybePromptCriteria();}).catch(e=>{document.documentElement.lang=S.lang;$('#app-root').innerHTML='<p style="padding:20px">'+esc(tr('loadFail'))+': '+esc(e.message)+'</p>';}).then(()=>{try{window.legacySplashHide&&window.legacySplashHide()}catch(_){}});
 })();
