@@ -2554,3 +2554,36 @@ details.lf-fold{min-width:0;max-width:100%}
 .bill-pill{font-size:12px;font-weight:700;border-radius:999px;padding:3px 8px;background:#e2e8f0;color:#334155;white-space:nowrap}
 .bill-pill.on{background:#dcfce7;color:#166534}
 @media(max-width:640px){.bill-stats{grid-template-columns:1fr}}
+
+/* Maps: open-in-maps button and street / satellite / hybrid control */
+.maps-btn{
+  display:inline-flex;align-items:center;justify-content:center;gap:4px;
+  min-height:36px;padding:4px 10px;border-radius:999px;border:1px solid #cbd5e1;
+  background:#fff;color:#0f172a;font:inherit;font-size:12.5px;font-weight:800;
+  line-height:1.1;cursor:pointer;white-space:nowrap;
+}
+.maps-btn:hover{border-color:#0f172a}
+.maps-btn.compact{min-height:32px;padding:3px 8px;font-size:12px}
+.maps-ico{font-size:14px;line-height:1}
+.card-actions .maps-btn,.share-detail-row .maps-btn,.lof-mappop-acts .maps-btn{min-height:44px}
+.share-detail-row{gap:8px;flex-wrap:wrap;align-items:center}
+.fav-row .maps-btn{align-self:center;margin-right:4px}
+.with-maps{display:flex;align-items:center;gap:8px}
+.with-maps>.pf-row{flex:1 1 auto;min-width:0}
+.cd-fav-wrap{display:flex;flex-direction:column;gap:6px;min-width:0}
+.cd-fav-wrap .cd-fav{width:100%}
+.cd-fav-wrap .maps-btn{align-self:flex-start}
+.maps-suggest{font-weight:700;opacity:.85;margin-left:6px}
+.lof-basemap.leaflet-control{
+  display:flex;gap:2px;margin-top:8px !important;padding:3px;border:0;border-radius:999px;
+  background:rgba(255,255,255,.96);box-shadow:0 2px 10px rgba(15,23,42,.18);
+}
+.lof-basemap button{
+  border:0;background:transparent;border-radius:999px;padding:6px 10px;min-height:32px;
+  font:inherit;font-size:12px;font-weight:800;color:#0f172a;cursor:pointer;
+}
+.lof-basemap button.on{background:#0f172a;color:#fff}
+@media (max-width:640px){
+  .prop-card .card-actions .maps-btn{flex-basis:100%;min-height:44px}
+  .lof-basemap button{padding:6px 8px;font-size:11px}
+}
