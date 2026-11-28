@@ -1455,14 +1455,128 @@ S.uploadDocument=async(file,{listingId,docType,offerId,replace,forUserId}={})=>{
   if(d.docType==='EM_RECEIPT'||d.docType==='INSPECTION_REPORT'){try{await refreshProgress(true);notify();}catch(e){}}
   return d;
 };
-S.openDocument=async id=>{
+function htmlEsc(v){return String(v==null?'':v).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
+function docShell(title,inner){
+  return '<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>'+htmlEsc(title)+'</title></head><body style="margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;background:#031432;color:#f8fafc;font:16px/1.45 system-ui,sans-serif;text-align:center;padding:24px"><div style="max-width:460px"><h1 style="font-size:22px;margin:0 0 12px;color:#e8c872">'+htmlEsc(title)+'</h1>'+inner+'</div></body></html>';
+}
+function paintDoc(w,title,inner){
+  if(!w||w.closed)return false;
+  try{w.document.open();w.document.write(docShell(title,inner));w.document.close();return true;}catch(e){return false;}
+}
+function signedUrlStale(url,expiresIn){
+  if(typeof expiresIn==='number'&&expiresIn<=0)return true;
+  try{
+    const u=new URL(url,location.href);
+    const exp=u.searchParams.get('Expires')||u.searchParams.get('expires');
+    if(exp&&Number(exp)>0&&Number(exp)*1000<=Date.now())return true;
+    const token=u.searchParams.get('token')||'';
+    const parts=token.split('.');
+    if(parts.length===3){
+      const payload=JSON.parse(atob(parts[1].replace(/-/g,'+').replace(/_/g,'/')));
+      if(payload&&payload.exp&&payload.exp*1000<=Date.now()+1000)return true;
+    }
+  }catch(e){}
+  return false;
+}
+function docBtnStyle(){return 'font:inherit;font-weight:700;background:#c9a24a;color:#031432;border:0;border-radius:10px;padding:10px 16px;cursor:pointer';}
+function ensureDocNotice(){
+  let box=document.getElementById('doc-open-notice');
+  if(box)return box;
+  box=document.createElement('div');
+  box.id='doc-open-notice';
+  box.setAttribute('role','dialog');
+  box.style.cssText='position:fixed;inset:0;z-index:2147482000;background:rgba(3,20,50,.72);display:flex;align-items:center;justify-content:center;padding:16px';
+  box.innerHTML='<div style="background:#fff;color:#0b1f3a;max-width:480px;width:100%;border-radius:14px;padding:18px;font:15px/1.45 system-ui,sans-serif;text-align:left"><h2 data-doc-title style="font-size:18px;margin:0 0 10px"></h2><div data-doc-body></div><div style="display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap;margin-top:14px"><button type="button" data-doc-go style="'+docBtnStyle()+'"></button><button type="button" data-doc-x style="font:inherit;padding:10px 14px;border-radius:10px;border:1px solid #94a3b8;background:#fff;cursor:pointer"></button></div></div>';
+  box.addEventListener('click',e=>{if(e.target===box||(e.target.closest&&e.target.closest('[data-doc-x]')))box.hidden=true;});
+  (document.body||document.documentElement).appendChild(box);
+  return box;
+}
+function showDocNotice(title,msg,goLbl,onGo){
   const es=S.lang==='es';
-  const w=window.open('','_blank');
+  const box=ensureDocNotice();
+  box.querySelector('[data-doc-title]').textContent=title;
+  const body=box.querySelector('[data-doc-body]');
+  body.textContent=msg||'';
+  const btn=box.querySelector('[data-doc-go]');
+  btn.hidden=!goLbl;
+  btn.textContent=goLbl||'';
+  btn.onclick=()=>{box.hidden=true;if(onGo)onGo();};
+  box.querySelector('[data-doc-x]').textContent=es?'Cerrar':'Close';
+  box.hidden=false;
+}
+function showPopupBlocked(url){
+  const es=S.lang==='es';
+  const box=ensureDocNotice();
+  box.querySelector('[data-doc-title]').textContent=es?'Ventana emergente bloqueada':'Pop-up blocked';
+  const body=box.querySelector('[data-doc-body]');
+  body.textContent='';
+  const p=document.createElement('p');
+  p.style.margin='0 0 12px';
+  p.textContent='Allow pop-ups for legacyownerfinance.net / Permite ventanas emergentes para legacyownerfinance.net';
+  const linkP=document.createElement('p');
+  linkP.style.margin='0';
+  const a=document.createElement('a');
+  a.href=url;
+  a.target='_blank';
+  a.rel='noopener';
+  a.textContent='Open the file / Abrir el archivo';
+  a.style.cssText='color:#0b1f3a;font-weight:700';
+  linkP.appendChild(a);
+  body.appendChild(p);
+  body.appendChild(linkP);
+  const btn=box.querySelector('[data-doc-go]');
+  btn.hidden=true;
+  box.querySelector('[data-doc-x]').textContent=es?'Cerrar':'Close';
+  box.hidden=false;
+}
+function showDocError(id,w,err){
+  const es=S.lang==='es';
+  const raw=err&&err.message?String(err.message):'';
+  const expired=/expir|venc/i.test(raw)||(err&&/expir/i.test(String(err.code||'')));
+  const title=expired?(es?'El enlace venció':'The link expired'):(es?'No se pudo abrir el archivo':'The file could not be opened');
+  const msg=raw||(es?'Inténtalo de nuevo.':'Please try again.');
+  const tryLbl='Try again / Intentar de nuevo';
+  if(w&&!w.closed){
+    paintDoc(w,title,'<p>'+htmlEsc(msg)+'</p><p><button type="button" id="doc-retry" style="'+docBtnStyle()+'">'+htmlEsc(tryLbl)+'</button></p>');
+    try{
+      const b=w.document.getElementById('doc-retry');
+      if(b)b.addEventListener('click',function(){
+        paintDoc(w,'Loading… / Cargando…','<p>Loading… / Cargando…</p>');
+        openDocumentInto(id,w);
+      });
+    }catch(e){}
+    return;
+  }
+  showDocNotice(title,msg,tryLbl,function(){S.openDocument(id);});
+}
+async function openDocumentInto(id,w){
+  const es=S.lang==='es';
+  let url='';
   try{
     const j=await api('document_url',{id});
-    if(!j||!j.url)throw new Error(es?'El archivo no está disponible.':'The file is not available.');
-    if(w){w.location.href=j.url;}else{window.location.href=j.url;}
-  }catch(e){if(w)w.close();throw e;}
+    url=j&&j.url?String(j.url):'';
+    if(!url)throw new Error(es?'El archivo no está disponible.':'The file is not available.');
+    if(j.expired||signedUrlStale(url,typeof j.expiresIn==='number'?j.expiresIn:null)){
+      const err=new Error(es?'El enlace venció.':'The link expired.');
+      err.code='expired';
+      throw err;
+    }
+  }catch(e){
+    showDocError(id,w,e);
+    return;
+  }
+  if(w&&!w.closed){
+    try{w.location.href=url;return;}catch(e){}
+  }
+  let w2=null;
+  try{w2=window.open(url,'_blank','noopener');}catch(e){w2=null;}
+  if(!w2)showPopupBlocked(url);
+}
+// Opens a blank tab in the click turn (so desktop popup blockers allow it), then sends that tab to a fresh 120s signed URL.
+S.openDocument=async id=>{
+  const w=window.open('','_blank');
+  if(w)paintDoc(w,'Loading… / Cargando…','<p>Loading… / Cargando…</p>');
+  await openDocumentInto(id,w);
 };
 S.STATUSES=['AVAILABLE','COMING_SOON','PENDING','SOLD']; // v50: Pending/NoEM retired (a home goes Pending automatically at 3/3 seller approvals)
 S.STATUS_LABEL={AVAILABLE:'Available',COMING_SOON:'Coming Soon',PENDING:'Pending',SOLD:'Sold (3-Day)',CLOSED:'Sold (3-Day)'};

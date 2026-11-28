@@ -76,7 +76,17 @@
 
   /* ---------- service worker ---------- */
   if('serviceWorker' in navigator&&!isNative&&(location.protocol==='https:'||location.hostname==='localhost'||location.hostname==='127.0.0.1')){
-    W.addEventListener('load',function(){navigator.serviceWorker.register('/sw.js').catch(function(){});});
+    var hadCtrl=!!navigator.serviceWorker.controller,reloaded=false;
+    W.addEventListener('load',function(){
+      navigator.serviceWorker.register('/sw.js').then(function(reg){
+        if(reg&&reg.update)reg.update().catch(function(){});
+      }).catch(function(){});
+    });
+    navigator.serviceWorker.addEventListener('controllerchange',function(){
+      if(!hadCtrl||reloaded)return;
+      reloaded=true;
+      location.reload();
+    });
   }
 
   /* ---------- install prompt ---------- */

@@ -14,7 +14,7 @@ const esc=v=>String(v==null?'':v).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;'
 const UI=()=>window.LegacyUI;
 let scrolledTo='';
 const focusOffer=id=>(location.hash||'').includes('offer='+encodeURIComponent(id))?' tour-focus':'';
-const rerender=()=>{const u=UI();if(u)u.render();const m=/offer=([^&]+)/.exec(location.hash);const id=m&&decodeURIComponent(m[1]);if(id){setTimeout(()=>{const el=document.getElementById('offer-'+id);if(el){el.classList.add('tour-focus');if(scrolledTo!==id){scrolledTo=id;el.scrollIntoView({behavior:'smooth',block:'start'});}}},150);}};
+const rerender=()=>{const u=UI();if(u)u.render();};
 const DEMO=(()=>{try{return new URLSearchParams(location.search).get('demo')==='tours';}catch(e){return false;}})();
 const isClient=()=>!!(S.user&&S.user.role==='BUYER'&&!S.isAdmin());
 const isAgent=()=>!!(S.user&&S.isAgent&&S.isAgent()&&!S.isAdmin());
@@ -699,6 +699,33 @@ function sellerSection(){
     return fold('sell-'+p.offerId,sum,`${top}${btns}${checklist(p,role)}${closingFlowBox(p,role)}`,{cls:'tour-sell'+focusOffer(p.offerId),id:'offer-'+p.offerId,force:hashHas('offer='+p.offerId)||(!p.decision&&!(p.counter&&p.counter.status==='OPEN'))});}).join('')}</section>`;
 }
 function findOffer(id){for(const t of ((data&&data.tours)||[]).concat(addedTours(),looseTours()))for(const o of t.offers||[])if(o.offerId===id)return o;const so=((data&&data.sellerOffers)||[]).find(x=>x.offerId===id);return so?{offerId:id,pipeline:so}:null;}
+function offerAlive(o){const p=o&&(o.pipeline||o);if(!o)return false;if(o.invalidatedAt||(p&&(p.invalidatedAt||p.decision==='DENIED'||p.archivedAt||p.dead)))return false;return true;}
+function locateDealSync(id){
+  id=String(id||'').trim();if(!id||!data)return null;
+  if(findOffer(id))return {kind:'offer',id,seller:((data.sellerOffers)||[]).some(p=>p.offerId===id)};
+  const tours=(data.tours||[]).concat(data.open||[]);
+  if(tours.some(t=>t&&t.id===id))return {kind:'tour',tourId:id};
+  const found=[];
+  const push=(oid,alive)=>{if(oid)found.push({id:oid,alive:!!alive});};
+  ((data.tours)||[]).concat(addedTours(),looseTours()).forEach(t=>(t.offers||[]).forEach(o=>{if(o&&(o.listingId===id||(o.pipeline&&o.pipeline.listingId===id)))push(o.offerId,offerAlive(o));}));
+  (data.sellerOffers||[]).forEach(p=>{const lid=p.listingId||(p.home&&p.home.id)||'';if(lid===id)push(p.offerId,offerAlive(p));});
+  (data.followedOffers||[]).forEach(f=>{if(f&&f.listingId===id)push(f.offerId,offerAlive(f));});
+  if(found.length){const live=found.find(x=>x.alive)||found[0];return {kind:'offer',id:live.id,seller:((data.sellerOffers)||[]).some(p=>p.offerId===live.id)};}
+  const tour=(data.tours||[]).find(t=>(t.homes||[]).some(h=>h.id===id));
+  if(tour)return {kind:'tour',tourId:tour.id};
+  const open=(data.open||[]).find(t=>(t.homes||[]).some(h=>h.id===id));
+  if(open)return {kind:'tour',tourId:open.id};
+  return null;
+}
+async function locateDeal(id){
+  id=String(id||'').trim();if(!id||!S.user)return null;
+  if(!data){
+    try{await load(true);}catch(e){}
+    if(!data)await new Promise(res=>{let n=0;const t=setInterval(()=>{if(data||lastErr||++n>40){clearInterval(t);res();}},100);});
+  }
+  if(!data&&lastErr)return {kind:'error',message:lastErr};
+  return locateDealSync(id);
+}
 function clientDocsCard(){
   if(!isClient())return '';load(false);if(!data)return '';
   const rows=[];(data.tours||[]).filter(t=>t.role==='CLIENT').concat(addedTours()).forEach(t=>(t.offers||[]).forEach(o=>{const p=o.pipeline;if(!p||p.archivedAt||p.invalidatedAt||o.invalidatedAt||p.decision==='DENIED')return;const h=(t.homes||[]).find(x=>x.id===o.listingId)||{};rows.push({t,o,p,h});}));
@@ -718,7 +745,7 @@ document.addEventListener('click',e=>{
   if((d.tcart||d.tbook)&&!S.user){document.querySelectorAll('.modal-backdrop,.lof-pop-bg').forEach(x=>x.remove());return UI().go('auth');}
   if(d.tcart){if(inCart(d.tcart)){removeFromCart(d.tcart);}else addToCart(d.tcart);return rerender();}
   if(d.tbook){if(addToCart(d.tbook)){document.querySelectorAll('.modal-backdrop,.drawer-bg,.lof-pop-bg').forEach(x=>x.remove());UI().go('tours');setTimeout(()=>{const f=document.querySelector('#tourReqF [name=date]');if(f){f.scrollIntoView({behavior:'smooth',block:'center'});f.focus();}},120);}return;}
-  if(d.tgooffer){scrolledTo='';location.hash='tours&offer='+encodeURIComponent(d.tgooffer);return;}
+  if(d.tgooffer){const h='tours&offer='+encodeURIComponent(d.tgooffer);scrolledTo='';if(location.hash==='#'+h){if(window.LegacyUI&&LegacyUI.focusDeal)LegacyUI.focusDeal(true);return;}location.hash=h;return;}
   if(d.tgo){document.querySelectorAll('.modal-backdrop').forEach(x=>x.remove());return UI().go('tours');}
   if(d.tcartdel){removeFromCart(d.tcartdel);return rerender();}
   if(d.taccept)return act(async()=>{const r=await call('tour_accept',{tourId:d.taccept});await load(true);if(r&&r.merged){location.hash='tours&tour='+r.mergedInto;return alert(L('¡Aprobada! Las casas se agregaron a la ruta que ya tenían ese día y se reordenó por distancia. Pueden editar el orden.','Approved! The homes were added to your existing route that day and re-sorted by distance. You can both edit the order.'));}alert(L('¡Listo! La cita es tuya. Ya puedes ver los datos del cliente, llamarle o escribirle en la app.','Done! The showing is yours. You can now see the client’s info, call or message them in the app.'));});
@@ -1421,6 +1448,6 @@ window.LegacyTours={
   offerSentCard:l=>{if(!S.user||!S.data)return '';const T=['REJECTED','WITHDRAWN','INVALIDATED','FELL_THROUGH','CANCELLED','DECLINED'];const o=(S.data.offers||[]).filter(x=>x&&x.listingId===l.id&&x.userId===S.user.id&&!T.includes(String(x.status||'').toUpperCase())).sort((a,b)=>String(b.createdAt||'').localeCompare(String(a.createdAt||'')))[0];
     if(!o)return '';return `<div class="tour-done">✅ <b>${L('Oferta enviada','Offer sent')}</b>${o.createdAt?' · '+esc(when(o.createdAt)):''}${money(o.offerPrice)?' · '+esc(money(o.offerPrice)):''} <button type="button" class="btn-card" data-tgo="1">${L('Ver próximos pasos','See next steps')}</button></div>`;},
   agentNavVisible:()=>isClient(),agentDashVisible:()=>isAgent(),agentDashboard,dealBox,agentAccount,clientDocsCard,sellerDashVisible,sellerPanel,sellerReload:()=>spLoad(true),clientPanel,closingFlowBox,stepChip,stepName,depositFiles,deadOfferIds:()=>(data&&data.deadOfferIds)||[],archive:()=>(data&&data.archive)||[],hiddenShowings:()=>(data&&data.hiddenShowings)||0,fold,tourOfferInfo:id=>{load(false);const o=findOffer(id);return o?(o.pipeline||o):null;},refreshAll:()=>{load(true);spLoad(true);},agentNavLabel:()=>'🤝 '+L('Mi agente','My agent'),agentView,
-  view,refresh:()=>load(true),cart
+  view,refresh:()=>load(true),cart,locateDeal
 };
 })();
