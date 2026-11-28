@@ -929,9 +929,10 @@ function agentDashboard(){
   const hello=hour<12?L('Buenos días','Good morning'):hour<19?L('Buenas tardes','Good afternoon'):L('Buenas noches','Good evening');
   const dateTxt=(()=>{try{return new Intl.DateTimeFormat(S.lang==='es'?'es-US':'en-US',{timeZone:'America/Chicago',weekday:'long',month:'long',day:'numeric'}).format(new Date());}catch(e){return '';}})();
   const head=`<div class="tour-wrap ad-wrap"><header class="ad-hero"><div><p class="ad-kicker">📊 ${L('Panel del agente','Agent dashboard')}</p><h2>${hello}${nm?', '+esc(nm):''}</h2><p class="ad-date">${esc(dateTxt)}</p></div><button type="button" class="ad-refresh" data-adrefresh="1" aria-label="${esc(L('Actualizar','Refresh'))}">↻</button></header>`;
-  if(!data&&!lastErr)return head+`<div class="ad-skel"></div><div class="ad-skel"></div></div>`;
-  if(lastErr&&!data)return head+`<p class="tour-warn">${esc(lastErr)}</p></div>`;
-  if(data.unavailable)return head+`<section class="card tour-card"><p>⏳ ${L('Las citas con carrito todavía no están activas.','Cart showings are not active yet.')}</p></section></div>`;
+  const bill=()=>window.LegacyBilling?LegacyBilling.dashboardCard():'';
+  if(!data&&!lastErr)return head+bill()+`<div class="ad-skel"></div><div class="ad-skel"></div></div>`;
+  if(lastErr&&!data)return head+bill()+`<p class="tour-warn">${esc(lastErr)}</p></div>`;
+  if(data.unavailable)return head+bill()+`<section class="card tour-card"><p>⏳ ${L('Las citas con carrito todavía no están activas.','Cart showings are not active yet.')}</p></section></div>`;
   const D=dashData();
   const kpi=(id,icon,n,label,hint,warn)=>`<button type="button" class="ad-kpi${warn?' warn':''}" data-adjump="${id}"><span class="ad-kpi-i" aria-hidden="true">${icon}</span><b>${n}</b><span class="ad-kpi-l">${label}</span>${hint?`<small>${hint}</small>`:''}</button>`;
   const urgent=D.actions.filter(a=>a.cd&&new Date(a.cd).getTime()-Date.now()<6*36e5).length;
@@ -955,7 +956,7 @@ function agentDashboard(){
   const note=!data.canAccept?`<p class="tour-warn">⏳ ${L('Tu cuenta de agente todavía no puede aceptar clientes nuevos (falta aprobación o licencia).','Your agent account can’t accept new clients yet (approval or license pending).')}</p>`:'';
   const acS=agentClosingsSection(),acMonth=acRows('month');
   const kpis2=kpis.replace(/<\/div>$/,'')+kpi('ad-closings','🏁',AC.rows?acMonth.length:'…',L('Cierres este mes','Closings this month'),AC.rows&&acMonth.length?esc(money(acMonth.reduce((n,r)=>n+(Number(r.priceCents)||0),0))):'')+'</div>';
-  return head+note+kpis2+actionsS+todayS+offersS+contractS+acS+weekS+clientsS+actS+statsS+`<div class="tour-btns ad-foot"><button type="button" class="btn-card" data-tab="tours">📋 ${L('Todas mis citas','All my showings')}</button><button type="button" class="btn-card" data-tab="inventory">🏠 ${L('Ver casas','See homes')}</button></div></div>`;
+  return head+note+kpis2+actionsS+todayS+offersS+contractS+acS+weekS+clientsS+actS+statsS+bill()+`<div class="tour-btns ad-foot"><button type="button" class="btn-card" data-tab="tours">📋 ${L('Todas mis citas','All my showings')}</button><button type="button" class="btn-card" data-tab="inventory">🏠 ${L('Ver casas','See homes')}</button></div></div>`;
 }
 let actShowAll=false;
 document.addEventListener('click',e=>{

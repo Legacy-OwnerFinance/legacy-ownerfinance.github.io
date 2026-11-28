@@ -1080,6 +1080,11 @@ const hash=pw=>{
 S.register=async f=>{
   if(f.role==='INVESTOR'&&!(S.caps&&S.caps.investor))throw new Error(S.lang==='es'?'El registro de inversionistas todavía no está disponible.':'Investor signup is not available yet.');
   const fields={name:f.role==='INVESTOR'?(f.representativeName||f.name):f.name,email:f.email,phone:f.phone,password:f.password,role:f.role,inviteCode:f.inviteCode,licenseNumber:f.licenseNumber,brokerage:f.brokerage,bio:f.role==='AGENT'?String(f.bio||'').slice(0,600):undefined,businessName:f.businessName,contactMethod:f.contactMethod,contactValue:f.contactValue,representativeName:f.representativeName};
+  if(f.role==='AGENT'){
+    const referralCode=window.LegacyBilling&&LegacyBilling.normalizeRef?LegacyBilling.normalizeRef(f.referralCode):String(f.referralCode||'').trim();
+    if(window.LegacyBilling&&LegacyBilling.rememberRef)LegacyBilling.rememberRef(referralCode);
+    if(referralCode){fields.referralCode=referralCode;fields.referral_code=referralCode;}
+  }
   const j=await api('register',{fields});
   if(j.needsVerify)return {needsVerify:true,email:j.email,pendingReview:!!j.pendingReview,role:f.role};
   const u=await adoptSession(j);
@@ -1514,4 +1519,40 @@ S.TX_DOCS=[
   {type:'EM_RECEIPT',label:'3. EM Receipt (earnest money)',labelEs:'3. Recibo del EM (depósito de garantía)'}
 ];
 S.money=c=>c==null?'—':'$'+Math.round(c/100).toLocaleString('en-US');
+// Agent billing. Stripe keys stay on the Edge Functions. Authorization is the anon JWT
+// (gateway verify_jwt); x-session is the signed-in agent, same as api().
+const BILLING_FNS={ 'create-checkout-session':1, 'create-portal-session':1 };
+const BILLING_TABLES={ agent_subscriptions:1, referrals:1 };
+S.billingPost=async function(name, body){
+  if(!BILLING_FNS[name])throw new Error('bad function');
+  const r=await fetch(`${SUPABASE_URL}/functions/v1/${name}`,{
+    method:'POST',
+    headers:sbHeaders(getToken()?{'x-session':getToken()}:{}),
+    body:JSON.stringify(body||{}),
+    cache:'no-store'
+  });
+  let j={};try{j=await r.json();}catch(e){}
+  if(!r.ok||j.error){
+    const err=new Error(j.message||j.error||('HTTP '+r.status));
+    err.code=j.error||('http_'+r.status);
+    err.status=r.status;
+    throw err;
+  }
+  return j;
+};
+S.billingSelect=async function(table, query){
+  if(!BILLING_TABLES[table])throw new Error('bad table');
+  const r=await fetch(`${SUPABASE_URL}/rest/v1/${table}?${query||'select=*'}`,{
+    headers:sbHeaders(Object.assign({'Accept':'application/json'}, getToken()?{'x-session':getToken()}:{})),
+    cache:'no-store'
+  });
+  let j=null;try{j=await r.json();}catch(e){}
+  if(!r.ok){
+    const err=new Error((j&&(j.message||j.error||j.hint))||('HTTP '+r.status));
+    err.status=r.status;
+    err.code=j&&j.code;
+    throw err;
+  }
+  return Array.isArray(j)?j:[];
+};
 })();
